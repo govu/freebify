@@ -98,7 +98,8 @@ export function ArtistPage() {
     )
   }
 
-  const avatar = artist.profile_picture?.["480x480"] ?? artist.profile_picture?.["150x150"] ?? null
+  const trackArt = tracks.find((t) => t.artwork?.["480x480"] || t.artwork?.["150x150"])?.artwork ?? null
+  const avatar = artist.profile_picture?.["480x480"] ?? artist.profile_picture?.["150x150"] ?? trackArt?.["480x480"] ?? null
   const cover = artist.cover_photo?.["2000x"] ?? artist.cover_photo?.["640x"] ?? avatar
 
   return (
@@ -122,13 +123,17 @@ export function ArtistPage() {
           transition={{ duration: 0.45 }}
           className="relative flex items-end gap-5 px-6 pb-6"
         >
-          {avatar && !avatarFailed && (
+          {avatar && !avatarFailed ? (
             <img
               src={avatar}
               alt=""
               onError={() => setAvatarFailed(true)}
               className="size-24 shrink-0 rounded-full border-2 border-white/15 bg-panel object-cover shadow-2xl shadow-black/60 sm:size-28"
             />
+          ) : (
+            <div className="grid size-24 shrink-0 place-items-center rounded-full border-2 border-white/15 bg-panel text-4xl font-black text-dim shadow-2xl shadow-black/60 sm:size-28">
+              {artist.name.charAt(0).toUpperCase()}
+            </div>
           )}
           <div className="min-w-0">
           {artist.is_verified && (

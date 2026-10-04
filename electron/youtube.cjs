@@ -731,6 +731,21 @@ async function search(query) {
   }
 }
 
+// last-resort imagery: any artist with songs has cover art — an artist page
+// should never render as a blank header just because YouTube ships no photos
+const trackArtwork = (tracks) =>
+  tracks.find((t) => t?.artwork?.["480x480"] || t?.artwork?.["150x150"])?.artwork ?? null
+const artToPicture = (art) =>
+  art
+    ? {
+        "150x150": art["150x150"] ?? art["480x480"],
+        "480x480": art["480x480"] ?? art["150x150"],
+        "1000x1000": art["1000x1000"] ?? art["480x480"] ?? art["150x150"],
+      }
+    : null
+const artToCover = (art) =>
+  art ? { "640x": art["480x480"] ?? art["150x150"], "2000x": art["1000x1000"] ?? art["480x480"] ?? art["150x150"] } : null
+
 const headerArt = (header, minWidth = 0) => {
   // immersive headers carry a bare thumbnails array; older layouts wrap it
   // in MusicThumbnail nodes — cover both, pick by declared width
@@ -783,7 +798,18 @@ async function artist(channelIdOrName, nameHint) {
       .slice(0, 30)
     // mapArtist can come back as bare "Artist" when the row's title lives in
     // flex_columns — the caller's display name is the better label
-    return { user: { ...hit, name: nameHint || hit.name, id: `yt-${hit.streamId}`, track_count: tracks.length }, tracks }
+    const art = trackArtwork(tracks)
+    return {
+      user: {
+        ...hit,
+        name: nameHint || hit.name,
+        id: `yt-${hit.streamId}`,
+        track_count: tracks.length,
+        profile_picture: hit.profile_picture ?? artToPicture(art),
+        cover_photo: hit.cover_photo ?? artToCover(art),
+      },
+      tracks,
+    }
   }
   const [page0, hit0] = await Promise.all([yt.music.getArtist(id).catch((e) => (ytFail(e), null)), hitP])
   let page = page0
@@ -860,7 +886,7 @@ async function artist(channelIdOrName, nameHint) {
   const sq = (u, s) => (u ? u.replace(/=w\d+-h\d+[^,]*/, `=w${s}-h${s}-l90-rj`) : null)
   const pic = self?.profile_picture ?? (avatar ?? banner
     ? { "150x150": sq(avatar ?? banner, 240), "480x480": sq(avatar ?? banner, 544), "1000x1000": sq(avatar ?? banner, 1024) }
-    : null)
+    : null) ?? artToPicture(trackArtwork(tracks))
   return {
     user: {
       id: `yt-${id}`,
@@ -871,7 +897,9 @@ async function artist(channelIdOrName, nameHint) {
       follower_count: self?.follower_count ?? 0,
       track_count: tracks.length,
       profile_picture: pic,
-      cover_photo: banner ? { "640x": banner, "2000x": banner } : pic ? { "640x": pic["480x480"], "2000x": pic["1000x1000"] } : null,
+      cover_photo: banner
+        ? { "640x": banner, "2000x": banner }
+        : (pic ? { "640x": pic["480x480"], "2000x": pic["1000x1000"] } : null) ?? artToCover(trackArtwork(tracks)),
     },
     tracks,
   }
