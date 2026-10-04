@@ -372,6 +372,14 @@ export function NowPlaying() {
       if (lyrist) return finish({ synced: lyrist, autoOff: 0 })
       const textyl = await fetchTextyl()
       if (textyl) return finish({ synced: textyl, autoOff: 0 })
+      // YouTube's own caption track — ASR exists for nearly every music
+      // upload, so it's real timed words rather than our distributed guess
+      const caps =
+        current.source === "yt" && current.streamId
+          ? await yt.captions(current.streamId).catch(() => null)
+          : null
+      const capLines = caps?.lines?.length ? sane(caps.lines) : null
+      if (capLines) return finish({ synced: capLines, autoOff: 0 })
       // synced sources exhausted — assemble the best plain text, then fake-sync
       const ytRes =
         current.source === "yt" && current.streamId

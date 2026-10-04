@@ -1172,6 +1172,104 @@ async function playlistArts(browseId) {
   return p
 }
 
+// ---------- captions → synced lyrics ----------
+// Last-resort synced lyrics: the video's own caption tracks (manual subs on
+// lyric videos, otherwise ASR — which exists for nearly every music upload).
+// `yt-dlp -J` exposes every caption format's URL without downloading media.
+
+// emit each cue's newest row only — rolling ASR windows repeat the previous
+// line as their first row, so last-row + dedupe reconstructs the lyric sheet
+function captionLines(body, ext) {
+  const out = []
+  const push = (t, text) => {
+    const clean = String(text).replace(/\s+/g, " ").trim()
+    if (!clean || out.at(-1)?.text === clean) return
+    out.push({ t, text: clean })
+  }
+  if (ext === "json3") {
+    try {
+      const j = JSON.parse(body)
+      for (const ev of j.events ?? []) {
+        if (typeof ev.tStartMs !== "number" || !ev.segs) continue
+        const rows = ev.segs
+          .map((s) => s.utf8 ?? "")
+          .join("")
+          .split(/\r?\n/)
+          .map((r) => r.trim())
+          .filter(Boolean)
+        if (rows.length) push(ev.tStartMs / 1000, rows.at(-1))
+      }
+    } catch {}
+    return out
+  }
+  let m
+  if (ext === "srv3") {
+    const re = /<text[^>]*\bt="(\d+)"[^>]*>([\s\S]*?)<\/text>/g
+    while ((m = re.exec(body))) {
+      const row = m[2].replace(/<[^>]+>/g, "\n").split(/\n+/).map((r) => r.trim()).filter(Boolean).at(-1)
+      if (row) push(Number(m[1]) / 1000, row)
+    }
+    return out
+  }
+  // vtt — inline <mm:ss.mmm> karaoke markers + <c> tags get stripped
+  const re = /(\d{2}):(\d{2}):(\d{2})[.,](\d{3})\s*-->[^\n]*\n([\s\S]*?)(?=\r?\n\s*\r?\n|$)/g
+  while ((m = re.exec(body))) {
+    const t = Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) + Number(m[4]) / 1000
+    const clean = m[5].replace(/<[^>]+>/g, " ").replace(/[ \t]+/g, " ")
+    const rows = clean.split(/\r?\n/).map((r) => r.trim()).filter(Boolean)
+    if (rows.length) push(t, rows.at(-1))
+  }
+  return out
+}
+
+// prefer a latin/euro language the lyrics are most likely sung in, else the
+// first available track; json3 parses cleanest, srv3/vtt are fallbacks
+const CAP_LANGS = ["es", "en", "pt", "it", "fr", "de"]
+function pickCaptionFmt(dict) {
+  if (!dict || typeof dict !== "object") return null
+  const keys = Object.keys(dict).filter((k) => Array.isArray(dict[k]) && dict[k].length)
+  if (!keys.length) return null
+  const rank = (k) => {
+    const i = CAP_LANGS.findIndex((l) => k === l || k.startsWith(`${l}-`))
+    return i === -1 ? CAP_LANGS.length : i
+  }
+  keys.sort((a, b) => rank(a) - rank(b))
+  const fmts = dict[keys[0]]
+  return fmts.find((f) => f.ext === "json3") ?? fmts.find((f) => f.ext === "srv3") ?? fmts.find((f) => f.ext === "vtt") ?? null
+}
+
+const capInflight = new Map()
+async function captions(videoId) {
+  if (!ytdlpAvailable()) return null
+  if (capInflight.has(videoId)) return capInflight.get(videoId)
+  const job = (async () => {
+    try {
+      const out = await runYtdlp(
+        [
+          "-J", "--no-playlist", "--no-warnings",
+          "--socket-timeout", "10", "--retries", "2",
+          `https://www.youtube.com/watch?v=${videoId}`,
+        ],
+        30000
+      )
+      const info = JSON.parse(out)
+      const fmt = pickCaptionFmt(info.subtitles) ?? pickCaptionFmt(info.automatic_captions)
+      if (!fmt?.url) return null
+      const res = await fetch(fmt.url, { headers: { "User-Agent": "Freebify/1.0" }, signal: AbortSignal.timeout(9000) })
+      if (!res.ok) return null
+      const lines = captionLines(await res.text(), fmt.ext)
+      return lines.length >= 4 ? { lines } : null
+    } catch (e) {
+      log("captions", `${videoId}: ${e?.message ?? e}`)
+      return null
+    } finally {
+      capInflight.delete(videoId)
+    }
+  })()
+  capInflight.set(videoId, job)
+  return job
+}
+
 // Full synced-where-available lyrics for the Now Playing panel
 async function lyrics(videoId) {
   const yt = await getYt()
@@ -1303,6 +1401,9 @@ function register(ipcMain) {
   )
   ipcMain.handle("yt:lyrics", (_e, videoId) =>
     typeof videoId === "string" && VID.test(videoId) ? withTimeout(lyrics(videoId), 15000).catch(() => null) : null
+  )
+  ipcMain.handle("yt:captions", (_e, videoId) =>
+    typeof videoId === "string" && VID.test(videoId) ? withTimeout(captions(videoId), 40000).catch(() => null) : null
   )
   ipcMain.handle("yt:suggest", (_e, q) =>
     typeof q === "string" && q.length < 100 ? withTimeout(suggestions(Q(q)), 8000).then((r) => r ?? [], () => []) : []

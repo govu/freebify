@@ -154,7 +154,7 @@
 
   /* ============ GALLERY ============ */
   .gallery { padding: clamp(80px, 12vh, 140px) 0; }
-  .gal-inner { display: grid; grid-template-columns: 0.85fr 1.5fr; min-height: 100svh; }
+  .gal-inner { display: grid; grid-template-columns: 0.85fr 1.5fr; height: 100svh; }
   .gal-left { position: relative; padding-left: clamp(24px, 4vw, 72px); }
   .gal-steps { position: sticky; top: 64px; height: calc(100svh - 64px); display: flex; flex-direction: column; justify-content: center; }
   .gal-step { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; opacity: 0; padding-right: 40px; }
@@ -451,7 +451,6 @@
         steps.forEach((st, i) => gsap.to(st, { opacity: i === idx ? 1 : 0, y: i === idx ? 0 : 14, duration: 0.45, ease: "power2.out", overwrite: "auto" }));
       },
     });
-    document.querySelector(".gallery").style.height = `${N * 100}svh`;
   }
 
   /* ---------- dev screenshot hook (?y=px) ---------- */

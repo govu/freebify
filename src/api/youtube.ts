@@ -22,6 +22,7 @@ interface YtBridge {
   mood: (params: string) => Promise<{ name: string | null; playlists: Playlist[]; tracks: Track[] } | null>
   playlistArts: (id: string) => Promise<string[]>
   lyrics: (videoId: string) => Promise<{ lyrics: string } | null>
+  captions?: (videoId: string) => Promise<{ lines: { t: number; text: string }[] } | null>
   suggest: (q: string) => Promise<string[]>
 }
 
@@ -104,6 +105,7 @@ export const yt = {
   mood: (params: string) => ytBridge()?.mood(params) ?? Promise.resolve(null),
   playlistArts: (id: string) => ytBridge()?.playlistArts(id) ?? Promise.resolve([]),
   lyrics: (videoId: string) => ytBridge()?.lyrics(videoId) ?? Promise.resolve(null),
+  captions: (videoId: string) => ytBridge()?.captions?.(videoId) ?? Promise.resolve(null),
   suggest: (q: string) => ytBridge()?.suggest(q) ?? Promise.resolve([]),
 }
 
