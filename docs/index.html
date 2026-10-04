@@ -11,7 +11,7 @@
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,500&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #0a0a0a;
@@ -22,7 +22,6 @@
     --faint: #666666;
     --ghost: #3c3c3c;
     --sans: "Inter Tight", "Inter", system-ui, sans-serif;
-    --serif: "Instrument Serif", Georgia, serif;
     --ease: cubic-bezier(0.16, 1, 0.3, 1);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -135,7 +134,7 @@
   }
   .manifesto p .w { opacity: 0.16; transition: opacity 0.5s linear; }
   .manifesto p .w.lit { opacity: 1; }
-  .manifesto p em { font-family: var(--serif); font-style: italic; font-weight: 400; letter-spacing: -0.01em; }
+  .manifesto p em { font-style: italic; font-weight: 500; letter-spacing: -0.02em; }
 
   /* ============ FEATURES ============ */
   .feats { max-width: 1100px; margin: 0 auto; padding: 0 24px clamp(90px, 14vh, 160px); }
@@ -158,7 +157,6 @@
   .gal-left { position: relative; padding-left: clamp(24px, 4vw, 72px); }
   .gal-steps { position: sticky; top: 64px; height: calc(100svh - 64px); display: flex; flex-direction: column; justify-content: center; }
   .gal-step { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; opacity: 0; padding-right: 40px; }
-  .gal-step .k { font-size: 14px; color: var(--faint); font-weight: 500; margin-bottom: 18px; }
   .gal-step h3 { font-size: clamp(30px, 3.6vw, 50px); font-weight: 800; letter-spacing: -0.035em; line-height: 1.02; margin-bottom: 18px; }
   .gal-step .c { color: var(--dim); font-size: 16px; line-height: 1.6; max-width: 340px; }
   .gal-right { position: relative; padding: 0 clamp(24px, 4vw, 72px) 0 24px; }
@@ -170,14 +168,12 @@
   }
   .gal-stack .gimg img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
   .gal-stack .gimg:first-child { opacity: 1; }
-  .mobile-cap { display: none; }
   @media (max-width: 900px) {
     .gal-inner { display: block; }
     .gal-left { display: none; }
     .gal-right { padding: 0 24px; }
     .gal-stack { position: static; height: auto; display: grid; gap: 20px; }
     .gal-stack .gimg { position: static; opacity: 1; aspect-ratio: 16/10; }
-    .mobile-cap { display: block; margin-top: 20px; color: var(--faint); font-size: 14px; }
   }
 
   /* ============ GET ============ */
@@ -199,7 +195,7 @@
   .foot-brand .mark svg { display: block; width: clamp(44px, 6vw, 92px); height: auto; }
   .foot-brand h2 {
     font-size: clamp(64px, 14.5vw, 230px); font-weight: 900;
-    letter-spacing: -0.055em; line-height: 0.78; text-transform: uppercase; color: #1c1c1c;
+    letter-spacing: -0.008em; line-height: 0.78; text-transform: uppercase; color: #1c1c1c;
     -webkit-text-stroke: 1px #383838; white-space: nowrap;
     transition: color 1.2s var(--ease), -webkit-text-stroke-color 1.2s var(--ease);
   }
@@ -303,10 +299,10 @@
   <div class="gal-inner">
     <div class="gal-left">
       <div class="gal-steps" id="galSteps">
-        <div class="gal-step"><div class="k">Home</div><h3>Pick up where<br>you left off</h3><div class="c">Recently played, weekly charts and editorial picks — the moment you open the app.</div></div>
-        <div class="gal-step"><div class="k">Lyrics</div><h3>Lyrics that keep<br>the tempo</h3><div class="c">Line-synced karaoke that follows the song. Tap any line to jump to it.</div></div>
-        <div class="gal-step"><div class="k">Search</div><h3>Find it in<br>three letters</h3><div class="c">Songs, artists, albums and playlists — ranked the way you'd expect.</div></div>
-        <div class="gal-step"><div class="k">Artists</div><h3>Every artist,<br>properly profiled</h3><div class="c">Top tracks, monthly listeners and full discographies.</div></div>
+        <div class="gal-step"><h3>Pick up where<br>you left off</h3><div class="c">Recently played, weekly charts and editorial picks — the moment you open the app.</div></div>
+        <div class="gal-step"><h3>Lyrics that keep<br>the tempo</h3><div class="c">Line-synced karaoke that follows the song. Tap any line to jump to it.</div></div>
+        <div class="gal-step"><h3>Find it in<br>three letters</h3><div class="c">Songs, artists, albums and playlists — ranked the way you'd expect.</div></div>
+        <div class="gal-step"><h3>Every artist,<br>properly profiled</h3><div class="c">Top tracks, monthly listeners and full discographies.</div></div>
       </div>
     </div>
     <div class="gal-right">
@@ -316,7 +312,6 @@
         <div class="gimg"><img src="shots/search.png" alt="Search"></div>
         <div class="gimg"><img src="shots/artist.png" alt="Artist page"></div>
       </div>
-      <div class="mobile-cap">Home · lyrics · search · artist</div>
     </div>
   </div>
 </section>
