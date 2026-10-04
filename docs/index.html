@@ -3,441 +3,617 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Freebify — Free music. No ads. Forever.</title>
-<meta name="description" content="Freebify is a free, open-source desktop music player. No ads, no subscriptions, original studio recordings — for everyone, everywhere.">
+<title>Freebify — All the music. None of the ads.</title>
+<meta name="description" content="Freebify is a free, open-source desktop music player. Original studio recordings, live synced lyrics, zero ads. For Windows.">
+<meta property="og:title" content="Freebify — All the music. None of the ads.">
+<meta property="og:description" content="Free music player for Windows. Original recordings, synced lyrics, zero ads.">
+<meta property="og:image" content="shots/home.png">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #0a0a0a;
-    --panel: #101010;
-    --card: #141414;
-    --card-hover: #1c1c1c;
-    --line: #262626;
-    --ink: #f5f5f5;
-    --dim: #a3a3a3;
-    --faint: #737373;
-    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --panel: #0e0e0e;
+    --line: #232323;
+    --line-soft: #191919;
+    --ink: #f2f2f2;
+    --dim: #8f8f8f;
+    --faint: #5c5c5c;
+    --ghost: #3a3a3a;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+    --sans: "Inter Tight", "Inter", system-ui, sans-serif;
+    --serif: "Instrument Serif", Georgia, serif;
+    --ease: cubic-bezier(0.16, 1, 0.3, 1);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
+  html.lenis, html.lenis body { height: auto; }
+  .lenis.lenis-smooth { scroll-behavior: auto !important; }
   body {
-    background: var(--bg);
-    color: var(--ink);
-    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    background: var(--bg); color: var(--ink);
+    font-family: var(--sans);
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
   }
   ::selection { background: #fff; color: #000; }
+  ::-webkit-scrollbar { width: 10px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: #2a2a2a; border: 3px solid var(--bg); border-radius: 8px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3d3d3d; }
+  img { display: block; }
+  a { color: inherit; }
+  .mono { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 400; }
 
-  /* ---------- nav ---------- */
+  /* film grain — kills the flat digital look */
+  .grain {
+    position: fixed; inset: -50%; z-index: 200; pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.028;
+    animation: grain 0.9s steps(4) infinite;
+  }
+  @keyframes grain {
+    0% { transform: translate(0,0); } 25% { transform: translate(-2%,3%); }
+    50% { transform: translate(3%,-2%); } 75% { transform: translate(-3%,-3%); }
+    100% { transform: translate(2%,2%); }
+  }
+
+  /* ============ LOADER ============ */
+  .loader {
+    position: fixed; inset: 0; z-index: 300; background: var(--bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px;
+  }
+  .loader .mark svg { display: block; animation: spinArc 1.6s cubic-bezier(.6,.1,.3,.9) infinite; }
+  @keyframes spinArc { to { transform: rotate(360deg); } }
+  .loader .word { font-family: var(--mono); font-size: 13px; letter-spacing: 0.42em; text-indent: 0.42em; color: var(--dim); }
+  .loader .num { font-family: var(--mono); font-size: 11px; color: var(--ghost); letter-spacing: 0.14em; }
+  .loader .bar { position: absolute; left: 0; bottom: 0; height: 2px; width: 0%; background: var(--ink); }
+  .loader.done { transform: translateY(-100%); transition: transform 0.85s var(--ease); }
+
+  /* ============ NAV ============ */
   nav {
-    position: fixed; inset: 0 0 auto 0; z-index: 50;
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 18px clamp(20px, 5vw, 64px);
+    position: fixed; inset: 0 0 auto 0; z-index: 100;
+    display: flex; align-items: stretch; height: 52px;
+    border-bottom: 1px solid var(--line);
+    background: rgb(10 10 10 / 0.78);
     backdrop-filter: blur(16px);
-    background: rgb(10 10 10 / 0.65);
-    border-bottom: 1px solid transparent;
-    transition: border-color 0.4s;
+    transform: translateY(-100%);
+    transition: transform 0.7s var(--ease) 0.15s;
   }
-  nav.scrolled { border-color: var(--line); }
-  .nav-brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px; letter-spacing: -0.02em; text-decoration: none; color: var(--ink); }
-  .nav-links { display: flex; align-items: center; gap: 8px; }
-  .nav-links a {
-    color: var(--dim); text-decoration: none; font-size: 14px; font-weight: 500;
-    padding: 8px 14px; border-radius: 99px; transition: color 0.2s, background 0.2s;
+  nav.in { transform: none; }
+  nav .brand {
+    display: flex; align-items: center; gap: 10px; padding: 0 22px;
+    font-family: var(--mono); font-weight: 500; font-size: 13px; letter-spacing: 0.16em;
+    text-decoration: none; border-right: 1px solid var(--line); color: var(--ink);
   }
-  .nav-links a:hover { color: var(--ink); background: rgb(255 255 255 / 0.06); }
-  .nav-cta {
-    display: inline-flex; align-items: center; gap: 8px;
-    background: var(--ink); color: #000 !important; font-weight: 700;
-    padding: 10px 20px !important; border-radius: 99px;
-    transition: transform 0.2s var(--ease-out), box-shadow 0.2s !important;
+  nav .brand svg { flex: none; }
+  nav .links { display: flex; align-items: stretch; margin-left: auto; }
+  nav .links a {
+    display: flex; align-items: center; padding: 0 20px;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--dim); text-decoration: none; border-left: 1px solid var(--line);
+    transition: color .18s, background .18s;
   }
-  .nav-cta:hover { transform: scale(1.04); box-shadow: 0 0 32px rgb(255 255 255 / 0.18); }
+  nav .links a:hover { color: var(--ink); background: #161616; }
+  nav .links a.dl { color: #000; background: var(--ink); font-weight: 500; }
+  nav .links a.dl:hover { background: #fff; }
+  @media (max-width: 640px) {
+    nav .links a:not(.dl) { display: none; }
+    .hero h1 { font-size: 10.4vw; letter-spacing: -0.045em; }
+    .get h2 { font-size: 9.8vw; }
+    .foot-brand h2 { font-size: 12vw; }
+    .hero-meta span:nth-child(3) { display: none; }
+  }
 
-  /* ---------- hero ---------- */
-  .hero {
-    position: relative; min-height: 100svh;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    text-align: center; padding: 120px 20px 0; overflow: hidden;
+  /* ============ HERO ============ */
+  .hero { padding-top: 52px; min-height: 100svh; display: flex; flex-direction: column; }
+  .hero-meta {
+    display: flex; justify-content: space-between; gap: 16px;
+    padding: 24px 24px 0; color: var(--faint);
   }
-  .hero::before {
-    content: ""; position: absolute; inset: -20%;
-    background: radial-gradient(50% 40% at 50% 30%, rgb(255 255 255 / 0.07), transparent 70%);
-    pointer-events: none;
-  }
-  .pill {
-    display: inline-flex; align-items: center; gap: 8px;
-    border: 1px solid var(--line); border-radius: 99px;
-    padding: 7px 16px; font-size: 13px; font-weight: 600; color: var(--dim);
-    background: rgb(20 20 20 / 0.6); backdrop-filter: blur(8px);
-  }
-  .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; animation: pulse 2.2s infinite; }
-  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgb(74 222 128 / 0.5);} 50% { box-shadow: 0 0 0 6px rgb(74 222 128 / 0);} }
+  .hero-meta span:nth-child(2) { display: none; }
+  @media (min-width: 720px) { .hero-meta span:nth-child(2) { display: inline; } }
   .hero h1 {
-    margin-top: 28px;
-    font-size: clamp(44px, 8.5vw, 108px);
-    font-weight: 900; letter-spacing: -0.045em; line-height: 0.98;
+    margin-top: clamp(26px, 5vh, 60px); padding: 0 24px;
+    font-size: clamp(54px, 10.8vw, 176px);
+    font-weight: 900; letter-spacing: -0.055em; line-height: 0.88;
+    text-transform: uppercase; font-kerning: normal;
   }
-  .hero h1 .line { display: block; overflow: hidden; }
-  .hero h1 .line span { display: block; transform: translateY(110%); animation: riseIn 1s var(--ease-out) forwards; }
-  .hero h1 .line:nth-child(2) span { animation-delay: 0.12s; color: var(--faint); }
-  .hero h1 .line:nth-child(3) span { animation-delay: 0.24s; }
-  @keyframes riseIn { to { transform: translateY(0); } }
-  .hero p.sub {
-    margin-top: 24px; max-width: 560px;
-    font-size: clamp(16px, 2vw, 19px); color: var(--dim); line-height: 1.6;
-    opacity: 0; animation: fadeUp 0.9s var(--ease-out) 0.5s forwards;
+  .hero h1 .row { display: block; overflow: hidden; padding-block: 0.02em; }
+  .hero h1 .row > span { display: block; transform: translateY(112%); }
+  .hero h1 .row:nth-child(2) > span { color: var(--ghost); }
+  .hero h1 .row > span em {
+    font-family: var(--serif); font-style: italic; font-weight: 400;
+    text-transform: none; letter-spacing: -0.02em;
   }
-  .hero-ctas {
-    margin-top: 36px; display: flex; gap: 14px; flex-wrap: wrap; justify-content: center;
-    opacity: 0; animation: fadeUp 0.9s var(--ease-out) 0.65s forwards;
-  }
-  @keyframes fadeUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
-  .btn-primary {
-    display: inline-flex; align-items: center; gap: 10px;
-    background: var(--ink); color: #000; font-weight: 700; font-size: 16px;
-    padding: 16px 32px; border-radius: 99px; text-decoration: none;
-    transition: transform 0.25s var(--ease-out), box-shadow 0.25s;
-  }
-  .btn-primary:hover { transform: scale(1.05); box-shadow: 0 0 48px rgb(255 255 255 / 0.22); }
-  .btn-ghost {
-    display: inline-flex; align-items: center; gap: 10px;
-    border: 1px solid var(--line); color: var(--ink); font-weight: 600; font-size: 16px;
-    padding: 16px 30px; border-radius: 99px; text-decoration: none;
-    transition: border-color 0.2s, background 0.2s, transform 0.25s var(--ease-out);
-  }
-  .btn-ghost:hover { border-color: #4d4d4d; background: rgb(255 255 255 / 0.04); transform: scale(1.03); }
+  .hero h1 .row > span.play { animation: rise 1.15s var(--ease) forwards; }
+  .hero h1 .row:nth-child(2) > span.play { animation-delay: 0.14s; }
+  .hero h1 .row:nth-child(3) > span.play { animation-delay: 0.28s; }
+  @keyframes rise { to { transform: translateY(0); } }
 
-  /* equalizer bars */
-  .eq {
-    display: flex; align-items: flex-end; gap: 4px; height: 40px;
-    margin-top: 44px; opacity: 0; animation: fadeUp 0.9s var(--ease-out) 0.8s forwards;
+  .hero-sub {
+    display: flex; justify-content: space-between; align-items: flex-end; gap: 32px;
+    padding: 30px 24px 44px; flex-wrap: wrap;
   }
-  .eq span {
-    width: 4px; border-radius: 2px; background: linear-gradient(180deg, #525252, #2a2a2a);
-    animation: eq 1.2s ease-in-out infinite;
+  .hero-sub p { max-width: 470px; color: var(--dim); font-size: clamp(15px, 1.6vw, 18px); line-height: 1.6; font-weight: 400; }
+  .hero-sub p b { color: var(--ink); font-weight: 600; }
+  .cta-row { display: flex; gap: 12px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px; text-decoration: none;
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 17px 28px; transition: transform .35s var(--ease), background .2s, color .2s, border-color .2s;
   }
-  .eq span:nth-child(odd) { animation-duration: 0.9s; }
-  .eq span:nth-child(3n) { animation-duration: 1.4s; }
-  @keyframes eq { 0%,100% { height: 8px; } 50% { height: 40px; } }
+  .btn.solid { background: var(--ink); color: #000; font-weight: 500; }
+  .btn.solid:hover { background: #fff; transform: translateY(-2px); }
+  .btn.line { border: 1px solid var(--line); color: var(--dim); }
+  .btn.line:hover { border-color: #4a4a4a; color: var(--ink); transform: translateY(-2px); }
 
-  /* hero screenshot */
-  .hero-shot {
-    margin-top: 64px; width: min(1100px, 92vw); position: relative;
-    opacity: 0; animation: shotIn 1.1s var(--ease-out) 0.9s forwards;
-    perspective: 1600px;
-  }
-  @keyframes shotIn { from { opacity: 0; transform: translateY(60px); } to { opacity: 1; transform: none; } }
-  .hero-shot .frame {
-    border-radius: 18px 18px 0 0; overflow: hidden;
-    border: 1px solid var(--line); border-bottom: none;
-    box-shadow: 0 40px 120px -20px rgb(0 0 0 / 0.9), 0 0 80px -30px rgb(255 255 255 / 0.06);
-    transform-style: preserve-3d;
-    transition: transform 0.4s var(--ease-out);
+  .hero-visual { position: relative; margin-top: auto; }
+  .hero-visual .frame {
+    width: min(1400px, calc(100vw - 48px)); margin: 0 auto;
+    border: 1px solid var(--line); border-bottom: 0;
+    overflow: hidden; max-height: 62vh; position: relative;
     background: var(--panel);
   }
-  .hero-shot img { display: block; width: 100%; }
-  .hero-shot::after {
-    content: ""; position: absolute; inset: auto 0 -1px 0; height: 45%;
-    background: linear-gradient(180deg, transparent, var(--bg) 82%);
-    pointer-events: none;
-  }
+  .hero-visual img { width: 100%; will-change: transform; }
+  .hero-visual .fade { position: absolute; inset: 0; background: linear-gradient(180deg, transparent 60%, rgb(10 10 10 / 0.7)); pointer-events: none; }
 
-  /* ---------- marquee ---------- */
-  .marquee {
-    border-block: 1px solid var(--line); padding: 22px 0; overflow: hidden;
-    display: flex; white-space: nowrap; margin-top: 80px;
-    mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  /* ticker */
+  .ticker { border-block: 1px solid var(--line); overflow: hidden; white-space: nowrap; background: var(--bg); }
+  .ticker .inner { display: inline-flex; will-change: transform; }
+  .ticker span {
+    display: inline-flex; align-items: center; padding: 14px 0;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint);
   }
-  .marquee .track { display: flex; gap: 56px; padding-right: 56px; animation: scroll 30s linear infinite; }
-  .marquee span {
-    font-size: 15px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--faint); display: flex; align-items: center; gap: 56px;
-  }
-  .marquee b { color: var(--ink); font-weight: 800; }
-  @keyframes scroll { to { transform: translateX(-100%); } }
+  .ticker span::after { content: "·"; margin: 0 30px; color: #2e2e2e; }
+  .ticker b { color: var(--ink); font-weight: 500; }
+  .ticker i { font-style: normal; color: var(--dim); margin: 0 8px; }
+  .ticker .live { color: #4ade80; margin-right: 10px; animation: blink 2.4s infinite; }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
 
-  /* ---------- sections ---------- */
-  section { padding: clamp(80px, 12vw, 140px) clamp(20px, 6vw, 80px); max-width: 1240px; margin: 0 auto; }
-  .kicker {
-    font-size: 13px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase;
-    color: var(--faint); margin-bottom: 18px;
+  /* ============ MANIFESTO ============ */
+  .manifesto { padding: clamp(100px, 18vh, 200px) 24px; max-width: 1240px; margin: 0 auto; }
+  .manifesto .mono { color: var(--faint); margin-bottom: 44px; display: block; }
+  .manifesto p {
+    font-size: clamp(31px, 4.8vw, 64px); font-weight: 700; letter-spacing: -0.028em; line-height: 1.15;
   }
-  .h2 { font-size: clamp(32px, 5vw, 56px); font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; }
-  .lead { margin-top: 18px; color: var(--dim); font-size: clamp(16px, 1.8vw, 18px); line-height: 1.65; max-width: 620px; }
+  .manifesto p .w { opacity: 0.16; transition: opacity 0.5s linear; }
+  .manifesto p .w.lit { opacity: 1; }
+  .manifesto p em { font-family: var(--serif); font-style: italic; font-weight: 400; letter-spacing: -0.01em; }
 
-  /* reveal on scroll */
-  .reveal { opacity: 0; transform: translateY(32px); transition: opacity 0.8s var(--ease-out), transform 0.8s var(--ease-out); }
-  .reveal.in { opacity: 1; transform: none; }
-  .reveal.d1 { transition-delay: 0.08s; } .reveal.d2 { transition-delay: 0.16s; }
-  .reveal.d3 { transition-delay: 0.24s; } .reveal.d4 { transition-delay: 0.32s; }
+  /* ============ SPEC ============ */
+  .index { border-top: 1px solid var(--line); }
+  .index-head {
+    display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 20px;
+    padding: clamp(64px, 10vh, 120px) 24px 48px; max-width: 1380px; margin: 0 auto;
+  }
+  .index-head h2 { font-size: clamp(40px, 6.2vw, 92px); font-weight: 900; letter-spacing: -0.045em; line-height: 0.92; text-transform: uppercase; }
+  .index-head .mono { color: var(--faint); text-align: right; }
+  .spec { max-width: 1380px; margin: 0 auto; padding: 0 24px clamp(64px, 10vh, 120px); }
+  .spec-row {
+    position: relative;
+    display: grid; grid-template-columns: 64px minmax(150px, 320px) 1fr auto; gap: 24px;
+    padding: 28px 0; border-top: 1px solid var(--line-soft); align-items: baseline;
+    transition: background .25s;
+  }
+  .spec-row:last-child { border-bottom: 1px solid var(--line-soft); }
+  .spec-row::before { content: ""; position: absolute; inset: 0 -24px; background: #121212; opacity: 0; transition: opacity .3s; }
+  .spec-row:hover::before { opacity: 1; }
+  .spec-row > * { position: relative; }
+  .spec-row .n { font-family: var(--mono); font-size: 11px; color: var(--faint); letter-spacing: 0.08em; }
+  .spec-row .t { font-size: clamp(19px, 2.3vw, 27px); font-weight: 700; letter-spacing: -0.02em; transition: transform .4s var(--ease); }
+  .spec-row:hover .t { transform: translateX(8px); }
+  .spec-row .d { color: var(--dim); font-size: clamp(14px, 1.4vw, 16px); line-height: 1.6; max-width: 520px; }
+  .spec-row .arr { font-family: var(--mono); color: var(--ghost); font-size: 14px; transition: color .25s, transform .4s var(--ease); }
+  .spec-row:hover .arr { color: var(--ink); transform: translateX(4px); }
+  @media (max-width: 760px) {
+    .spec-row { grid-template-columns: 44px 1fr; }
+    .spec-row .d, .spec-row .arr { grid-column: 2; }
+  }
+  /* cursor-follow preview */
+  .peek {
+    position: fixed; z-index: 90; width: 300px; aspect-ratio: 16/10;
+    pointer-events: none; overflow: hidden; border: 1px solid var(--line);
+    opacity: 0; transform: scale(0.92) rotate(-2deg);
+    transition: opacity .35s var(--ease), transform .45s var(--ease);
+    filter: grayscale(0.4) contrast(1.05);
+  }
+  .peek.on { opacity: 1; transform: scale(1) rotate(-2deg); }
+  .peek img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
 
-  /* features grid */
-  .grid { margin-top: 56px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
-  .feat {
-    position: relative; overflow: hidden;
-    background: var(--card); border: 1px solid var(--line); border-radius: 20px;
-    padding: 32px 28px; transition: transform 0.35s var(--ease-out), border-color 0.3s, background 0.3s;
+  /* ============ GALLERY (pinned crossfade) ============ */
+  .gallery { border-top: 1px solid var(--line); }
+  .gal-inner { display: grid; grid-template-columns: 0.9fr 1.4fr; min-height: 100svh; }
+  .gal-left { position: relative; padding: clamp(60px, 10vh, 120px) 0 clamp(60px,10vh,120px) 24px; }
+  .gal-steps { position: sticky; top: 52px; height: calc(100svh - 52px); display: flex; flex-direction: column; justify-content: center; }
+  .gal-step { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; opacity: 0; }
+  .gal-step .n { font-family: var(--mono); font-size: 11px; color: var(--faint); letter-spacing: 0.08em; margin-bottom: 18px; }
+  .gal-step h3 { font-size: clamp(30px, 4vw, 54px); font-weight: 800; letter-spacing: -0.03em; line-height: 1; text-transform: uppercase; margin-bottom: 16px; }
+  .gal-step .c { font-family: var(--mono); font-size: 11px; color: var(--faint); letter-spacing: 0.1em; text-transform: uppercase; }
+  .gal-right { position: relative; padding: clamp(60px,10vh,120px) 24px; border-left: 1px solid var(--line-soft); }
+  .gal-stack { position: sticky; top: calc(52px + 6vh); height: min(76svh, 780px); }
+  .gal-stack .gimg {
+    position: absolute; inset: 0; overflow: hidden;
+    border: 1px solid var(--line); background: var(--panel); opacity: 0;
   }
-  .feat:hover { transform: translateY(-4px); border-color: #3d3d3d; background: var(--card-hover); }
-  .feat::before {
-    content: ""; position: absolute; inset: 0;
-    background: radial-gradient(320px 200px at var(--mx, 50%) var(--my, 0%), rgb(255 255 255 / 0.05), transparent 70%);
-    opacity: 0; transition: opacity 0.3s; pointer-events: none;
+  .gal-stack .gimg img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+  .gal-stack .gimg:first-child { opacity: 1; }
+  @media (max-width: 900px) {
+    .gal-inner { display: block; }
+    .gal-left { position: static; }
+    .gal-steps { position: static; height: auto; }
+    .gal-step { position: static; opacity: 1; padding: 48px 24px 8px; }
+    .gal-right { border-left: 0; padding-top: 0; }
+    .gal-stack { position: static; height: auto; display: grid; gap: 16px; }
+    .gal-stack .gimg { position: static; opacity: 1; aspect-ratio: 16/10; }
+    .gal-steps .gal-step:not(:first-of-type) { display: none; }
+    .gal-steps { display: none; }
+    .gal-right .mobile-cap { display: block; }
   }
-  .feat:hover::before { opacity: 1; }
-  .feat .ico {
-    width: 46px; height: 46px; border-radius: 13px;
-    display: grid; place-items: center; margin-bottom: 20px;
-    background: rgb(255 255 255 / 0.06); border: 1px solid var(--line);
-  }
-  .feat h3 { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 8px; }
-  .feat p { font-size: 14.5px; color: var(--dim); line-height: 1.6; }
+  .gal-right .mobile-cap { display: none; font-family: var(--mono); font-size: 10px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 8px; }
+  @media (max-width: 900px) { .gal-right .mobile-cap { display: block; } .gal-left { display: none; } }
 
-  /* screenshots bento */
-  .shots { margin-top: 56px; display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; }
-  .shot {
-    position: relative; border-radius: 20px; overflow: hidden;
-    border: 1px solid var(--line); background: var(--panel);
-    transition: transform 0.4s var(--ease-out), border-color 0.3s;
-  }
-  .shot:hover { transform: scale(1.015); border-color: #3d3d3d; }
-  .shot img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
-  .shot .cap {
-    position: absolute; inset: auto 0 0 0; padding: 40px 22px 16px;
-    font-size: 13px; font-weight: 600; color: var(--dim);
-    background: linear-gradient(180deg, transparent, rgb(10 10 10 / 0.92));
-  }
-  .shot.a { grid-column: span 7; aspect-ratio: 16/9.6; }
-  .shot.b { grid-column: span 5; aspect-ratio: 16/9.6; }
-  .shot.c { grid-column: span 5; aspect-ratio: 16/9.6; }
-  .shot.d { grid-column: span 7; aspect-ratio: 16/9.6; }
-  @media (max-width: 800px) { .shot { grid-column: span 12 !important; } }
+  /* ============ GET ============ */
+  .get { border-top: 1px solid var(--line); padding: clamp(90px, 15vh, 170px) 24px clamp(70px, 12vh, 130px); }
+  .get .inner { max-width: 1380px; margin: 0 auto; }
+  .get .k { color: var(--faint); display: block; margin-bottom: 26px; }
+  .get h2 { font-size: clamp(56px, 10.5vw, 172px); font-weight: 900; letter-spacing: -0.05em; line-height: 0.88; text-transform: uppercase; }
+  .get h2 span { color: var(--ghost); }
+  .get .row { margin-top: 60px; display: flex; align-items: center; gap: 26px; flex-wrap: wrap; }
+  .get .row .btn { padding: 24px 44px; font-size: 13px; }
+  .get .meta { display: flex; gap: 30px; flex-wrap: wrap; margin-top: 44px; color: var(--faint); }
+  .get .meta b { color: var(--dim); font-weight: 500; }
+  .get .meta .dot { color: #4ade80; }
 
-  /* download */
-  .dl {
-    text-align: center; position: relative;
+  /* ============ FOOTER ============ */
+  footer { border-top: 1px solid var(--line); overflow: hidden; }
+  .foot-brand {
+    padding: clamp(50px, 8vh, 90px) 24px 0; max-width: 1600px; margin: 0 auto;
+    display: flex; align-items: flex-end; gap: clamp(12px, 2vw, 28px);
   }
-  .dl .card {
-    position: relative; overflow: hidden; margin-top: 48px;
-    border: 1px solid var(--line); border-radius: 28px; background: var(--card);
-    padding: clamp(44px, 7vw, 80px) clamp(24px, 6vw, 80px);
+  .foot-brand .mark { flex: none; transform: translateY(-0.5vw); }
+  .foot-brand .mark svg { display: block; width: clamp(44px, 6vw, 96px); height: auto; }
+  .foot-brand h2 {
+    font-size: clamp(64px, 14.5vw, 230px); font-weight: 900;
+    letter-spacing: -0.055em; line-height: 0.78; text-transform: uppercase; color: #1e1e1e;
+    -webkit-text-stroke: 1px #3a3a3a; white-space: nowrap;
+    transition: color 1.2s var(--ease), -webkit-text-stroke-color 1.2s var(--ease);
   }
-  .dl .card::before {
-    content: ""; position: absolute; inset: -40%;
-    background: radial-gradient(45% 55% at 50% 0%, rgb(255 255 255 / 0.07), transparent 70%);
-    pointer-events: none;
+  .foot-brand:hover h2 { color: var(--ink); -webkit-text-stroke-color: transparent; }
+  .foot {
+    display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap;
+    padding: 40px 24px 34px; max-width: 1380px; margin: 0 auto;
   }
-  .dl-meta { margin-top: 22px; font-size: 14px; color: var(--faint); }
-  .dl-meta b { color: var(--dim); font-weight: 600; }
-  .alt { margin-top: 16px; font-size: 14px; }
-  .alt a { color: var(--dim); text-decoration: none; border-bottom: 1px solid var(--line); transition: color 0.2s, border-color 0.2s; }
-  .alt a:hover { color: var(--ink); border-color: var(--faint); }
-  .steps { margin-top: 44px; display: flex; justify-content: center; gap: clamp(20px, 6vw, 72px); flex-wrap: wrap; }
-  .step { display: flex; flex-direction: column; align-items: center; gap: 12px; font-size: 14px; color: var(--dim); font-weight: 500; }
-  .step .n {
-    width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
-    border: 1px solid var(--line); background: var(--panel); font-weight: 800; color: var(--ink); font-size: 15px;
-  }
+  .foot .l { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); }
+  .foot .r { display: flex; gap: 28px; }
+  .foot .r a { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); text-decoration: none; transition: color .2s; }
+  .foot .r a:hover { color: var(--ink); }
+  .legal { padding: 0 24px 36px; max-width: 1380px; margin: 0 auto; color: #434343; font-size: 12px; line-height: 1.65; }
 
-  /* footer */
-  footer {
-    border-top: 1px solid var(--line); padding: 48px clamp(20px, 6vw, 80px);
-    display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap;
-    max-width: 1240px; margin: 0 auto;
-  }
-  footer .l { display: flex; align-items: center; gap: 10px; color: var(--faint); font-size: 14px; }
-  footer a { color: var(--dim); text-decoration: none; font-size: 14px; transition: color 0.2s; }
-  footer a:hover { color: var(--ink); }
-  .foot-links { display: flex; gap: 24px; align-items: center; }
-  .disclaimer { width: 100%; font-size: 12px; color: #525252; margin-top: 8px; }
+  /* reveal */
+  .rv { opacity: 0; transform: translateY(30px); transition: opacity 1s var(--ease), transform 1s var(--ease); }
+  .rv.in { opacity: 1; transform: none; }
+  .rv.d1 { transition-delay: .1s } .rv.d2 { transition-delay: .2s } .rv.d3 { transition-delay: .3s }
 
   @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { animation-duration: 0.01ms !important; animation-delay: 0s !important; transition-duration: 0.01ms !important; }
-    .hero h1 .line span { transform: none; }
-    .hero p.sub, .hero-ctas, .eq, .hero-shot { opacity: 1; }
-    .reveal { opacity: 1; transform: none; }
+    *, *::before, *::after { animation: none !important; transition-duration: 0.01ms !important; }
+    .hero h1 .row > span { transform: none; animation: none; }
+    .rv { opacity: 1; transform: none; }
+    .loader { display: none; }
+    nav { transform: none; }
+    .grain { animation: none; }
+    .manifesto p .w { opacity: 1; }
+    .gal-step { opacity: 1 !important; position: static; }
+    .gal-stack .gimg { opacity: 1 !important; position: static; }
+    .gal-stack { position: static; height: auto; display: grid; gap: 16px; }
   }
 </style>
 </head>
 <body>
 
-<nav id="nav">
-  <a class="nav-brand" href="#">
-    <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
-      <circle cx="16" cy="16" r="13" stroke="currentColor" stroke-width="2.6"/>
-      <path d="M16 3 A13 13 0 0 1 29 16" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
-      <circle cx="16" cy="16" r="5.5" fill="currentColor"/>
+<div class="grain" aria-hidden="true"></div>
+
+<!-- ============ LOADER ============ -->
+<div class="loader" id="loader" aria-hidden="true">
+  <div class="mark">
+    <svg width="56" height="56" viewBox="0 0 48 48" fill="none" style="color:#f2f2f2">
+      <path d="M41.5 33A19 19 0 1 1 24 5" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+      <circle cx="24" cy="24" r="10" stroke="currentColor" stroke-width="5"/>
+      <circle cx="24" cy="24" r="3.5" fill="currentColor"/>
     </svg>
-    Freebify
+  </div>
+  <div class="word">FREEBIFY</div>
+  <div class="num" id="loadNum">0</div>
+  <div class="bar" id="loadBar"></div>
+</div>
+
+<nav id="nav">
+  <a class="brand" href="#top" data-scroll>
+    <svg width="19" height="19" viewBox="0 0 48 48" fill="none">
+      <path d="M41.5 33A19 19 0 1 1 24 5" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+      <circle cx="24" cy="24" r="10" stroke="currentColor" stroke-width="5"/>
+      <circle cx="24" cy="24" r="3.5" fill="currentColor"/>
+    </svg>
+    FREEBIFY
   </a>
-  <div class="nav-links">
-    <a href="#features">Features</a>
-    <a href="#screenshots">Screenshots</a>
-    <a href="https://github.com/govu/freebify" target="_blank" rel="noopener">GitHub</a>
-    <a class="nav-cta" href="#download">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Download
-    </a>
+  <div class="links">
+    <a href="#spec" data-scroll>Spec</a>
+    <a href="#shots" data-scroll>Interface</a>
+    <a href="https://github.com/govu/freebify" target="_blank" rel="noopener">GitHub ↗</a>
+    <a class="dl" href="#get" data-scroll>Download</a>
   </div>
 </nav>
 
-<header class="hero">
-  <div class="pill"><span class="dot"></span> v<span id="ver">1.0</span> &nbsp;·&nbsp; free &amp; open source</div>
+<header class="hero" id="top">
+  <div class="hero-meta mono">
+    <span>FBF—001</span>
+    <span>Desktop music player — YTM + Audius catalogs</span>
+    <span>Windows 10 / 11</span>
+    <span><span id="verTag">v1.0.3</span> · MIT</span>
+  </div>
   <h1>
-    <span class="line"><span>Music that’s</span></span>
-    <span class="line"><span>just yours.</span></span>
-    <span class="line"><span>No ads. Ever.</span></span>
+    <span class="row"><span>All the music.</span></span>
+    <span class="row"><span>None of the</span></span>
+    <span class="row"><span>ads<em>.</em></span></span>
   </h1>
-  <p class="sub">Freebify is a free desktop music player — real songs, original studio recordings, live synced lyrics and zero ads. For everyone, everywhere.</p>
-  <div class="hero-ctas">
-    <a class="btn-primary" id="heroDl" href="#download">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Download for Windows
-    </a>
-    <a class="btn-ghost" href="https://github.com/govu/freebify" target="_blank" rel="noopener">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55v-2.15c-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.72-1.54-2.55-.29-5.23-1.28-5.23-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.04 0 0 .97-.31 3.17 1.18a11.1 11.1 0 0 1 5.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.75.11 3.04.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.35.77 1.05.77 2.12v3.15c0 .3.21.67.8.55A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>
-      Star on GitHub
-    </a>
+  <div class="hero-sub">
+    <p>Freebify is a desktop music player that streams <b>original studio recordings</b> — no ads between songs, no subscriptions, no account. Just the music.</p>
+    <div class="cta-row">
+      <a class="btn solid" href="#get" data-scroll>Download free ↓</a>
+      <a class="btn line" href="https://github.com/govu/freebify" target="_blank" rel="noopener">Source ↗</a>
+    </div>
   </div>
-  <div class="eq" aria-hidden="true">
-    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
-  </div>
-  <div class="hero-shot">
-    <div class="frame" id="tilt"><img src="shots/home.png" alt="Freebify app — home catalog"></div>
+  <div class="hero-visual">
+    <div class="frame"><img src="shots/home.png" alt="Freebify — home" id="heroImg"><div class="fade"></div></div>
   </div>
 </header>
 
-<div class="marquee" aria-hidden="true">
-  <div class="track">
-    <span><b>NO ADS</b></span><span>NO SUBSCRIPTIONS</span><span><b>ORIGINAL RECORDINGS</b></span><span>LIVE LYRICS</span><span><b>GENRE RADIO</b></span><span>DISCORD PRESENCE</span><span><b>OPEN SOURCE</b></span><span>FREE FOREVER</span>
-  </div>
-  <div class="track">
-    <span><b>NO ADS</b></span><span>NO SUBSCRIPTIONS</span><span><b>ORIGINAL RECORDINGS</b></span><span>LIVE LYRICS</span><span><b>GENRE RADIO</b></span><span>DISCORD PRESENCE</span><span><b>OPEN SOURCE</b></span><span>FREE FOREVER</span>
-  </div>
-</div>
+<div class="ticker" aria-hidden="true"><div class="inner" id="ticker"></div></div>
 
-<section id="features">
-  <div class="kicker reveal">Why Freebify</div>
-  <h2 class="h2 reveal d1">Everything a music app<br>should be. Nothing it shouldn’t.</h2>
-  <p class="lead reveal d2">Built to feel premium and stay honest — the features you actually use, engineered to be fast and quiet.</p>
-  <div class="grid">
-    <div class="feat reveal">
-      <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="4.9" y1="4.9" x2="19.1" y2="19.1"/></svg></div>
-      <h3>Zero ads, period</h3>
-      <p>No audio ads, no banners, no “upgrade to premium” nags. The player plays — that’s the whole deal.</p>
+<section class="manifesto" id="manifesto">
+  <span class="mono rv">( The idea )</span>
+  <p id="maniText">Streaming made music free, then charged you in ads. <em>Freebify removes the business model and keeps the player</em> — every search returns the real studio version, every transition is instant, and nothing ever interrupts a song.</p>
+</section>
+
+<section class="index" id="spec">
+  <div class="index-head">
+    <h2 class="rv">What’s<br>inside</h2>
+    <span class="mono rv d1">Spec / 001–008</span>
+  </div>
+  <div class="spec" id="specList">
+    <div class="spec-row rv" data-img="shots/artist.png"><span class="n">001</span><span class="t">Original recordings</span><span class="d">Search returns the real studio release — not a slowed edit, a sped-up rip or a cover with the same title.</span><span class="arr">→</span></div>
+    <div class="spec-row rv" data-img="shots/home.png"><span class="n">002</span><span class="t">Zero ads</span><span class="d">No audio interruptions, no banners, no “go premium” nags. The player plays. That’s the deal.</span><span class="arr">→</span></div>
+    <div class="spec-row rv" data-img="shots/nowplaying.png"><span class="n">003</span><span class="t">Live synced lyrics</span><span class="d">Line-by-line karaoke that follows the song, auto-calibrated to the exact version you’re hearing.</span><span class="arr">→</span></div>
+    <div class="spec-row rv" data-img="shots/search.png"><span class="n">004</span><span class="t">Genre radio</span><span class="d">Start a radio from any track and the queue stays on-vibe — the same sound, not the same song rehashed.</span><span class="arr">→</span></div>
+    <div class="spec-row rv"><span class="n">005</span><span class="t">Discord presence</span><span class="d">Your status shows the song, the artist, the artwork and live progress — like the big players do.</span><span class="arr">→</span></div>
+    <div class="spec-row rv"><span class="n">006</span><span class="t">Silent auto-updates</span><span class="d">New versions download in the background and install when you quit. You never manage the app.</span><span class="arr">→</span></div>
+    <div class="spec-row rv" data-img="shots/home.png"><span class="n">007</span><span class="t">Your library</span><span class="d">Likes, playlists, queue and history — stored locally on your machine, not our servers.</span><span class="arr">→</span></div>
+    <div class="spec-row rv"><span class="n">008</span><span class="t">No account</span><span class="d">Install and press play. No email, no login, no trial clock. That’s the entire signup flow.</span><span class="arr">→</span></div>
+  </div>
+</section>
+
+<section class="gallery" id="shots">
+  <div class="gal-inner">
+    <div class="gal-left">
+      <div class="gal-steps" id="galSteps">
+        <div class="gal-step"><div class="n">01 / Home</div><h3>Pick up where<br>you left off</h3><div class="c">Recents · charts · editorial</div></div>
+        <div class="gal-step"><div class="n">02 / Lyrics</div><h3>Lyrics that keep<br>the tempo</h3><div class="c">Line-synced · auto-calibrated</div></div>
+        <div class="gal-step"><div class="n">03 / Search</div><h3>Find it in<br>three letters</h3><div class="c">Songs · artists · playlists</div></div>
+        <div class="gal-step"><div class="n">04 / Artists</div><h3>Every artist,<br>properly profiled</h3><div class="c">Bio · top tracks · monthly listeners</div></div>
+      </div>
     </div>
-    <div class="feat reveal d1">
-      <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
-      <h3>Originals only</h3>
-      <p>Real studio recordings — not slowed edits, sped-up rips or covers. What the artist released is what you hear.</p>
-    </div>
-    <div class="feat reveal d2">
-      <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 0-4 4v6a4 4 0 0 0 8 0V6a4 4 0 0 0-4-4z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg></div>
-      <h3>Live synced lyrics</h3>
-      <p>Karaoke-style lyrics that follow the song line by line, auto-synced to the right version — click any line to jump there.</p>
-    </div>
-    <div class="feat reveal">
-      <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><path d="M7.5 7.5C5 9.5 5 14.5 7.5 16.5M16.5 7.5C19 9.5 19 14.5 16.5 16.5M4 5C.5 8 .5 16 4 19M20 5c3.5 3 3.5 11 0 14"/></svg></div>
-      <h3>Genre radio</h3>
-      <p>Start a radio from any song and Freebify keeps playing what fits — the same vibe, endlessly, not the same track rehashed.</p>
-    </div>
-    <div class="feat reveal d1">
-      <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 0 0 .42-8.98 6.5 6.5 0 0 0-12.4-1.3A5 5 0 0 0 6 18.5z"/><path d="M12 12v6"/><path d="m9.5 15.5 2.5 2.5 2.5-2.5"/></svg></div>
-      <h3>Discord presence</h3>
-      <p>Show what you’re listening to on Discord — cover art, artist and live progress, just like the big players do.</p>
-    </div>
-    <div class="feat reveal d2">
-      <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg></div>
-      <h3>Always up to date</h3>
-      <p>The app updates itself silently in the background — every improvement lands without you lifting a finger.</p>
+    <div class="gal-right">
+      <div class="gal-stack" id="galStack">
+        <div class="gimg"><img src="shots/home.png" alt="Home"></div>
+        <div class="gimg"><img src="shots/nowplaying.png" alt="Synced lyrics"></div>
+        <div class="gimg"><img src="shots/search.png" alt="Search"></div>
+        <div class="gimg"><img src="shots/artist.png" alt="Artist page"></div>
+      </div>
+      <div class="mobile-cap">Interface — home · lyrics · search · artist</div>
     </div>
   </div>
 </section>
 
-<section id="screenshots">
-  <div class="kicker reveal">Inside the app</div>
-  <h2 class="h2 reveal d1">Dark, calm, fast.</h2>
-  <p class="lead reveal d2">A deliberately neutral interface — nothing competes with the music. These are real captures, not mockups.</p>
-  <div class="shots">
-    <div class="shot a reveal"><img src="shots/home.png" alt="Home — your library and charts" loading="lazy"><div class="cap">Home — jump back in, browse this week’s chart</div></div>
-    <div class="shot b reveal d1"><img src="shots/nowplaying.png" alt="Now Playing — synced lyrics" loading="lazy"><div class="cap">Now Playing — lyrics that move with the song</div></div>
-    <div class="shot c reveal"><img src="shots/search.png" alt="Search — artists, songs, playlists" loading="lazy"><div class="cap">Search — songs, artists and playlists together</div></div>
-    <div class="shot d reveal d1"><img src="shots/artist.png" alt="Artist page — Tito Nieves" loading="lazy"><div class="cap">Artist pages — real profiles with monthly listeners</div></div>
-  </div>
-</section>
-
-<section id="download" class="dl">
-  <div class="kicker reveal">Get it</div>
-  <h2 class="h2 reveal d1">Free today.<br>Free forever.</h2>
-  <div class="card reveal d2">
-    <a class="btn-primary" id="dlBtn" href="https://github.com/govu/freebify/releases/latest" target="_blank" rel="noopener" style="font-size:18px;padding:18px 40px">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      <span id="dlLabel">Download Freebify for Windows</span>
-    </a>
-    <p class="dl-meta" id="dlMeta">Free &amp; open source · Windows 10/11 · <b id="verMeta">v1.0</b></p>
-    <p class="alt"><a href="https://github.com/govu/freebify/releases/latest" target="_blank" rel="noopener" id="altLink">Portable version &amp; older releases</a> · <a href="https://github.com/govu/freebify" target="_blank" rel="noopener">Source code</a></p>
-    <div class="steps">
-      <div class="step reveal"><div class="n">1</div>Download</div>
-      <div class="step reveal d1"><div class="n">2</div>Install</div>
-      <div class="step reveal d2"><div class="n">3</div>Press play</div>
+<section class="get" id="get">
+  <div class="inner">
+    <span class="k mono rv">( Download )</span>
+    <h2 class="rv">Get Freebify.<br><span>Keep the money.</span></h2>
+    <div class="row rv d1">
+      <a class="btn solid" id="dlBtn" href="https://github.com/govu/freebify/releases/latest" target="_blank" rel="noopener">Download for Windows</a>
+      <a class="btn line" id="portableBtn" href="https://github.com/govu/freebify/releases/latest" target="_blank" rel="noopener">Portable .exe</a>
+    </div>
+    <div class="meta mono rv d2">
+      <span>VERSION <b id="verMeta">1.0.3</b></span>
+      <span>SIZE <b>~120 MB</b></span>
+      <span>OS <b>Windows 10/11 · 64-bit</b></span>
+      <span>PRICE <b>$0 — forever</b></span>
+      <span id="dlCount" style="display:none">DOWNLOADS <b id="dlCountN"></b></span>
+      <span><span class="dot">●</span> <b>AUTO-UPDATES</b></span>
     </div>
   </div>
 </section>
 
 <footer>
-  <div class="l">
-    <svg width="20" height="20" viewBox="0 0 32 32" fill="none" style="color:var(--dim)">
-      <circle cx="16" cy="16" r="13" stroke="currentColor" stroke-width="2.6"/>
-      <path d="M16 3 A13 13 0 0 1 29 16" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
-      <circle cx="16" cy="16" r="5.5" fill="currentColor"/>
-    </svg>
-    Freebify — made for people who just want the music.
+  <div class="foot-brand">
+    <span class="mark">
+      <svg viewBox="0 0 48 48" fill="none" style="color:#3a3a3a">
+        <path d="M41.5 33A19 19 0 1 1 24 5" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+        <circle cx="24" cy="24" r="10" stroke="currentColor" stroke-width="5"/>
+        <circle cx="24" cy="24" r="3.5" fill="currentColor"/>
+      </svg>
+    </span>
+    <h2>FREEBIFY</h2>
   </div>
-  <div class="foot-links">
-    <a href="https://github.com/govu/freebify" target="_blank" rel="noopener">GitHub</a>
-    <a href="https://github.com/govu/freebify/releases" target="_blank" rel="noopener">Releases</a>
-    <a href="https://github.com/govu/freebify/issues" target="_blank" rel="noopener">Report a bug</a>
+  <div class="foot">
+    <span class="l">© 2026 Freebify — free software, free music.</span>
+    <div class="r">
+      <a href="https://github.com/govu/freebify" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/govu/freebify/releases" target="_blank" rel="noopener">Releases</a>
+      <a href="https://github.com/govu/freebify/issues" target="_blank" rel="noopener">Issues</a>
+    </div>
   </div>
-  <p class="disclaimer">Freebify is an independent open-source project and is not affiliated with Spotify or YouTube. Music metadata and streams are provided by their respective public sources.</p>
+  <p class="legal">Freebify is an independent open-source project. Not affiliated with Spotify or YouTube. Music metadata and streams are provided by their respective public sources.</p>
 </footer>
 
+<div class="peek" id="peek"><img id="peekImg" src="shots/home.png" alt=""></div>
+
+<script src="https://unpkg.com/lenis@1.3.11/dist/lenis.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.7/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.7/ScrollTrigger.min.js"></script>
 <script>
-  // nav shadow
-  const nav = document.getElementById("nav");
-  addEventListener("scroll", () => nav.classList.toggle("scrolled", scrollY > 24), { passive: true });
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  // scroll reveal
-  const io = new IntersectionObserver((es) => es.forEach(e => e.isIntersecting && e.target.classList.add("in")), { threshold: 0.12 });
-  document.querySelectorAll(".reveal").forEach(el => io.observe(el));
+  /* ---------- loader ---------- */
+  const loader = document.getElementById("loader");
+  const num = document.getElementById("loadNum");
+  const bar = document.getElementById("loadBar");
+  let p = 0;
+  const tickLoad = () => {
+    p = Math.min(100, p + Math.random() * 26 + 8);
+    num.textContent = String(Math.round(p)).padStart(3, "0");
+    bar.style.width = p + "%";
+    if (p < 100) setTimeout(tickLoad, 90 + Math.random() * 120);
+    else setTimeout(() => {
+      loader.classList.add("done");
+      document.getElementById("nav").classList.add("in");
+      document.querySelectorAll(".hero h1 .row > span").forEach(s => s.classList.add("play"));
+      setTimeout(() => loader.remove(), 900);
+    }, 320);
+  };
+  reduced ? (loader.remove(), document.getElementById("nav").classList.add("in"), document.querySelectorAll(".hero h1 .row > span").forEach(s => s.classList.add("play"))) : setTimeout(tickLoad, 180);
 
-  // hero screenshot tilt
-  const tilt = document.getElementById("tilt");
-  const hero = document.querySelector(".hero-shot");
-  if (matchMedia("(pointer:fine)").matches) {
-    hero.addEventListener("mousemove", (e) => {
-      const r = hero.getBoundingClientRect();
-      const x = (e.clientX - r.left) / r.width - 0.5;
-      const y = (e.clientY - r.top) / r.height - 0.5;
-      tilt.style.transform = `rotateY(${x * 5}deg) rotateX(${-y * 4}deg)`;
-    });
-    hero.addEventListener("mouseleave", () => (tilt.style.transform = ""));
+  /* ---------- lenis smooth scroll ---------- */
+  let lenis = null;
+  if (!reduced && window.Lenis) {
+    lenis = new Lenis({ lerp: 0.09, wheelMultiplier: 1, smoothWheel: true });
+    const raf = (t) => { lenis.raf(t); requestAnimationFrame(raf); };
+    requestAnimationFrame(raf);
   }
-
-  // feature card spotlight
-  document.querySelectorAll(".feat").forEach((c) => {
-    c.addEventListener("mousemove", (e) => {
-      const r = c.getBoundingClientRect();
-      c.style.setProperty("--mx", ((e.clientX - r.left) / r.width) * 100 + "%");
-      c.style.setProperty("--my", ((e.clientY - r.top) / r.height) * 100 + "%");
+  document.querySelectorAll("a[data-scroll]").forEach(a => {
+    a.addEventListener("click", (e) => {
+      const id = a.getAttribute("href");
+      if (!id?.startsWith("#")) return;
+      e.preventDefault();
+      const el = document.querySelector(id);
+      if (!el) return;
+      lenis ? lenis.scrollTo(el, { offset: -52, duration: 1.4 }) : el.scrollIntoView({ behavior: "smooth" });
     });
   });
 
-  // live download links from the latest GitHub release
+  /* ---------- reveals ---------- */
+  const io = new IntersectionObserver(es => es.forEach(e => e.isIntersecting && e.target.classList.add("in")), { threshold: 0.12 });
+  document.querySelectorAll(".rv").forEach(el => io.observe(el));
+
+  /* ---------- ticker ---------- */
+  const tracks = [
+    ["De Mí Enamórate", "Tito Nieves", "5:12"],
+    ["La Gozadera", "Gente de Zona", "3:24"],
+    ["PARADIXE", "El Americano 4KT", "5:42"],
+    ["Vivir Mi Vida", "Marc Anthony", "4:13"],
+    ["Fabricando Fantasías", "Tito Nieves", "4:35"],
+    ["Amanece", "Anuel AA", "3:31"],
+    ["Las 8 am", "Andres Franco", "2:58"],
+    ["BbY WOW", "rusowsky", "3:46"],
+  ];
+  const half = tracks.map(([t, a, d], i) =>
+    `<span>${i === 0 ? '<b class="live">●</b>' : ''}<b>${t}</b><i>${a}</i>${d}</span>`).join("");
+  const tickerEl = document.getElementById("ticker");
+  tickerEl.innerHTML = half + half;
+  // translateX loop via transform for perf
+  if (!reduced) {
+    let tx = 0, wHalf = 0;
+    const measure = () => (wHalf = tickerEl.scrollWidth / 2);
+    addEventListener("load", measure); setTimeout(measure, 800);
+    const move = () => {
+      if (wHalf) { tx -= 0.55; if (-tx >= wHalf) tx += wHalf; tickerEl.style.transform = `translate3d(${tx}px,0,0)`; }
+      requestAnimationFrame(move);
+    };
+    requestAnimationFrame(move);
+  }
+
+  /* ---------- manifesto word scrub ---------- */
+  const mani = document.getElementById("maniText");
+  (() => {
+    // wrap words in spans, preserving the <em> styling
+    const wrapWords = (node) => {
+      [...node.childNodes].forEach(ch => {
+        if (ch.nodeType === 3) {
+          const frag = document.createDocumentFragment();
+          ch.textContent.split(/(\s+)/).forEach(part => {
+            if (!part.trim()) return frag.appendChild(document.createTextNode(part));
+            const s = document.createElement("span");
+            s.className = "w"; s.textContent = part;
+            frag.appendChild(s);
+          });
+          node.replaceChild(frag, ch);
+        } else if (ch.nodeType === 1) wrapWords(ch);
+      });
+    };
+    wrapWords(mani);
+    const words = [...mani.querySelectorAll(".w")];
+    if (reduced) return words.forEach(w => w.classList.add("lit"));
+    const lit = () => {
+      const r = mani.getBoundingClientRect();
+      const prog = Math.min(1, Math.max(0, (innerHeight * 0.72 - r.top) / (r.height * 1.1)));
+      const cut = Math.floor(prog * words.length);
+      words.forEach((w, i) => w.classList.toggle("lit", i <= cut));
+    };
+    addEventListener("scroll", lit, { passive: true });
+    lit();
+  })();
+
+  /* ---------- spec hover peek ---------- */
+  const peek = document.getElementById("peek");
+  const peekImg = document.getElementById("peekImg");
+  let px = 0, py = 0, tx2 = 0, ty2 = 0;
+  addEventListener("mousemove", e => { tx2 = e.clientX; ty2 = e.clientY; });
+  const follow = () => {
+    px += (tx2 - px) * 0.12; py += (ty2 - py) * 0.12;
+    peek.style.left = px + 24 + "px"; peek.style.top = py - 130 + "px";
+    requestAnimationFrame(follow);
+  };
+  requestAnimationFrame(follow);
+  document.querySelectorAll(".spec-row[data-img]").forEach(row => {
+    row.addEventListener("mouseenter", () => { peekImg.src = row.dataset.img; peek.classList.add("on"); });
+    row.addEventListener("mouseleave", () => peek.classList.remove("on"));
+  });
+
+  /* ---------- hero parallax ---------- */
+  const heroImg = document.getElementById("heroImg");
+  if (!reduced) addEventListener("scroll", () => {
+    const y = scrollY;
+    if (y < innerHeight * 1.2) heroImg.style.transform = `translateY(${y * -0.12}px) scale(1.04)`;
+  }, { passive: true });
+
+  /* ---------- gallery crossfade (GSAP) ---------- */
+  if (!reduced && window.gsap && innerWidth > 900) {
+    gsap.registerPlugin(ScrollTrigger);
+    const steps = gsap.utils.toArray(".gal-step");
+    const imgs = gsap.utils.toArray(".gal-stack .gimg");
+    gsap.set(steps[0], { opacity: 1 });
+    const N = imgs.length;
+    ScrollTrigger.create({
+      trigger: ".gallery",
+      start: "top top",
+      end: `+=${N * 90}%`,
+      pin: ".gal-inner",
+      scrub: true,
+      onUpdate(self) {
+        const idx = Math.min(N - 1, Math.floor(self.progress * N));
+        imgs.forEach((im, i) => gsap.to(im, { opacity: i === idx ? 1 : 0, duration: 0.5, ease: "power2.out", overwrite: "auto" }));
+        steps.forEach((st, i) => gsap.to(st, { opacity: i === idx ? 1 : 0, y: i === idx ? 0 : 14, duration: 0.45, ease: "power2.out", overwrite: "auto" }));
+      },
+    });
+    // section needs extra scroll length for the pin
+    document.querySelector(".gallery").style.height = `${N * 100}svh`;
+  }
+
+  /* ---------- dev screenshot hook (?y=px) ---------- */
+  const _y = new URLSearchParams(location.search).get("y");
+  if (_y) document.documentElement.style.transform = `translateY(${-_y}px)`;
+  if (new URLSearchParams(location.search).has("vw")) document.title = `W${innerWidth}x${innerHeight} DPR${devicePixelRatio}`;
+
+  /* ---------- release wiring ---------- */
   fetch("https://api.github.com/repos/govu/freebify/releases/latest")
     .then(r => r.json())
     .then(rel => {
@@ -445,14 +621,17 @@
       const setup = rel.assets?.find(a => /setup\.exe$/i.test(a.name));
       const portable = rel.assets?.find(a => /portable\.exe$/i.test(a.name));
       if (v) {
-        document.getElementById("ver").textContent = v;
-        document.getElementById("verMeta").textContent = "v" + v;
-        document.getElementById("dlLabel").textContent = `Download Freebify ${v} for Windows`;
+        document.getElementById("verTag").textContent = "v" + v;
+        document.getElementById("verMeta").textContent = v;
+        document.getElementById("dlBtn").textContent = `Download Freebify ${v}`;
       }
       if (setup) document.getElementById("dlBtn").href = setup.browser_download_url;
-      if (portable) document.getElementById("altLink").href = portable.browser_download_url;
+      if (portable) document.getElementById("portableBtn").href = portable.browser_download_url;
       const dls = rel.assets?.reduce((n, a) => n + (a.download_count || 0), 0);
-      if (dls) document.getElementById("dlMeta").innerHTML += ` · <b>${dls.toLocaleString()} downloads</b>`;
+      if (dls >= 500) {
+        document.getElementById("dlCount").style.display = "";
+        document.getElementById("dlCountN").textContent = dls.toLocaleString();
+      }
     })
     .catch(() => {});
 </script>
