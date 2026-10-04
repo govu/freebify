@@ -13,7 +13,12 @@ function candidates(art: Artwork, size: ImgSize): string[] {
   } catch {
     return [primary]
   }
-  return [primary, ...(art.mirrors ?? []).map((m) => `${m}${path}`)]
+  // YouTube's maxresdefault only exists for HD uploads — when the chosen size
+  // 404s, the next size down is the fallback that actually renders. Mirrors
+  // only exist for Audius, so key-fallback is what saves yt artwork.
+  const sizes: ImgSize[] = ["1000x1000", "480x480", "150x150"]
+  const rest = sizes.filter((s) => s !== size).map((s) => art[s]).filter((u): u is string => Boolean(u) && u !== primary)
+  return [primary, ...(art.mirrors ?? []).map((m) => `${m}${path}`), ...rest]
 }
 
 interface ArtworkImgProps {

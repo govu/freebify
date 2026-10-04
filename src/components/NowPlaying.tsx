@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react"
 import { Link } from "react-router-dom"
 import { useLibrary } from "../store/library"
 import { usePlayer } from "../store/player"
-import { yt } from "../api/youtube"
+import { yt, ytBridge } from "../api/youtube"
 import { dominantColor, rgb } from "../utils/color"
 import { fmtDuration } from "../utils/format"
 import { ArtworkImg } from "./ArtworkImg"
@@ -49,6 +49,74 @@ function parseLrc(src: string): LrcLine[] {
     for (const t of stamps) out.push({ t: t + metaOffset, text: rest })
   }
   return out.sort((a, b) => a.t - b.t)
+}
+
+interface LrcRec {
+  id?: number
+  trackName?: string
+  artistName?: string
+  duration?: number
+  syncedLyrics?: string | null
+  plainLyrics?: string | null
+}
+
+// accent/case/punctuation-insensitive normalize — uploaders write the same
+// title a dozen ways; lyric DB records use yet another
+const norm = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+
+// prefix match on a word boundary — "lluvia remix" starts with "lluvia",
+// but "raindrops" must NOT count as matching "rain"
+const starts = (a: string, b: string) => a.startsWith(b) && (a.length === b.length || a[b.length] === " ")
+
+// loose title equality: containment either way or ≥70% word overlap —
+// strict equality rejects the same song under a longer upload title
+const titleLike = (a: string, b: string) => {
+  const na = norm(a)
+  const nb = norm(b)
+  if (!na || !nb) return false
+  if (starts(na, nb) || starts(nb, na)) return true
+  const wa = new Set(na.split(" "))
+  const wb = nb.split(" ").filter((w) => w.length > 1)
+  return wb.length > 0 && wb.filter((w) => wa.has(w)).length / wb.length >= 0.7
+}
+
+// strip only NOISE tails — "(VIDEO OFICIAL)", "| BLESSD (VIDEO...)",
+// "[Official Audio]" — while keeping meaningful "(feat. X)" groups: each
+// trailing bracket/pipe group is removed only if it contains a noise
+// keyword, so features survive and video cruft dies
+const TITLE_NOISE = /video|oficial|official|lyric|letra|\baudio\b|visual|\bhd\b|\b4k\b|\bmv\b|explicit|live\b|cover\b|remaster/i
+const cleanTitle = (s: string) => {
+  let t = s.trim()
+  for (let i = 0; i < 4; i++) {
+    const m = /\s*(\([^(]*\)|\[[^\]]*\]|\|.*)$/.exec(t)
+    if (!m || !TITLE_NOISE.test(m[1])) break
+    t = t.slice(0, m.index).trim()
+  }
+  return t
+}
+// drops every bracket group + pipe tail — the "(feat. X)"-stripped retry
+const stripGroups = (s: string) => s.replace(/\s*(\([^(]*\)|\[[^\]]*\])/g, "").replace(/\s*\|.*$/, "").trim()
+
+const lrcGet = async (path: string, p: Record<string, string>): Promise<LrcRec[]> => {
+  try {
+    const u = new URL(path, "https://lrclib.net")
+    for (const [k, v] of Object.entries(p)) if (v) u.searchParams.set(k, v)
+    const r = await fetch(u, { signal: AbortSignal.timeout(7000) })
+    if (!r.ok) return []
+    const j = (await r.json()) as LrcRec | LrcRec[]
+    return (Array.isArray(j) ? j : [j]).filter(
+      (x) => Boolean(x?.syncedLyrics?.trim()) || Boolean(x?.plainLyrics?.trim())
+    )
+  } catch {
+    return []
+  }
 }
 
 // live lyrics — active line bright, past lines dim, future lines faint;
@@ -230,17 +298,13 @@ export function NowPlaying() {
     if (!showLyrics || lyricsTried || !current) return
     let live = true
     setLyricsLoading(true)
-    // strip only NOISE tails — "(VIDEO OFICIAL)", "| BLESSD (VIDEO...)",
-    // "[Official Audio]" — while keeping meaningful "(feat. X)" groups:
-    // each trailing bracket/pipe group is removed only if it contains a
-    // noise keyword, so features survive and video cruft dies
-    const noise = /video|oficial|official|lyric|letra|\baudio\b|visual|\bhd\b|\b4k\b|\bmv\b|explicit|live\b|cover\b|remaster/i
-    let title = current.title.trim()
-    for (let i = 0; i < 4; i++) {
-      const m = /\s*(\([^(]*\)|\[[^\]]*\]|\|.*)$/.exec(title)
-      if (!m || !noise.test(m[1])) break
-      title = title.slice(0, m.index).trim()
-    }
+    // cleanTitle strips only NOISE tails — "(VIDEO OFICIAL)", "[Official
+    // Audio]" — keeping meaningful "(feat. X)" groups; the stripped variant
+    // drops every bracket for a bare-title retry when feature-tagged
+    // queries come back empty
+    const title = cleanTitle(current.title)
+    const stripped = stripGroups(title)
+    const titles = stripped && stripped !== title ? [title, stripped] : [title]
     // channel suffixes: " - Topic"/" - Official" need the dash (bare
     // "Topic"/"Official HIGE DANDism" are real artist names); VEVO is
     // stripped only in its shouty trailing form (ShakiraVEVO → Shakira)
@@ -248,55 +312,74 @@ export function NowPlaying() {
       .replace(/\s*[-–—]\s*(vevo|official|oficial|topic)\b.*$/i, "")
       .replace(/VEVO\s*$/, "")
       .trim()
-    const fetchLrcLib = async (): Promise<{ synced: LrcLine[]; autoOff: number } | { plain: string } | null> => {
-      try {
-        const params = (u: URL) => {
-          u.searchParams.set("track_name", title)
-          u.searchParams.set("artist_name", artist)
-          return u
+    const dur = current.duration ?? 0
+    // last-line sanity: a synced file whose last line lands way past our
+    // track's end is for a different version — reject it rather than drift
+    const sane = (lines: LrcLine[]) =>
+      lines.length >= 4 && (!dur || lines[lines.length - 1].t <= dur + 20) ? lines : null
+    // LRCLIB pools every candidate three query shapes return — the strict
+    // artist+title search misses whenever the uploader isn't the canonical
+    // artist ("Salsa Clasica", "X - Topic"), so fuzzy `q` and title-only
+    // searches widen the net. Picks stay gated by title overlap + duration,
+    // so a same-title different song can't slip through
+    const lrcPool: LrcRec[] = []
+    const lrcSeen = new Set<number>()
+    const lrcAdd = (recs: LrcRec[]) => {
+      for (const r of recs) {
+        if (r.id != null) {
+          if (lrcSeen.has(r.id)) continue
+          lrcSeen.add(r.id)
         }
-        // /api/search returns every candidate version — picking the record
-        // whose duration is closest to OUR track is what keeps timestamps
-        // aligned (radio edits / deluxe versions have different structure,
-        // so a wrong pick puts every line off by the intro's length).
-        // The endpoint rate-limits to 503s sometimes → /api/get is the
-        // reliable first-match fallback
-        let arr: Array<{ duration?: number; syncedLyrics?: string; plainLyrics?: string }> | null = null
-        try {
-          const r = await fetch(params(new URL("https://lrclib.net/api/search")), { signal: AbortSignal.timeout(8000) })
-          if (r.ok) {
-            const j = await r.json()
-            if (Array.isArray(j)) arr = j
-          }
-        } catch {
-          /* fall through to /api/get */
-        }
-        if (!arr) {
-          const r = await fetch(params(new URL("https://lrclib.net/api/get")), { signal: AbortSignal.timeout(8000) })
-          if (!r.ok) return null
-          const j = (await r.json()) as { syncedLyrics?: string; plainLyrics?: string; duration?: number }
-          arr = j && (j.syncedLyrics || j.plainLyrics) ? [j] : []
-        }
-        if (!arr.length) return null
-        const dur = current.duration ?? 0
-        const close = (x: { duration?: number }) => (dur ? Math.abs((x.duration ?? 0) - dur) : 0)
-        const syncedPool = arr.filter((x) => x.syncedLyrics).sort((a, b) => close(a) - close(b))
-        for (const rec of syncedPool) {
-          const synced = parseLrc(rec.syncedLyrics!)
-          // sanity: a synced file whose last line lands way past our track's
-          // end is for a different version — skip it rather than drift
-          if (synced.length >= 4 && (!dur || synced[synced.length - 1].t <= dur + 20)) {
-            // auto-calibration: our version longer than the record usually
-            // means the extra time is lead-in intro → shift lyrics later
-            const g = dur && rec.duration ? Math.max(-15, Math.min(15, dur - rec.duration)) : 0
-            return { synced, autoOff: Math.abs(g) >= 2.5 ? Math.round(g * 2) / 2 : 0 }
-          }
-        }
-        const plain = syncedPool[0]?.plainLyrics?.trim() ?? arr.find((x) => x.plainLyrics)?.plainLyrics?.trim()
-        return plain ? { plain } : null
-      } catch {
-        return null
+        lrcPool.push(r)
       }
+    }
+    // canonical-artist records sort first — a cover's lyrics can differ
+    // even when the title matches
+    const artistSim = (name?: string) => {
+      const na = norm(artist)
+      const nr = norm(name ?? "")
+      if (!na || !nr) return 0
+      if (na === nr || starts(na, nr) || starts(nr, na)) return 2
+      const wa = new Set(na.split(" "))
+      return nr.split(" ").some((w) => wa.has(w)) ? 1 : 0
+    }
+    const pickLrc = (ref: string): { synced: LrcLine[]; autoOff: number } | { plain: string } | null => {
+      // closest duration wins — radio edits / deluxe versions have
+      // different structure, so a wrong-duration pick puts every line
+      // off by the intro's length
+      const close = (x: LrcRec) => (dur && x.duration ? Math.abs(x.duration - dur) : 999)
+      const cand = lrcPool.filter((r) => titleLike(r.trackName ?? "", ref))
+      const by = (a: LrcRec, b: LrcRec) => artistSim(b.artistName) - artistSim(a.artistName) || close(a) - close(b)
+      for (const rec of cand.filter((r) => r.syncedLyrics?.trim()).sort(by)) {
+        const synced = sane(parseLrc(rec.syncedLyrics!))
+        if (!synced) continue
+        // auto-calibration: our version longer than the record usually
+        // means the extra time is lead-in intro → shift lyrics later
+        const g = dur && rec.duration ? Math.max(-15, Math.min(15, dur - rec.duration)) : 0
+        return { synced, autoOff: Math.abs(g) >= 2.5 ? Math.round(g * 2) / 2 : 0 }
+      }
+      const plain = cand.filter((r) => r.plainLyrics?.trim()).sort(by)[0]?.plainLyrics?.trim()
+      return plain ? { plain } : null
+    }
+    const fetchLrcLib = async (): Promise<{ synced: LrcLine[]; autoOff: number } | { plain: string } | null> => {
+      for (const t of titles) {
+        // the three query shapes race in parallel — same host, and a
+        // synced hit short-circuits before the next title variant
+        const [strict, fuzzy, byTitle] = await Promise.all([
+          lrcGet("/api/search", { track_name: t, artist_name: artist }),
+          lrcGet("/api/search", { q: `${artist} ${t}`.trim() }),
+          lrcGet("/api/search", { track_name: t }),
+        ])
+        lrcAdd(strict)
+        lrcAdd(fuzzy)
+        lrcAdd(byTitle)
+        const hit = pickLrc(t)
+        if (hit && "synced" in hit) return hit
+      }
+      // /api/get is exact-match only but occasionally serves a record the
+      // search ranking buried — one cheap shot with the primary title
+      lrcAdd(await lrcGet("/api/get", { track_name: titles[0], artist_name: artist }))
+      return titles.map(pickLrc).find((x) => x != null) ?? null
     }
     const fetchOvh = async (): Promise<{ plain: string } | null> => {
       try {
@@ -310,11 +393,7 @@ export function NowPlaying() {
     }
     // two more synced sources before resigning to plain text — lyrist
     // aggregates LRC records (QQ/NetEase catalogs, strong on Latin/regional
-    // music where LRCLIB is thin), textyl returns timestamped lines directly.
-    // Same last-line sanity check rejects records for a different master.
-    const dur = current.duration ?? 0
-    const sane = (lines: LrcLine[]) =>
-      lines.length >= 4 && (!dur || lines[lines.length - 1].t <= dur + 20) ? lines : null
+    // music where LRCLIB is thin), textyl returns timestamped lines directly
     const fetchLyrist = async (): Promise<LrcLine[] | null> => {
       try {
         const r = await fetch(`https://lyrist.vercel.app/api/${encodeURIComponent(title)}/${encodeURIComponent(artist)}`, { signal: AbortSignal.timeout(8000) })
@@ -335,6 +414,42 @@ export function NowPlaying() {
           .filter((x): x is { seconds: number; lyrics: string } => typeof x.seconds === "number" && !!x.lyrics?.trim())
           .map((x) => ({ t: x.seconds, text: x.lyrics.trim() }))
         return sane(lines)
+      } catch {
+        return null
+      }
+    }
+    // YouTube's own captions as the synced catch-all — ASR tracks exist for
+    // nearly every music upload, covering songs the lyric databases don't
+    // carry. yt tracks caption their own video; Audius tracks first find a
+    // YouTube twin (title overlap + duration ≤45s keeps mixes/clips out)
+    const fetchCaptions = async (): Promise<LrcLine[] | null> => {
+      try {
+        if (!ytBridge()?.captions) return null
+        let videoId = current.source === "yt" ? current.streamId ?? null : null
+        if (!videoId) {
+          const queries = [...new Set([`${artist} ${title}`.trim(), title, stripped].filter(Boolean))]
+          for (const q of queries) {
+            const res = await yt.search(q).catch(() => null)
+            const twin = (res?.tracks ?? [])
+              .filter(
+                (t) =>
+                  t.streamId &&
+                  titleLike(t.title, title) &&
+                  (!dur || !t.duration || Math.abs(t.duration - dur) <= 45)
+              )
+              .sort((a, b) => Math.abs((a.duration ?? 0) - dur) - Math.abs((b.duration ?? 0) - dur))[0]
+            if (twin?.streamId) {
+              videoId = twin.streamId
+              break
+            }
+          }
+        }
+        if (!videoId) return null
+        const cap = await yt.captions(videoId)
+        if (!cap?.lines?.length) return null
+        // captions run to the video's end — clip to the track's runtime so
+        // a longer upload's outro chatter can't tail the lyric sheet
+        return sane(cap.lines.filter((l) => !dur || l.t <= dur + 15))
       } catch {
         return null
       }
@@ -368,18 +483,15 @@ export function NowPlaying() {
       }
       const lrclib = await fetchLrcLib()
       if (lrclib && "synced" in lrclib) return finish(lrclib)
-      const lyrist = await fetchLyrist()
+      // lyrist + textyl race in parallel — independent hosts, no reason to
+      // pay two timeouts serially when a song is missing from both
+      const [lyrist, textyl] = await Promise.all([fetchLyrist(), fetchTextyl()])
       if (lyrist) return finish({ synced: lyrist, autoOff: 0 })
-      const textyl = await fetchTextyl()
       if (textyl) return finish({ synced: textyl, autoOff: 0 })
-      // YouTube's own caption track — ASR exists for nearly every music
-      // upload, so it's real timed words rather than our distributed guess
-      const caps =
-        current.source === "yt" && current.streamId
-          ? await yt.captions(current.streamId).catch(() => null)
-          : null
-      const capLines = caps?.lines?.length ? sane(caps.lines) : null
-      if (capLines) return finish({ synced: capLines, autoOff: 0 })
+      // lyric databases exhausted — YouTube captions (ASR included) are the
+      // coverage net: virtually every song has SOME captioned upload
+      const caps = await fetchCaptions()
+      if (caps) return finish({ synced: caps, autoOff: 0 })
       // synced sources exhausted — assemble the best plain text, then fake-sync
       const ytRes =
         current.source === "yt" && current.streamId
@@ -486,14 +598,21 @@ export function NowPlaying() {
                 transition={{ duration: 0.3 }}
                 className="absolute inset-0 flex flex-col items-center justify-center"
               >
+                {/* ambient artwork wash behind the lyric column — without it
+                    the panel reads as flat black with text floating in a void */}
+                {current.artwork && (
+                  <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden opacity-[0.17] blur-3xl saturate-[0.8]">
+                    <ArtworkImg art={current.artwork} size="1000x1000" className="size-full scale-125" />
+                  </div>
+                )}
                 {lyricsLoading ? (
                   <Loader2 size={28} className="animate-spin text-ink/50" />
                 ) : lyrics && "synced" in lyrics ? (
-                  <div className="h-full w-[min(92vw,700px)] [mask-image:linear-gradient(180deg,transparent,black_10%,black_90%,transparent)]">
+                  <div className="h-full w-[min(92vw,840px)] [mask-image:linear-gradient(180deg,transparent,black_10%,black_90%,transparent)]">
                     <SyncedLyrics lines={lyrics.synced} autoOff={lyrics.autoOff} />
                   </div>
                 ) : lyrics ? (
-                  <div className="scroller h-full w-[min(92vw,700px)] overflow-y-auto overscroll-contain px-2 [mask-image:linear-gradient(180deg,transparent,black_8%,black_92%,transparent)]">
+                  <div className="scroller h-full w-[min(92vw,840px)] overflow-y-auto overscroll-contain px-2 [mask-image:linear-gradient(180deg,transparent,black_8%,black_92%,transparent)]">
                     <p className="whitespace-pre-line py-8 text-center text-lg font-medium leading-relaxed text-ink/90">
                       {lyrics.plain}
                     </p>

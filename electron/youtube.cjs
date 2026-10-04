@@ -373,7 +373,10 @@ const cleanThumb = (url) =>
   url ? url.replace(/(ytimg\.com\/[^?]+)\?.*$/, "$1") : null
 const thumbAt = (item) => {
   const thumbs = thumbList(item)
-  return cleanThumb(thumbs[thumbs.length - 1]?.url ?? thumbs[0]?.url ?? null)
+  // pick by declared width — ytimg lists ascend small→large but
+  // googleusercontent artist thumbs descend (last = a 60px sliver)
+  const best = [...thumbs].sort((a, b) => (b?.width ?? 0) - (a?.width ?? 0))[0]
+  return cleanThumb(best?.url ?? thumbs[thumbs.length - 1]?.url ?? thumbs[0]?.url ?? null)
 }
 // smallest thumb ≥150px — lists render this key at ~40px and were
 // downloading/decoding 1200px bitmaps per row
@@ -728,10 +731,20 @@ async function search(query) {
   }
 }
 
-const headerArt = (header) => {
-  const node = collect(header, ["MusicThumbnail"])[0]
-  const url = node?.contents?.at(-1)?.url ?? node?.url ?? null
-  return url
+const headerArt = (header, minWidth = 0) => {
+  // immersive headers carry a bare thumbnails array; older layouts wrap it
+  // in MusicThumbnail nodes — cover both, pick by declared width
+  const direct = thumbList(header)
+  const nodes = collect(header, ["MusicThumbnail"]).flatMap((n) =>
+    Array.isArray(n.contents) ? n.contents : [n]
+  )
+  const all = [...direct, ...nodes].filter((t) => t?.url)
+  const pick =
+    all
+      .filter((t) => (t.width ?? 0) >= minWidth)
+      .sort((a, b) => (a.width ?? 0) - (b.width ?? 0))[0] ??
+    [...all].sort((a, b) => (b.width ?? 0) - (a.width ?? 0))[0]
+  return cleanThumb(pick?.url ?? null)
 }
 
 async function artist(channelIdOrName, nameHint) {
@@ -805,12 +818,15 @@ async function artist(channelIdOrName, nameHint) {
   try {
   const header = page.header?.contents ?? page.header ?? {}
   const name = text(header.title ?? header.name) || searchHit?.name || nameHint || channelIdOrName
-  const thumb = headerArt(header)
+  const banner = headerArt(header, 1000)
+  const avatar = headerArt(header, 240)
 
   // The "Top songs" shelf links to a playlist with the full list; in parallel
-  // resolve the monthly audience from artist search (header doesn't expose it)
+  // resolve the monthly audience AND the square avatar from artist search —
+  // the immersive header only carries wide banner crops, and a circle avatar
+  // center-cropped from a banner usually beheads the face
   let tracks = []
-  const audienceP = (async () => {
+  const metaP = (async () => {
     const meta = await yt.music.search(name, { type: "artist" }).catch(() => null)
     const items = collect(meta?.contents ?? meta?.results ?? meta, [
       "MusicTwoRowItem",
@@ -820,8 +836,7 @@ async function artist(channelIdOrName, nameHint) {
       .filter(Boolean)
     // no `?? items[0]` — a shared/stylized name would attribute a
     // DIFFERENT artist's audience to this page; wrong data beats no data
-    const self = items.find((a) => a.streamId === id)
-    return self?.follower_count ?? 0
+    return items.find((a) => a.streamId === id) ?? null
   })()
 
   const shelves = collect(page, ["MusicShelf"])
@@ -839,7 +854,13 @@ async function artist(channelIdOrName, nameHint) {
   if (!tracks.length) tracks = songsOf(page)
   tracks = tracks.slice(0, 30)
 
-  const follower_count = await audienceP
+  const self = await metaP
+  // square-crop any googleusercontent url — artist avatars are circles, and
+  // a 544 square pulled from a banner center beats a landscape sliver
+  const sq = (u, s) => (u ? u.replace(/=w\d+-h\d+[^,]*/, `=w${s}-h${s}-l90-rj`) : null)
+  const pic = self?.profile_picture ?? (avatar ?? banner
+    ? { "150x150": sq(avatar ?? banner, 240), "480x480": sq(avatar ?? banner, 544), "1000x1000": sq(avatar ?? banner, 1024) }
+    : null)
   return {
     user: {
       id: `yt-${id}`,
@@ -847,12 +868,10 @@ async function artist(channelIdOrName, nameHint) {
       name,
       handle: name,
       is_verified: hasVerifiedBadge(page?.header ?? page),
-      follower_count,
+      follower_count: self?.follower_count ?? 0,
       track_count: tracks.length,
-      profile_picture: thumb
-        ? { "150x150": thumb, "480x480": bigThumb(thumb) ?? thumb, "1000x1000": bigThumb(thumb) ?? thumb }
-        : null,
-      cover_photo: thumb ? { "640x": thumb, "2000x": bigThumb(thumb) ?? thumb } : null,
+      profile_picture: pic,
+      cover_photo: banner ? { "640x": banner, "2000x": banner } : pic ? { "640x": pic["480x480"], "2000x": pic["1000x1000"] } : null,
     },
     tracks,
   }
@@ -1234,15 +1253,32 @@ function pickCaptionFmt(dict) {
     return i === -1 ? CAP_LANGS.length : i
   }
   keys.sort((a, b) => rank(a) - rank(b))
-  const fmts = dict[keys[0]]
-  return fmts.find((f) => f.ext === "json3") ?? fmts.find((f) => f.ext === "srv3") ?? fmts.find((f) => f.ext === "vtt") ?? null
+  // walk languages in preference order — the top pick may only carry a
+  // format we can't parse (ttml) while a lower one has json3/vtt
+  for (const k of keys) {
+    const fmts = dict[k]
+    const fmt = fmts.find((f) => f.ext === "json3") ?? fmts.find((f) => f.ext === "srv3") ?? fmts.find((f) => f.ext === "vtt")
+    if (fmt) return fmt
+  }
+  return null
 }
 
+// resolved results (null included — a video with no captions shouldn't
+// re-run a 5s yt-dlp -J every time the lyrics panel reopens)
+const capCache = new Map()
 const capInflight = new Map()
 async function captions(videoId) {
   if (!ytdlpAvailable()) return null
+  if (capCache.has(videoId)) return capCache.get(videoId)
   if (capInflight.has(videoId)) return capInflight.get(videoId)
   const job = (async () => {
+    // only cache once -J succeeds — a thrown yt-dlp/network error is
+    // transient and must retry next time, not stick as a false negative
+    const done = (result) => {
+      capCache.set(videoId, result)
+      if (capCache.size > 60) capCache.delete(capCache.keys().next().value)
+      return result
+    }
     try {
       const out = await runYtdlp(
         [
@@ -1254,11 +1290,11 @@ async function captions(videoId) {
       )
       const info = JSON.parse(out)
       const fmt = pickCaptionFmt(info.subtitles) ?? pickCaptionFmt(info.automatic_captions)
-      if (!fmt?.url) return null
+      if (!fmt?.url) return done(null)
       const res = await fetch(fmt.url, { headers: { "User-Agent": "Freebify/1.0" }, signal: AbortSignal.timeout(9000) })
-      if (!res.ok) return null
+      if (!res.ok) return done(null)
       const lines = captionLines(await res.text(), fmt.ext)
-      return lines.length >= 4 ? { lines } : null
+      return done(lines.length >= 4 ? { lines } : null)
     } catch (e) {
       log("captions", `${videoId}: ${e?.message ?? e}`)
       return null

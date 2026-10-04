@@ -25,6 +25,7 @@ export function ArtistPage() {
   const [retry, setRetry] = useState(0)
   // a dead CDN cover URL shouldn't leave a broken-image hero
   const [coverFailed, setCoverFailed] = useState(false)
+  const [avatarFailed, setAvatarFailed] = useState(false)
   const playContext = usePlayer((s) => s.playContext)
 
   useEffect(() => {
@@ -97,7 +98,8 @@ export function ArtistPage() {
     )
   }
 
-  const cover = artist.cover_photo?.["2000x"] ?? artist.cover_photo?.["640x"]
+  const avatar = artist.profile_picture?.["480x480"] ?? artist.profile_picture?.["150x150"] ?? null
+  const cover = artist.cover_photo?.["2000x"] ?? artist.cover_photo?.["640x"] ?? avatar
 
   return (
     <div className="-mt-12 pb-10">
@@ -118,8 +120,17 @@ export function ArtistPage() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45 }}
-          className="relative px-6 pb-6"
+          className="relative flex items-end gap-5 px-6 pb-6"
         >
+          {avatar && !avatarFailed && (
+            <img
+              src={avatar}
+              alt=""
+              onError={() => setAvatarFailed(true)}
+              className="size-24 shrink-0 rounded-full border-2 border-white/15 bg-panel object-cover shadow-2xl shadow-black/60 sm:size-28"
+            />
+          )}
+          <div className="min-w-0">
           {artist.is_verified && (
             <p className="flex items-center gap-1.5 text-xs font-semibold text-ink">
               <BadgeCheck size={15} /> Verified artist
@@ -132,6 +143,7 @@ export function ArtistPage() {
               : `${fmtCount(artist.follower_count)} followers · ${artist.track_count} tracks`}
             {artist.location ? ` · ${artist.location}` : ""}
           </p>
+          </div>
         </motion.div>
       </div>
 
