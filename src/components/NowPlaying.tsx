@@ -308,17 +308,81 @@ export function NowPlaying() {
         return null
       }
     }
+    // two more synced sources before resigning to plain text — lyrist
+    // aggregates LRC records (QQ/NetEase catalogs, strong on Latin/regional
+    // music where LRCLIB is thin), textyl returns timestamped lines directly.
+    // Same last-line sanity check rejects records for a different master.
+    const dur = current.duration ?? 0
+    const sane = (lines: LrcLine[]) =>
+      lines.length >= 4 && (!dur || lines[lines.length - 1].t <= dur + 20) ? lines : null
+    const fetchLyrist = async (): Promise<LrcLine[] | null> => {
+      try {
+        const r = await fetch(`https://lyrist.vercel.app/api/${encodeURIComponent(title)}/${encodeURIComponent(artist)}`, { signal: AbortSignal.timeout(8000) })
+        if (!r.ok) return null
+        const j = (await r.json()) as { lyrics?: string }
+        return j.lyrics ? sane(parseLrc(j.lyrics)) : null
+      } catch {
+        return null
+      }
+    }
+    const fetchTextyl = async (): Promise<LrcLine[] | null> => {
+      try {
+        const r = await fetch(`https://api.textyl.co/api/lyrics?q=${encodeURIComponent(`${artist} ${title}`)}`, { signal: AbortSignal.timeout(8000) })
+        if (!r.ok) return null
+        const j = (await r.json()) as Array<{ seconds?: number; lyrics?: string }>
+        if (!Array.isArray(j)) return null
+        const lines = j
+          .filter((x): x is { seconds: number; lyrics: string } => typeof x.seconds === "number" && !!x.lyrics?.trim())
+          .map((x) => ({ t: x.seconds, text: x.lyrics.trim() }))
+        return sane(lines)
+      } catch {
+        return null
+      }
+    }
+    // last resort — every synced source missed but someone carries the words.
+    // Distribute plain lines across the runtime weighted by length so the
+    // karaoke view (active line, auto-scroll, click-to-seek) still works
+    // instead of a static wall; Shift+click still re-anchors if the guess drifts
+    const pseudoSync = (plain: string): { synced: LrcLine[]; autoOff: number } | null => {
+      const rows = plain.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+      if (rows.length < 2 || !dur) return null
+      const lead = Math.min(12, dur * 0.08)
+      const span = dur * 0.97 - lead
+      const total = rows.reduce((s, l) => s + l.length, 0)
+      let t = lead
+      return {
+        synced: rows.map((l) => {
+          const line = { t, text: l }
+          t += Math.max(1.2, (l.length / total) * span)
+          return line
+        }),
+        autoOff: 0,
+      }
+    }
     void (async () => {
+      const finish = (body: typeof lyrics) => {
+        if (!live) return
+        setLyrics(body)
+        setLyricsTried(true)
+        setLyricsLoading(false)
+      }
       const lrclib = await fetchLrcLib()
+      if (lrclib && "synced" in lrclib) return finish(lrclib)
+      const lyrist = await fetchLyrist()
+      if (lyrist) return finish({ synced: lyrist, autoOff: 0 })
+      const textyl = await fetchTextyl()
+      if (textyl) return finish({ synced: textyl, autoOff: 0 })
+      // synced sources exhausted — assemble the best plain text, then fake-sync
       const ytRes =
-        !lrclib && current.source === "yt" && current.streamId
+        current.source === "yt" && current.streamId
           ? await yt.lyrics(current.streamId).catch(() => null)
           : null
-      const body = lrclib ?? (ytRes?.lyrics ? { plain: ytRes.lyrics } : null) ?? (await fetchOvh())
-      if (!live) return
-      setLyrics(body)
-      setLyricsTried(true)
-      setLyricsLoading(false)
+      const plain =
+        (lrclib && "plain" in lrclib ? lrclib.plain : null) ??
+        ytRes?.lyrics ??
+        (await fetchOvh())?.plain ??
+        null
+      finish(plain ? (pseudoSync(plain) ?? { plain }) : null)
     })()
     return () => {
       live = false
@@ -457,7 +521,7 @@ export function NowPlaying() {
             <div className="min-w-0">
               <Marquee text={current.title} className="text-2xl font-bold" />
               <Link
-                to={`/artist/${encodeURIComponent(current.user.id)}`}
+                to={`/artist/${encodeURIComponent(current.user.id)}?n=${encodeURIComponent(current.user.name)}`}
                 onClick={() => setNpOpen(false)}
                 className="mt-1 block truncate text-base text-ink/60 transition hover:text-ink"
               >

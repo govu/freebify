@@ -725,28 +725,30 @@ const headerArt = (header) => {
   return url
 }
 
-async function artist(channelIdOrName) {
+async function artist(channelIdOrName, nameHint) {
   const yt = await getYt()
   if (!yt) return null
   let id = channelIdOrName
   // MPLA wraps the WHOLE channel id (MPLA + UCxxx = MPLAUCxxx) — strip the
   // prefix, don't re-add UC (UC${id.slice(4)} produced the invalid UCUCxxx)
   if (id?.startsWith("MPLA")) id = id.slice(4)
+  const searchArtists = async (query) => {
+    const res = await yt.music.search(query, { type: "artist" }).catch(() => null)
+    return collect(res?.contents ?? res?.results ?? res ?? [], ["MusicTwoRowItem", "MusicResponsiveListItem"])
+      .map(mapArtist)
+      .find(Boolean)
+  }
   let searchHit = null
   if (!id || !/^UC[\w-]{8,}/.test(id)) {
-    // resolve by name
-    const res = await yt.music.search(channelIdOrName, { type: "artist" }).catch(() => null)
-    const items = collect(res?.contents ?? res?.results ?? res ?? [], ["MusicTwoRowItem", "MusicResponsiveListItem"])
-    const a = items.map(mapArtist).find(Boolean)
+    // resolve by name — the caller's display name beats the raw id token
+    const a = await searchArtists(nameHint ?? channelIdOrName)
     if (!a) return null
     searchHit = a
     id = a.streamId
   }
-  const page = await yt.music.getArtist(id).catch((e) => (ytFail(e), null))
-  if (!page) {
-    // artist page hiccuped — degrade to the search hit + a song search
-    if (!searchHit) return null
-    const res = await yt.music.search(searchHit.name, { type: "song" }).catch(() => null)
+  const degrade = async (hit) => {
+    if (!hit) return null
+    const res = await yt.music.search(hit.name, { type: "song" }).catch(() => null)
     const tracks = collect(res?.contents ?? res?.results ?? res ?? [], [
       "MusicResponsiveListItem",
       "MusicTwoRowItem",
@@ -754,14 +756,34 @@ async function artist(channelIdOrName) {
       .map(mapSong)
       .filter((t) => t?.streamId)
       .slice(0, 30)
-    return {
-      user: { ...searchHit, id: `yt-${searchHit.streamId}`, track_count: tracks.length },
-      tracks,
+    return { user: { ...hit, id: `yt-${hit.streamId}`, track_count: tracks.length }, tracks }
+  }
+  let page = await yt.music.getArtist(id).catch((e) => (ytFail(e), null))
+  if (page) {
+    // getArtist resolves "valid but empty" pages for garbage channel ids —
+    // no header name AND no shelves means the channel is a phantom; treat it
+    // as dead so the nameHint rescue below can find the real artist
+    const hdr = page.header?.contents ?? page.header ?? {}
+    if (!text(hdr.title ?? hdr.name) && !collect(page, ["MusicShelf"]).length) page = null
+  }
+  if (!page) {
+    // channel-shaped but dead (private/deleted/bogus browseId) — the artist
+    // still exists; recover by name before giving up on them entirely
+    if (!searchHit && nameHint) searchHit = (await searchArtists(nameHint)) ?? null
+    if (!searchHit) return null
+    // re-resolve: the search hit's real channel may load a full page
+    if (searchHit.streamId && searchHit.streamId !== id) {
+      const retry = await yt.music.getArtist(searchHit.streamId).catch(() => null)
+      if (retry) {
+        page = retry
+        id = searchHit.streamId
+      }
     }
+    if (!page) return degrade(searchHit)
   }
 
   const header = page.header?.contents ?? page.header ?? {}
-  const name = text(header.title ?? header.name) || channelIdOrName
+  const name = text(header.title ?? header.name) || searchHit?.name || nameHint || channelIdOrName
   const thumb = headerArt(header)
 
   // The "Top songs" shelf links to a playlist with the full list; in parallel
@@ -1220,8 +1242,12 @@ function register(ipcMain) {
     }
     return true
   })
-  ipcMain.handle("yt:artist", (_e, id) =>
-    typeof id === "string" && id.length < 80 ? withTimeout(artist(id), 20000).catch(() => null) : null
+  ipcMain.handle("yt:artist", (_e, id, nameHint) =>
+    typeof id === "string" && id.length < 80
+      ? withTimeout(artist(id, typeof nameHint === "string" && nameHint.length < 80 ? nameHint : undefined), 20000).catch(
+          () => null
+        )
+      : null
   )
   ipcMain.handle("yt:album", (_e, id) =>
     typeof id === "string" && BID.test(id) ? withTimeout(album(id), 20000).catch(() => null) : null

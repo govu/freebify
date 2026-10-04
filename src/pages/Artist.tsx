@@ -1,7 +1,7 @@
 import { motion } from "motion/react"
-import { BadgeCheck, Play } from "lucide-react"
+import { BadgeCheck, Play, UserX } from "lucide-react"
 import { useEffect, useState } from "react"
-import { useParams } from "react-router-dom"
+import { useParams, useSearchParams } from "react-router-dom"
 import { apiClient } from "../api/audius"
 import { prefetchStream, yt } from "../api/youtube"
 import type { Track, User } from "../api/types"
@@ -12,6 +12,9 @@ import { fmtCount } from "../utils/format"
 
 export function ArtistPage() {
   const { id } = useParams<{ id: string }>()
+  // ?n= carries the display name — dead channel ids (private/deleted/browse
+  // ids that merely LOOK like UC…) get a name-search rescue in the backend
+  const nameHint = useSearchParams()[0].get("n") ?? undefined
   const [artist, setArtist] = useState<User | null>(null)
   const [tracks, setTracks] = useState<Track[]>([])
   const [loading, setLoading] = useState(true)
@@ -33,7 +36,7 @@ export function ArtistPage() {
     void (async () => {
       if (id.startsWith("yt-")) {
         try {
-          const res = await yt.artist(id.slice(3))
+          const res = await yt.artist(id.slice(3), nameHint)
           if (!live) return
           if (res) {
             setArtist(res.user)
@@ -57,7 +60,7 @@ export function ArtistPage() {
     return () => {
       live = false
     }
-  }, [id, retry])
+  }, [id, nameHint, retry])
 
   if (loading) {
     return (
@@ -75,16 +78,21 @@ export function ArtistPage() {
   if (error || !artist) {
     return (
       <div className="grid place-items-center py-32 text-center">
-        <div>
-          <p className="text-lg font-semibold">Artist not found</p>
-          <p className="mt-1 text-sm text-dim">They may have moved or the network hiccuped.</p>
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center">
+          <div className="grid size-14 place-items-center rounded-full bg-hover">
+            <UserX size={22} className="text-faint" />
+          </div>
+          <p className="mt-4 text-lg font-semibold">Artist not found</p>
+          <p className="mt-1 max-w-64 text-sm leading-5 text-dim">
+            {nameHint ? `Couldn't load ${nameHint}'s page — it may have moved or the network hiccuped.` : "They may have moved or the network hiccuped."}
+          </p>
           <button
             onClick={() => setRetry((r) => r + 1)}
             className="mt-5 rounded-full border border-line px-6 py-2 text-sm font-semibold transition hover:scale-[1.03] hover:border-white/30"
           >
             Retry
           </button>
-        </div>
+        </motion.div>
       </div>
     )
   }

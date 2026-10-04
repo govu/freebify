@@ -146,7 +146,7 @@ function RemotePlaylistView({ id }: { id: string }) {
           <p className="mt-3 text-sm text-dim">
             {ownerLinkable ? (
               <Link
-                to={`/artist/${encodeURIComponent(playlist.user.id)}`}
+                to={`/artist/${encodeURIComponent(playlist.user.id)}?n=${encodeURIComponent(playlist.user.name)}`}
                 className="font-semibold text-ink hover:underline"
               >
                 {playlist.user.name}

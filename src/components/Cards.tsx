@@ -261,7 +261,7 @@ export function LocalPlaylistCard({ p }: { p: LocalPlaylist }) {
 export function ArtistCard({ u }: { u: User }) {
   return (
     <motion.div whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 400, damping: 26 }}>
-      <Link to={`/artist/${encodeURIComponent(u.id)}`} className={`block ${cardCls}`}>
+      <Link to={`/artist/${encodeURIComponent(u.id)}?n=${encodeURIComponent(u.name)}`} className={`block ${cardCls}`}>
         <ArtworkImg
           art={u.profile_picture}
           alt={u.name}

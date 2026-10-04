@@ -10,7 +10,7 @@ interface YtBridge {
   stream: (videoId: string) => Promise<string | null>
   prefetch?: (videoId: string) => Promise<string | null>
   invalidate: (videoId: string) => Promise<boolean>
-  artist: (id: string) => Promise<{ user: User; tracks: Track[] } | null>
+  artist: (id: string, nameHint?: string) => Promise<{ user: User; tracks: Track[] } | null>
   album: (id: string) => Promise<{ playlist: Playlist; tracks: Track[] } | null>
   playlist: (id: string) => Promise<{ playlist: Playlist; tracks: Track[] } | null>
   playlists: () => Promise<Playlist[]>
@@ -82,7 +82,7 @@ export const yt = {
   prefetch: (videoId: string) =>
     (ytBridge()?.prefetch ?? ytBridge()?.stream)?.(videoId) ?? Promise.resolve(null),
   invalidate: (videoId: string) => ytBridge()?.invalidate(videoId) ?? Promise.resolve(false),
-  artist: (id: string) => ytBridge()?.artist(id) ?? Promise.resolve(null),
+  artist: (id: string, nameHint?: string) => ytBridge()?.artist(id, nameHint) ?? Promise.resolve(null),
   album: (id: string) => ytBridge()?.album(id) ?? Promise.resolve(null),
   playlist: (id: string) => ytBridge()?.playlist(id) ?? Promise.resolve(null),
   playlists: () => ytBridge()?.playlists() ?? Promise.resolve([]),

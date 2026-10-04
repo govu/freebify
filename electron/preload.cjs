@@ -7,7 +7,7 @@ contextBridge.exposeInMainWorld("freebify", {
     stream: (videoId) => ipcRenderer.invoke("yt:stream", videoId),
     prefetch: (videoId) => ipcRenderer.invoke("yt:prefetch", videoId),
     invalidate: (videoId) => ipcRenderer.invoke("yt:invalidate", videoId),
-    artist: (id) => ipcRenderer.invoke("yt:artist", id),
+    artist: (id, nameHint) => ipcRenderer.invoke("yt:artist", id, nameHint),
     album: (id) => ipcRenderer.invoke("yt:album", id),
     playlist: (id) => ipcRenderer.invoke("yt:playlist", id),
     playlists: () => ipcRenderer.invoke("yt:playlists"),

@@ -108,7 +108,7 @@ export function TrackTable({ tracks, context, showHeader = true, showPlays: want
               onMenu={() => setMenuFor(menuFor === rowKey ? null : rowKey)}
               closeMenu={() => setMenuFor((m) => (m === rowKey ? null : m))}
               onPlay={() => playContext(context ?? tracks, i)}
-              goArtist={() => navigate(`/artist/${encodeURIComponent(t.user.id)}`)}
+              goArtist={() => navigate(`/artist/${encodeURIComponent(t.user.id)}?n=${encodeURIComponent(t.user.name)}`)}
               onRemove={onRemove}
               removeLabel={removeLabel}
             />
@@ -195,7 +195,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
     onMenu()
   }
 
-  const artistPath = `/artist/${encodeURIComponent(t.user.id)}`
+  const artistPath = `/artist/${encodeURIComponent(t.user.id)}?n=${encodeURIComponent(t.user.name)}`
   // yt-va / yt- / empty ids are fake owner ids (playlist "Various Artists",
   // missing channel) — navigating there lands on a broken artist page
   const artistOk = Boolean(t.user.id) && t.user.id !== "yt-va" && t.user.id !== "yt-"

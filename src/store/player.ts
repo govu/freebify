@@ -72,6 +72,7 @@ interface PlayerState {
   clearQueue: () => void
   jumpTo: (i: number) => void
   moveInQueue: (from: number, to: number) => void
+  startRadio: () => void
 }
 
 let streamRetries = 0
@@ -229,6 +230,39 @@ function prefetchNextTrack() {
 // a fresh queue fills again (a stale flag used to dead-end the queue).
 let radioFilledFor: { id: string; tail: string } | null = null
 
+// radio results often carry "the same song, other versions" (covers,
+// re-uploads, "Nueva Versión") — YouTube treats them as related because
+// the title matches. Spotify radio never does this: normalize titles and
+// drop anything that collapses to the seed's own title.
+const normTitle = (t: string) =>
+  t
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/\s*(\([^)]*\)|\[[^\]]*\]|\|.*)$/, "")
+    .replace(/\s+/g, " ")
+    .trim()
+
+function genreMix(vid: string, seed: Track): Promise<Track[]> {
+  return yt.upNext(vid).then(async (more) => {
+    // niche videos can return a sparse panel — top up with the artist's
+    // own songs so the queue always keeps going
+    if (more.length < 8 && seed.user?.name && seed.user.name !== "Unknown artist") {
+      const extra = await yt.search(seed.user.name).then((r) => r.tracks).catch(() => [] as Track[])
+      const seen = new Set(more.map((t) => t.streamId))
+      more = [...more, ...extra.filter((t) => t.streamId && !seen.has(t.streamId))].slice(0, 40)
+    }
+    const seedTitle = normTitle(seed.title)
+    const titles = new Set<string>()
+    return more.filter((t) => {
+      const n = normTitle(t.title)
+      if (!t.streamId || n === seedTitle || titles.has(n)) return false
+      titles.add(n)
+      return true
+    })
+  })
+}
+
 function maybeFillRadio() {
   const { queue, index, current, autoplay } = usePlayer.getState()
   if (!autoplay) return
@@ -245,18 +279,12 @@ function maybeFillRadio() {
   const vid = current.streamId
   void (async () => {
     try {
-      let more = await yt.upNext(vid)
-      // niche videos can return a sparse panel — top up with the artist's
-      // own songs so the queue always keeps going
-      if (more.length < 8 && current.user?.name && current.user.name !== "Unknown artist") {
-        const extra = await yt.search(current.user.name).then((r) => r.tracks).catch(() => [] as Track[])
-        const seen = new Set(more.map((t) => t.streamId))
-        more = [...more, ...extra.filter((t) => t.streamId && !seen.has(t.streamId))].slice(0, 40)
-      }
+      const more = await genreMix(vid, current)
       const s = usePlayer.getState()
       if (s.current?.id !== current.id) return
       const have = new Set(s.queue.map((t) => t.streamId ?? t.id))
-      const add = more.filter((t) => t.streamId && !have.has(t.streamId))
+      const haveTitles = new Set(s.queue.map((t) => normTitle(t.title)))
+      const add = more.filter((t) => t.streamId && !have.has(t.streamId) && !haveTitles.has(normTitle(t.title)))
       if (!add.length) {
         // an empty fetch must not poison the flag — after a network blip
         // the queue would dead-end forever at track's end; clear so the
@@ -666,6 +694,23 @@ export const usePlayer = create<PlayerState>()(
           q.splice(to, 0, item)
           const ni = index > from && index <= to ? index - 1 : index < from && index >= to ? index + 1 : index
           set({ queue: q, index: ni, history: get().history.map((h) => (h === from ? to : h > from && h <= to ? h - 1 : h < from && h >= to ? h + 1 : h)) })
+        },
+        // "Go to song radio" — clears everything after the current track and
+        // re-seeds with the genre mix (like Spotify's radio). What you were
+        // playing keeps playing; NEXT UP becomes similar songs.
+        startRadio: () => {
+          const { current } = get()
+          if (!current || current.source !== "yt" || !current.streamId) return
+          const vid = current.streamId
+          void (async () => {
+            const mix = await genreMix(vid, current).catch(() => [] as Track[])
+            const s = get()
+            if (s.current?.id !== current.id || !mix.length) return
+            // a radio REPLACES what follows (same as Spotify); history stays
+            radioFilledFor = { id: current.id, tail: mix.slice(0, 4).map((t) => t.id).join(",") }
+            set({ queue: [...s.queue.slice(0, s.index + 1), ...mix] })
+            notify("Radio started — similar songs queued")
+          })()
         },
         setAutoplay: (v) => set({ autoplay: v }),
       }

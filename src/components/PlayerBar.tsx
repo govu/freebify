@@ -80,7 +80,7 @@ export function PlayerBar() {
                 >
                   <Marquee text={current.title} className="text-sm font-semibold" />
                   <Link
-                    to={`/artist/${encodeURIComponent(current.user.id)}`}
+                    to={`/artist/${encodeURIComponent(current.user.id)}?n=${encodeURIComponent(current.user.name)}`}
                     className="block truncate text-xs text-dim transition hover:text-ink hover:underline"
                   >
                     {current.user.name}

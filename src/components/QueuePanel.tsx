@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react"
-import { GripVertical, Infinity as InfinityIcon, ListPlus, Trash2, X } from "lucide-react"
+import { GripVertical, Infinity as InfinityIcon, ListPlus, Radio, Trash2, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { useLibrary } from "../store/library"
 import { notify, usePlayer } from "../store/player"
@@ -21,6 +21,7 @@ export function QueuePanel() {
   const createPlaylist = useLibrary((s) => s.createPlaylist)
   const addTracksToPlaylist = useLibrary((s) => s.addTracksToPlaylist)
   const moveInQueue = usePlayer((s) => s.moveInQueue)
+  const startRadio = usePlayer((s) => s.startRadio)
   const [saved, setSaved] = useState(false)
   // drag-to-reorder — indices are absolute queue indices, not upNext-local
   const [dragI, setDragI] = useState<number | null>(null)
@@ -113,6 +114,18 @@ export function QueuePanel() {
             />
           </span>
         </button>
+
+        {/* "Go to song radio" — Spotify's radio action: replaces NEXT UP with
+            genre-similar songs instead of leaving a same-title context list */}
+        {queue[index]?.source === "yt" && (
+          <button
+            onClick={startRadio}
+            className="mx-3 mb-2 flex items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-colors hover:bg-hover"
+          >
+            <Radio size={15} className="text-faint" />
+            <span className="flex-1 text-xs font-medium text-dim">Start radio from this song</span>
+          </button>
+        )}
 
         <div className="scroller min-h-0 flex-1 overflow-y-auto px-2 pb-4">
           {queue[index] && (
