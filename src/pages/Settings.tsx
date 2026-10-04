@@ -1,5 +1,5 @@
 import { motion } from "motion/react"
-import { FolderOpen, Heart, Infinity as InfinityIcon, Keyboard, Trash2 } from "lucide-react"
+import { FolderOpen, Gamepad2, Heart, Infinity as InfinityIcon, Keyboard, Trash2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useLibrary } from "../store/library"
 import { notify, usePlayer } from "../store/player"
@@ -29,6 +29,14 @@ export function SettingsPage() {
   const setAutoplay = usePlayer((s) => s.setAutoplay)
   const playlists = useLibrary((s) => s.playlists)
   const liked = useLibrary((s) => s.liked)
+  const [discord, setDiscord] = useState(() => localStorage.getItem("freebify-discord") !== "off")
+
+  const toggleDiscord = () => {
+    const next = !discord
+    setDiscord(next)
+    localStorage.setItem("freebify-discord", next ? "on" : "off")
+    window.dispatchEvent(new CustomEvent("freebify:discord-toggle", { detail: next }))
+  }
 
   useEffect(() => {
     window.freebify?.app?.info().then(setInfo).catch(() => {})
@@ -71,6 +79,24 @@ export function SettingsPage() {
                 layout
                 transition={{ type: "spring", stiffness: 500, damping: 34 }}
                 className={`absolute top-1 size-3 rounded-full ${autoplay ? "left-5 bg-black" : "left-1 bg-dim"}`}
+              />
+            </span>
+          </button>
+          <button
+            onClick={toggleDiscord}
+            aria-pressed={discord}
+            className="mt-3 flex w-full items-center gap-3 text-left"
+          >
+            <Gamepad2 size={16} className={discord ? "text-ink" : "text-faint"} />
+            <span className="flex-1">
+              <span className="block text-sm font-medium">Discord status</span>
+              <span className="block text-xs text-dim">Show what you're listening to on your profile</span>
+            </span>
+            <span className={`relative h-5 w-9 rounded-full transition-colors ${discord ? "bg-ink" : "bg-hover"}`}>
+              <motion.span
+                layout
+                transition={{ type: "spring", stiffness: 500, damping: 34 }}
+                className={`absolute top-1 size-3 rounded-full ${discord ? "left-5 bg-black" : "left-1 bg-dim"}`}
               />
             </span>
           </button>

@@ -1,5 +1,5 @@
-import { motion } from "motion/react"
-import { Music2, Play, Search as SearchIcon, X } from "lucide-react"
+import { AnimatePresence, motion } from "motion/react"
+import { Play, Search as SearchIcon, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { apiClient, GENRES, isNonOriginalQuery, originalsOnly } from "../api/audius"
@@ -123,10 +123,15 @@ export function SearchPage() {
   return (
     <div className="-mt-12 px-6 pb-10">
       {/* search input */}
-      <div className="sticky top-14 z-20 mx-auto mb-8 mt-4 max-w-md">
+      <motion.div
+        initial={{ opacity: 0, y: -8, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ type: "spring", stiffness: 320, damping: 28 }}
+        className="sticky top-14 z-20 mx-auto mb-8 mt-4 max-w-md"
+      >
         <div className="relative">
-          <div className="flex items-center gap-3 rounded-full border border-line bg-panel/90 px-5 py-3 shadow-xl shadow-black/30 backdrop-blur transition-colors focus-within:border-white/40">
-            <SearchIcon size={18} className="shrink-0 text-dim" />
+          <div className="group flex items-center gap-3 rounded-full border border-line bg-panel/90 px-5 py-3.5 shadow-xl shadow-black/30 backdrop-blur transition-all duration-300 focus-within:border-white/50 focus-within:shadow-[0_0_0_4px_rgba(255,255,255,0.07),0_18px_40px_-12px_rgba(0,0,0,0.8)] hover:border-white/25">
+            <SearchIcon size={18} className="shrink-0 text-dim transition-colors duration-300 group-focus-within:text-ink" />
             <input
               ref={inputRef}
               id="search-input"
@@ -142,20 +147,26 @@ export function SearchPage() {
                 }
               }}
               placeholder="Songs, artists, playlists…"
-              className="w-full bg-transparent text-sm placeholder:text-faint"
+              className="w-full bg-transparent text-[15px] font-medium placeholder:font-normal placeholder:text-faint/70"
             />
-            {query && (
-              <button
-                onClick={() => {
-                  setQuery("")
-                  inputRef.current?.focus()
-                }}
-                aria-label="Clear"
-                className="text-dim transition hover:text-ink"
-              >
-                <X size={16} />
-              </button>
-            )}
+            <AnimatePresence>
+              {query && (
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.6 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.6 }}
+                  transition={{ duration: 0.15 }}
+                  onClick={() => {
+                    setQuery("")
+                    inputRef.current?.focus()
+                  }}
+                  aria-label="Clear"
+                  className="grid size-6 shrink-0 place-items-center rounded-full bg-hover text-dim transition hover:bg-white/15 hover:text-ink"
+                >
+                  <X size={13} />
+                </motion.button>
+              )}
+            </AnimatePresence>
           </div>
           {/* autocomplete — YouTube Music's own suggestion engine; clicking
               fills + searches immediately (feels instant) */}
@@ -177,7 +188,7 @@ export function SearchPage() {
             </div>
           )}
         </div>
-      </div>
+      </motion.div>
 
       {!debounced && (
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
@@ -197,7 +208,6 @@ export function SearchPage() {
                     className="relative h-24 overflow-hidden rounded-xl bg-card p-3 text-left text-sm font-bold text-ink shadow-lg transition hover:bg-cardhover"
                   >
                     {m.name}
-                    <Music2 size={52} className="absolute -bottom-3 -right-3 rotate-[20deg] text-white/10" />
                   </motion.button>
                 ))}
               </div>
@@ -215,10 +225,6 @@ export function SearchPage() {
                 className="relative h-24 overflow-hidden rounded-xl bg-card p-3 text-left text-sm font-bold text-ink shadow-lg transition hover:bg-cardhover"
               >
                 {g}
-                <Music2
-                  size={52}
-                  className="absolute -bottom-3 -right-3 rotate-[20deg] text-white/10"
-                />
               </motion.button>
             ))}
           </div>

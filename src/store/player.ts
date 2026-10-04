@@ -1111,4 +1111,42 @@ if ("mediaSession" in navigator) {
     lastProgress = progress
     pushThumbar(s)
   })
+
+  // Discord Rich Presence — Discord renders the progress bar itself from
+  // start/end timestamps, so only real transitions need a push: track
+  // change, play/pause, and seeks (>3s position jumps). A presenceEnabled
+  // broadcast toggles the whole feature from Settings.
+  let rpcEnabled = localStorage.getItem("freebify-discord") !== "off"
+  let rpcLastKey = ""
+  const pushPresence = (s: ReturnType<typeof usePlayer.getState>) => {
+    if (!rpcEnabled) return
+    const cur = s.current
+    bridge?.presence?.(
+      cur && s.isPlaying
+        ? {
+            playing: true,
+            title: cur.title,
+            artist: cur.user?.name,
+            artwork: cur.artwork?.["480x480"] ?? cur.artwork?.["150x150"],
+            durationMs: Math.round((s.duration || cur.duration || 0) * 1000),
+            positionMs: Math.round(s.currentTime * 1000),
+          }
+        : null
+    )
+  }
+  usePlayer.subscribe((s, prev) => {
+    const cur = s.current
+    const key = s.isPlaying ? `${cur?.id}|play` : cur ? `${cur.id}|paused` : "idle"
+    const jumped = Math.abs(s.currentTime - (prev?.currentTime ?? 0)) > 3
+    if (key === rpcLastKey && !jumped) return
+    rpcLastKey = key
+    pushPresence(s)
+  })
+  window.addEventListener("freebify:discord-toggle", (e) => {
+    rpcEnabled = (e as CustomEvent<boolean>).detail !== false
+    bridge?.presenceEnabled?.(rpcEnabled)
+    if (!rpcEnabled) bridge?.presence?.(null)
+    else pushPresence(usePlayer.getState())
+  })
+  bridge?.presenceEnabled?.(rpcEnabled)
 }

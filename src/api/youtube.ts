@@ -32,6 +32,15 @@ declare global {
       player?: {
         thumbar: (s: { playing: boolean; title?: string; artist?: string; progress?: number }) => void
         onCommand: (cb: (c: string) => void) => void
+        presence?: (s: {
+          playing: boolean
+          title?: string
+          artist?: string
+          artwork?: string
+          durationMs?: number
+          positionMs?: number
+        } | null) => void
+        presenceEnabled?: (v: boolean) => void
       }
       win?: {
         control: (action: "minimize" | "maximize" | "close") => void

@@ -273,9 +273,8 @@ if (!gotLock) {
       const tip = title ? `${title} — ${artist || "Freebify"}` : "Freebify"
       win.setThumbnailToolTip(tip)
       tray?.setToolTip(tip)
-      // taskbar progress bar — green fill tracking the song, like Spotify's
-      const p = typeof s.progress === "number" && Number.isFinite(s.progress) ? s.progress : -1
-      win.setProgressBar(p >= 0 && p <= 1 ? p : -1)
+      // no taskbar progress fill — a bar under the icon reads as a download
+      // indicator, not a media progress bar
     })
 
     // app info + diagnostics for the Settings page
@@ -294,6 +293,15 @@ if (!gotLock) {
       }
     })
     ipcMain.on("app:log", (_e, msg) => logLine("renderer", msg))
+
+    // Discord Rich Presence — "Listening to Freebify" with art + progress.
+    // The renderer only sends real transitions (track/play/pause/seek);
+    // Discord computes the progress bar itself from the timestamps.
+    const discord = require("./discord.cjs")
+    ipcMain.on("player:presence", (_e, s) => {
+      if (s && typeof s === "object") void discord.setPresence(s)
+    })
+    ipcMain.on("player:presence-enabled", (_e, v) => discord.setEnabled(v !== false))
 
     createTray()
     createWindow()

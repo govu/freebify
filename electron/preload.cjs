@@ -26,6 +26,9 @@ contextBridge.exposeInMainWorld("freebify", {
     thumbar: (s) => ipcRenderer.send("player:thumbar", s),
     // main → renderer: thumbnail toolbar button clicks
     onCommand: (cb) => ipcRenderer.on("player:cmd", (_e, c) => cb(c)),
+    // Discord Rich Presence — now-playing card on the user's profile
+    presence: (s) => ipcRenderer.send("player:presence", s),
+    presenceEnabled: (v) => ipcRenderer.send("player:presence-enabled", v),
   },
   win: {
     // frameless window chrome drawn by the renderer
