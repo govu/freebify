@@ -3,7 +3,7 @@
 // when Discord isn't open we retry quietly in the background.
 //
 // CLIENT_ID comes from the app's Discord Developer Portal application.
-const CLIENT_ID = "REPLACE_WITH_DISCORD_APP_ID" // Freebify — discord.com/developers application id
+const CLIENT_ID = "1556360210031841291" // Freebify — discord.com/developers application id
 const ACTIVITY_TYPE_LISTENING = 2
 
 let client = null
@@ -69,6 +69,21 @@ async function push(activity) {
   }
 }
 
+// ytimg video thumbs: hqdefault.jpg is a 4:3 frame with letterbox bars baked
+// in. maxresdefault is true 16:9 without them — but it 404s on some videos,
+// so HEAD-check and keep the original when missing.
+async function bestArt(url) {
+  if (!/i\.ytimg\.com\/vi\//.test(url)) return url
+  const better = url.replace(/\/(hqdefault|mqdefault|sddefault|hq720|default)\.jpg.*$/, "/maxresdefault.jpg")
+  if (better === url) return url
+  try {
+    const r = await fetch(better, { method: "HEAD", signal: AbortSignal.timeout(3000) })
+    return r.ok ? better : url
+  } catch {
+    return url
+  }
+}
+
 // payload from the renderer: {playing, title, artist, artwork, durationMs,
 // positionMs, url} — null clears the presence
 async function setPresence(payload) {
@@ -89,9 +104,13 @@ async function setPresence(payload) {
     largeImageText: "Freebify",
     instance: false,
   }
-  const art = typeof payload.artwork === "string" && /^https:/.test(payload.artwork) ? payload.artwork : null
-  // external https art works without uploading assets to the dev portal
-  if (art) activity.largeImageUrl = art
+  let art = typeof payload.artwork === "string" && /^https:/.test(payload.artwork) ? payload.artwork : null
+  if (art) art = await bestArt(art)
+  // Discord's IPC rewrites external https in large_image to mp:external/*
+  // automatically — no dev-portal assets or OAuth needed. large_url makes
+  // the artwork clickable (opens the source video).
+  if (art) activity.largeImageKey = art
+  if (typeof payload.url === "string" && /^https:/.test(payload.url)) activity.largeImageUrl = payload.url
   const dur = Number(payload.durationMs)
   const pos = Number(payload.positionMs)
   if (Number.isFinite(dur) && dur > 0 && Number.isFinite(pos) && pos >= 0) {

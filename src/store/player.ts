@@ -1130,6 +1130,9 @@ if ("mediaSession" in navigator) {
             artwork: cur.artwork?.["480x480"] ?? cur.artwork?.["150x150"],
             durationMs: Math.round((s.duration || cur.duration || 0) * 1000),
             positionMs: Math.round(s.currentTime * 1000),
+            url: cur.id.startsWith("yt-")
+              ? `https://music.youtube.com/watch?v=${cur.id.slice(3)}`
+              : undefined,
           }
         : null
     )

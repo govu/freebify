@@ -39,6 +39,7 @@ declare global {
           artwork?: string
           durationMs?: number
           positionMs?: number
+          url?: string
         } | null) => void
         presenceEnabled?: (v: boolean) => void
       }

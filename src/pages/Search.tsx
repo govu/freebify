@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react"
-import { Play, Search as SearchIcon, X } from "lucide-react"
+import { Music2, Play, Search as SearchIcon, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { apiClient, GENRES, isNonOriginalQuery, originalsOnly } from "../api/audius"
@@ -208,6 +208,7 @@ export function SearchPage() {
                     className="relative h-24 overflow-hidden rounded-xl bg-card p-3 text-left text-sm font-bold text-ink shadow-lg transition hover:bg-cardhover"
                   >
                     {m.name}
+                    <Music2 size={52} className="absolute -bottom-3 -right-3 rotate-[20deg] text-cardhover" />
                   </motion.button>
                 ))}
               </div>
@@ -225,6 +226,7 @@ export function SearchPage() {
                 className="relative h-24 overflow-hidden rounded-xl bg-card p-3 text-left text-sm font-bold text-ink shadow-lg transition hover:bg-cardhover"
               >
                 {g}
+                <Music2 size={52} className="absolute -bottom-3 -right-3 rotate-[20deg] text-cardhover" />
               </motion.button>
             ))}
           </div>
