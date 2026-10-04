@@ -155,10 +155,11 @@ export default function App() {
     return () => off?.()
   }, [navigate])
 
-  // "update downloaded" → one quiet toast; it installs on quit
+  // "update downloaded" → tell them how: X only hides to the tray, so a
+  // plain "installs on quit" leaves users never installing
   useEffect(() => {
     const off = window.freebify?.app?.onUpdateReady?.((v) =>
-      notify(`Update ready — v${v} installs when you quit`),
+      notify(`Update ready — v${v}. Quit from the tray to install, or "Restart to update" there.`),
     )
     return () => off?.()
   }, [])

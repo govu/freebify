@@ -54,5 +54,6 @@ contextBridge.exposeInMainWorld("freebify", {
       ipcRenderer.on("app:update-ready", h)
       return () => ipcRenderer.removeListener("app:update-ready", h)
     },
+    installUpdate: () => ipcRenderer.invoke("app:install-update"),
   },
 })

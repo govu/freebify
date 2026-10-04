@@ -32,35 +32,50 @@ const thumbIcon = (name) => {
 }
 let thumbarPlaying = false
 let tray = null
+// set when an update finishes downloading — powers the explicit "restart to
+// update" affordance, since X hides to the tray and users never see a quit
+let pendingUpdate = null
+let updaterRef = null
+
+const showWindow = () => {
+  const win = BrowserWindow.getAllWindows()[0]
+  if (win) {
+    if (win.isMinimized()) win.restore()
+    win.show()
+    win.focus()
+  }
+}
+const sendCmd = (cmd) => () => {
+  const win = BrowserWindow.getAllWindows()[0]
+  win?.webContents.send("player:cmd", cmd)
+}
+
+function buildTrayMenu() {
+  if (!tray) return
+  const template = [
+    { label: "Show Freebify", click: showWindow },
+    { type: "separator" },
+    { label: "Play / Pause", click: sendCmd("toggle") },
+    { label: "Next", click: sendCmd("next") },
+    { label: "Previous", click: sendCmd("prev") },
+    { type: "separator" },
+  ]
+  if (pendingUpdate && updaterRef) {
+    template.push({
+      label: `Restart to update — v${pendingUpdate}`,
+      click: () => updaterRef.quitAndInstall(true, true),
+    })
+  }
+  template.push({ label: "Quit", click: quit })
+  tray.setContextMenu(Menu.buildFromTemplate(template))
+}
 
 function createTray() {
   if (tray) return
   tray = new Tray(thumbIcon("tray.png"))
   tray.setToolTip("Freebify")
-  const show = () => {
-    const win = BrowserWindow.getAllWindows()[0]
-    if (win) {
-      if (win.isMinimized()) win.restore()
-      win.show()
-      win.focus()
-    }
-  }
-  const send = (cmd) => () => {
-    const win = BrowserWindow.getAllWindows()[0]
-    win?.webContents.send("player:cmd", cmd)
-  }
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: "Show Freebify", click: show },
-      { type: "separator" },
-      { label: "Play / Pause", click: send("toggle") },
-      { label: "Next", click: send("next") },
-      { label: "Previous", click: send("prev") },
-      { type: "separator" },
-      { label: "Quit", click: quit },
-    ])
-  )
-  tray.on("click", show)
+  buildTrayMenu()
+  tray.on("click", showWindow)
 }
 
 function refreshThumbar(win) {
@@ -213,8 +228,14 @@ if (!gotLock) {
         autoUpdater.autoInstallOnAppQuit = true
         autoUpdater.on("update-downloaded", (info) => {
           logLine("update", `downloaded ${info.version} — installs on quit`)
+          pendingUpdate = info.version
+          updaterRef = autoUpdater
+          buildTrayMenu()
           const win = BrowserWindow.getAllWindows()[0]
           win?.webContents.send("app:update-ready", info.version)
+        })
+        ipcMain.handle("app:install-update", () => {
+          if (pendingUpdate && updaterRef) updaterRef.quitAndInstall(true, true)
         })
         autoUpdater.on("error", (e) => logLine("update", `check failed: ${e?.message ?? e}`))
         void autoUpdater.checkForUpdates().catch(() => {})

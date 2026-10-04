@@ -54,6 +54,7 @@ declare global {
         log: (msg: string) => void
         onDeepLink: (cb: (path: string) => void) => () => void
         onUpdateReady: (cb: (version: string) => void) => () => void
+        installUpdate: () => Promise<void>
       }
     }
   }
