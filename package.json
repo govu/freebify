@@ -1,7 +1,7 @@
 {
   "name": "freebify",
   "private": true,
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Freebify — free music streaming. No ads, no subscriptions.",
   "type": "module",
   "main": "electron/main.cjs",
