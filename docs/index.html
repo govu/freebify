@@ -27,7 +27,6 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html.lenis, html.lenis body { height: auto; }
   .lenis.lenis-smooth { scroll-behavior: auto !important; }
-  html { scroll-behavior: smooth; }
   body {
     background: var(--bg); color: var(--ink);
     font-family: var(--sans);
@@ -518,24 +517,37 @@
   }, { passive: true });
 
   /* ---------- gallery crossfade (GSAP) ---------- */
-  if (!reduced && window.gsap && innerWidth > 900) {
+  if (!reduced && window.gsap) {
     gsap.registerPlugin(ScrollTrigger);
+    // Lenis smooth-scroll drives the native scroll — ScrollTrigger must be
+    // told on every frame or its pin positions drift out of sync (the
+    // gallery stays fixed over the hero when scrolling back up)
+    if (lenis) lenis.on("scroll", ScrollTrigger.update);
     const steps = gsap.utils.toArray(".gal-step");
     const imgs = gsap.utils.toArray(".gal-stack .gimg");
     gsap.set(steps[0], { opacity: 1 });
     const N = imgs.length;
-    ScrollTrigger.create({
-      trigger: ".gallery",
-      start: "top top",
-      end: `+=${N * 90}%`,
-      pin: ".gal-inner",
-      scrub: true,
-      onUpdate(self) {
-        const idx = Math.min(N - 1, Math.floor(self.progress * N));
-        imgs.forEach((im, i) => gsap.to(im, { opacity: i === idx ? 1 : 0, duration: 0.5, ease: "power2.out", overwrite: "auto" }));
-        steps.forEach((st, i) => gsap.to(st, { opacity: i === idx ? 1 : 0, y: i === idx ? 0 : 14, duration: 0.45, ease: "power2.out", overwrite: "auto" }));
-      },
+    // pin only exists on desktop — resizing across the breakpoint must
+    // destroy it or a fixed-position clone survives into the mobile stack
+    gsap.matchMedia().add("(min-width: 901px)", () => {
+      ScrollTrigger.create({
+        trigger: ".gallery",
+        start: "top top",
+        end: `+=${N * 90}%`,
+        pin: ".gal-inner",
+        scrub: true,
+        anticipatePin: 1,
+        onUpdate(self) {
+          const idx = Math.min(N - 1, Math.floor(self.progress * N));
+          imgs.forEach((im, i) => gsap.to(im, { opacity: i === idx ? 1 : 0, duration: 0.5, ease: "power2.out", overwrite: "auto" }));
+          steps.forEach((st, i) => gsap.to(st, { opacity: i === idx ? 1 : 0, y: i === idx ? 0 : 14, duration: 0.45, ease: "power2.out", overwrite: "auto" }));
+        },
+      });
     });
+    // fonts/images change section heights after first layout — refresh
+    // trigger positions once everything settles or pins land mid-section
+    addEventListener("load", () => ScrollTrigger.refresh());
+    document.fonts?.ready.then(() => ScrollTrigger.refresh());
   }
 
   /* ---------- mini player ---------- */
