@@ -746,20 +746,27 @@ const artToPicture = (art) =>
 const artToCover = (art) =>
   art ? { "640x": art["480x480"] ?? art["150x150"], "2000x": art["1000x1000"] ?? art["480x480"] ?? art["150x150"] } : null
 
-const headerArt = (header, minWidth = 0) => {
+const headerArtList = (header) => {
   // immersive headers carry a bare thumbnails array; older layouts wrap it
-  // in MusicThumbnail nodes — cover both, pick by declared width
+  // in MusicThumbnail nodes — cover both, dedup, biggest first
   const direct = thumbList(header)
   const nodes = collect(header, ["MusicThumbnail"]).flatMap((n) =>
     Array.isArray(n.contents) ? n.contents : [n]
   )
-  const all = [...direct, ...nodes].filter((t) => t?.url)
-  const pick =
-    all
-      .filter((t) => (t.width ?? 0) >= minWidth)
-      .sort((a, b) => (a.width ?? 0) - (b.width ?? 0))[0] ??
-    [...all].sort((a, b) => (b.width ?? 0) - (a.width ?? 0))[0]
-  return cleanThumb(pick?.url ?? null)
+  const seen = new Set()
+  return [...direct, ...nodes]
+    .filter((t) => t?.url)
+    .map((t) => ({ url: cleanThumb(t.url), width: t.width ?? 0 }))
+    .filter((t) => t.url && !seen.has(t.url) && seen.add(t.url))
+    .sort((a, b) => b.width - a.width)
+}
+
+const headerArt = (header, minWidth = 0) => {
+  const all = headerArtList(header)
+  // smallest thumb that still clears the bar — sorted desc so the last
+  // qualifying entry is the tightest fit; fall back to the biggest
+  const pick = [...all].reverse().find((t) => t.width >= minWidth) ?? all[0]
+  return pick?.url ?? null
 }
 
 async function artist(channelIdOrName, nameHint) {
@@ -844,7 +851,8 @@ async function artist(channelIdOrName, nameHint) {
   try {
   const header = page.header?.contents ?? page.header ?? {}
   const name = text(header.title ?? header.name) || searchHit?.name || nameHint || channelIdOrName
-  const banner = headerArt(header, 1000)
+  const bannerList = headerArtList(header).map((t) => t.url)
+  const banner = bannerList[0] ?? null
   const avatar = headerArt(header, 240)
 
   // The "Top songs" shelf links to a playlist with the full list; in parallel
@@ -898,7 +906,9 @@ async function artist(channelIdOrName, nameHint) {
       track_count: tracks.length,
       profile_picture: pic,
       cover_photo: banner
-        ? { "640x": banner, "2000x": banner }
+        ? // distinct fallbacks — one googleusercontent token can 404/429 while
+          // another size of the same banner still works
+          { "2000x": banner, "640x": bannerList.find((u) => u !== banner) ?? banner }
         : (pic ? { "640x": pic["480x480"], "2000x": pic["1000x1000"] } : null) ?? artToCover(trackArtwork(tracks)),
     },
     tracks,

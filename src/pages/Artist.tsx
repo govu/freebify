@@ -23,9 +23,13 @@ export function ArtistPage() {
   // when the request simply didn't come back
   const [tracksError, setTracksError] = useState(false)
   const [retry, setRetry] = useState(0)
-  // a dead CDN cover URL shouldn't leave a broken-image hero
+  // a dead CDN cover URL shouldn't leave a broken-image hero — and the
+  // component isn't remounted between artists, so all image state must
+  // reset when the route param changes (below, inside the effect)
   const [coverFailed, setCoverFailed] = useState(false)
   const [avatarFailed, setAvatarFailed] = useState(false)
+  const [coverIdx, setCoverIdx] = useState(0)
+  const [avatarIdx, setAvatarIdx] = useState(0)
   const playContext = usePlayer((s) => s.playContext)
 
   useEffect(() => {
@@ -34,6 +38,10 @@ export function ArtistPage() {
     setLoading(true)
     setError(false)
     setTracksError(false)
+    setCoverFailed(false)
+    setAvatarFailed(false)
+    setCoverIdx(0)
+    setAvatarIdx(0)
     void (async () => {
       if (id.startsWith("yt-")) {
         try {
@@ -99,18 +107,38 @@ export function ArtistPage() {
   }
 
   const trackArt = tracks.find((t) => t.artwork?.["480x480"] || t.artwork?.["150x150"])?.artwork ?? null
-  const avatar = artist.profile_picture?.["480x480"] ?? artist.profile_picture?.["150x150"] ?? trackArt?.["480x480"] ?? null
-  const cover = artist.cover_photo?.["2000x"] ?? artist.cover_photo?.["640x"] ?? avatar
+  const avatars = [
+    ...new Set(
+      [
+        artist.profile_picture?.["480x480"],
+        artist.profile_picture?.["150x150"],
+        trackArt?.["480x480"],
+        trackArt?.["150x150"],
+      ].filter((u): u is string => typeof u === "string" && u.length > 0),
+    ),
+  ]
+  const avatar = avatars[Math.min(avatarIdx, avatars.length - 1)] ?? null
+  // ordered candidates — a dead googleusercontent token shouldn't kill the
+  // hero when another size of the same banner still serves
+  const covers = [
+    ...new Set(
+      [artist.cover_photo?.["2000x"], artist.cover_photo?.["640x"], avatar].filter(
+        (u): u is string => typeof u === "string" && u.length > 0,
+      ),
+    ),
+  ]
+  const cover = covers[Math.min(coverIdx, covers.length - 1)] ?? null
 
   return (
     <div className="-mt-12 pb-10">
       {/* hero */}
       <div className="relative flex min-h-64 items-end overflow-hidden">
         {cover && !coverFailed ? (
-          <img
+          <HeroImg
             src={cover}
-            alt=""
-            onError={() => setCoverFailed(true)}
+            onGiveUp={() =>
+              coverIdx + 1 < covers.length ? setCoverIdx((i) => i + 1) : setCoverFailed(true)
+            }
             className="absolute inset-0 size-full object-cover"
           />
         ) : (
@@ -124,10 +152,11 @@ export function ArtistPage() {
           className="relative flex items-end gap-5 px-6 pb-6"
         >
           {avatar && !avatarFailed ? (
-            <img
+            <HeroImg
               src={avatar}
-              alt=""
-              onError={() => setAvatarFailed(true)}
+              onGiveUp={() =>
+                avatarIdx + 1 < avatars.length ? setAvatarIdx((i) => i + 1) : setAvatarFailed(true)
+              }
               className="size-24 shrink-0 rounded-full border-2 border-white/15 bg-panel object-cover shadow-2xl shadow-black/60 sm:size-28"
             />
           ) : (
@@ -187,5 +216,47 @@ export function ArtistPage() {
         )}
       </div>
     </div>
+  )
+}
+
+// A transient CDN failure (googleusercontent rate-limits hot sessions with
+// 429s, flaky wifi, DNS hiccup) would mark the hero dead for the whole
+// mount — retry with fresh img elements before giving up to the fallback.
+function HeroImg({
+  src,
+  onGiveUp,
+  className,
+}: {
+  src: string
+  onGiveUp: () => void
+  className: string
+}) {
+  const [attempt, setAttempt] = useState(0)
+  const [dead, setDead] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  useEffect(() => {
+    setAttempt(0)
+    setDead(false)
+    setLoaded(false)
+  }, [src])
+  if (dead) return null
+  return (
+    <img
+      key={`${src}:${attempt}`}
+      src={src}
+      alt=""
+      onLoad={() => setLoaded(true)}
+      onError={() => {
+        if (attempt < 3) setTimeout(() => setAttempt((a) => a + 1), 1200 * (attempt + 1))
+        else {
+          setDead(true)
+          onGiveUp()
+        }
+      }}
+      // invisible until a successful decode — a retrying element would
+      // otherwise flash the browser's broken-image glyph over the hero
+      style={{ opacity: loaded ? 1 : 0 }}
+      className={className}
+    />
   )
 }
