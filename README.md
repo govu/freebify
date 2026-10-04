@@ -7,6 +7,8 @@ built-in fallback so playback never dead-ends.
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![Stack](https://img.shields.io/badge/stack-Electron%20%C2%B7%20React%2019%20%C2%B7%20TypeScript%20%C2%B7%20Tailwind%20v4-lightgrey)
 
+**[Download & website → govu.github.io/freebify](https://govu.github.io/freebify/)**
+
 ## Features
 
 - **Full official catalog** — search YouTube Music for original studio
