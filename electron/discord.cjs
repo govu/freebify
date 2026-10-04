@@ -23,22 +23,41 @@ function log(msg) {
   } catch {}
 }
 
+function withTimeout(p, ms, what) {
+  return Promise.race([
+    p,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${what} timed out`)), ms)),
+  ])
+}
+
 async function connect() {
   if (client || connecting || !enabled) return client
   connecting = true
+  let c = null
   try {
     const { Client } = await import("@xhayper/discord-rpc")
-    const c = new Client({ clientId: CLIENT_ID })
+    c = new Client({ clientId: CLIENT_ID })
     c.on("disconnected", () => {
       if (client === c) client = null
+      try {
+        c.destroy?.()
+      } catch {}
       log("disconnected")
       scheduleRetry()
     })
-    await c.login()
+    // a dead Discord pipe can leave login() pending forever — without the
+    // timeout `connecting` stays true and every retry early-returns, so the
+    // presence never recovers until app restart
+    await withTimeout(c.login(), 10000, "discord login")
     client = c
+    c = null // ownership transferred — failure path won't destroy it
     log("connected")
     if (lastJson) await push(lastJson).catch(() => {})
-  } catch {
+  } catch (e) {
+    log(`connect failed: ${e?.message ?? e}`)
+    try {
+      c?.destroy?.()
+    } catch {}
     client = null
     scheduleRetry()
   } finally {
@@ -61,10 +80,13 @@ async function push(activity) {
   if (!c) return
   try {
     // user.setActivity sends the SET_ACTIVITY command over the IPC socket
-    await c.user.setActivity(activity)
+    await withTimeout(c.user.setActivity(activity), 8000, "setActivity")
   } catch (e) {
     log(`setActivity failed: ${e?.message ?? e}`)
     client = null
+    try {
+      c.destroy?.()
+    } catch {}
     scheduleRetry()
   }
 }

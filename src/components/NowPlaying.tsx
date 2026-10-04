@@ -553,8 +553,10 @@ export function NowPlaying() {
           sit under the drag strip and the queue button's corner can hit the
           window's close control */}
       {/* window drag strip — the overlay covers every other drag region,
-          so without this the window can't be moved while it's open */}
-      <div className="drag-region absolute inset-x-0 top-0 z-20 h-12" />
+          so without this the window can't be moved while it's open.
+          right-[140px] clears the floating window controls — a drag region
+          under them swallows their clicks at the native hit-test level */}
+      <div className="drag-region absolute left-0 right-[140px] top-0 z-20 h-12" />
       <div className="relative z-10 flex h-full flex-col px-6 pb-5 pt-12 sm:px-10">
         {/* header — grab here and drag down to dismiss, like mobile apps */}
         <div

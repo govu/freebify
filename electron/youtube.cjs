@@ -1392,6 +1392,15 @@ const withTimeout = (p, ms = 15000) =>
   })
 
 function register(ipcMain) {
+  // warm the binary: the first yt-dlp spawn on Windows pays PE-load +
+  // AV-scan cost (~300-800ms). A throwaway --version at startup moves that
+  // off the critical path of the user's first click.
+  if (ytdlpAvailable()) {
+    try {
+      execFile(binPath(), ["--version"], { timeout: 8000 }, () => {})
+    } catch {}
+  }
+
   // no raw available() here — Innertube.create() has no timeout of its own
   // and on a dead-but-silent network the promise never settles, hanging
   // every page's first ytAvailable() await (skeletons forever, no Audius
