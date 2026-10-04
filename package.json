@@ -1,0 +1,91 @@
+{
+  "name": "freebify",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Freebify — free music streaming. No ads, no subscriptions.",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "dev:electron": "concurrently -k \"vite --port 5173 --strictPort\" \"wait-on http://127.0.0.1:5173 && electron . --dev\"",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "dist": "npm run build && electron-builder",
+    "fetch-bin": "node scripts/fetch-bin.mjs",
+    "dist:dir": "npm run build && electron-builder --dir",
+    "dist:portable": "npm run build && electron-builder --win portable"
+  },
+  "dependencies": {
+    "electron-updater": "^6.6.2",
+    "youtubei.js": "^18.1.0"
+  },
+  "devDependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "lucide-react": "^1.51.0",
+    "motion": "^14.0.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-router-dom": "^7.18.4",
+    "zustand": "^5.0.15",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "concurrently": "^10.0.5",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "oxlint": "^1.81.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0",
+    "wait-on": "^9.5.1"
+  },
+  "build": {
+    "appId": "com.freebify.app",
+    "productName": "Freebify",
+    "copyright": "Freebify",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "bin/yt-dlp.exe",
+        "to": "bin/yt-dlp.exe"
+      },
+      {
+        "from": "resources/thumbar",
+        "to": "thumbar"
+      }
+    ],
+    "win": {
+      "target": [
+        "portable",
+        "nsis"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "portable": {
+      "artifactName": "Freebify-${version}-portable.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "Freebify",
+      "artifactName": "Freebify-${version}-setup.exe"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "govu",
+      "repo": "freebify",
+      "releaseType": "release"
+    }
+  }
+}

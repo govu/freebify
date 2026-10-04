@@ -1,0 +1,196 @@
+@import "tailwindcss";
+
+/* latin-only Inter variable — the full fontsource bundle ships cyrillic,
+   greek and vietnamese woff2s (~4MB) we never render */
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("@fontsource-variable/inter/files/inter-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("@fontsource-variable/inter/files/inter-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --color-bg: #0a0a0a;
+  --color-panel: #101010;
+  --color-card: #181818;
+  --color-cardhover: #242424;
+  --color-hover: #232323;
+  --color-line: rgb(255 255 255 / 0.08);
+  --color-ink: #ffffff;
+  --color-dim: #a3a3a3;
+  /* was #666 (3.45:1 on bg — fails WCAG AA at the 9-11px sizes it's used
+     for: column headers, placeholders, badges). #858585 ≈ 5.6:1 passes */
+  --color-faint: #858585;
+  --color-accent: #ffffff;
+  --color-accentsoft: #e5e5e5;
+  --color-accent2: #d4d4d4;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+
+::selection {
+  background: rgb(255 255 255 / 0.25);
+}
+
+/* ------- scrollbars ------- */
+.scroller {
+  scrollbar-width: thin;
+  scrollbar-color: #2c2c2c transparent;
+}
+.scroller::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.scroller::-webkit-scrollbar-thumb {
+  background: #2c2c2c;
+  border-radius: 8px;
+  border: 2px solid var(--color-bg);
+}
+.scroller::-webkit-scrollbar-thumb:hover {
+  background: #3f3f3f;
+}
+.scroller::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ------- equalizer ------- */
+.eq {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+.eq > span {
+  width: 3px;
+  height: 100%;
+  border-radius: 2px;
+  background: currentColor;
+  transform-origin: bottom;
+  animation: eq-bounce 0.9s ease-in-out infinite;
+}
+.eq > span:nth-child(1) { animation-delay: 0s; }
+.eq > span:nth-child(2) { animation-delay: 0.22s; }
+.eq > span:nth-child(3) { animation-delay: 0.1s; animation-duration: 0.7s; }
+.eq > span:nth-child(4) { animation-delay: 0.32s; }
+/* paused bars must rest at the same low level — pausing the animation
+   freezes each bar mid-bounce at whatever height it had, which looked
+   like a broken random equalizer */
+.eq.paused > span {
+  animation: none;
+  transform: scaleY(0.3);
+}
+@keyframes eq-bounce {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
+/* ------- skeleton shimmer ------- */
+.shimmer {
+  position: relative;
+  overflow: hidden;
+  background: #1a1a1a;
+}
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.06), transparent);
+  animation: shimmer 1.5s infinite;
+}
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
+}
+
+/* ------- helpers ------- */
+
+/* frameless window chrome: the strip drags, its buttons don't */
+.drag-region {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+.card-shadow {
+  box-shadow: 0 24px 48px -12px rgb(0 0 0 / 0.55);
+}
+
+input[type="text"] {
+  outline: none;
+}
+/* a bare color-shift is a weak focus cue — give text inputs a real ring.
+   The ring inherits the element's own radius so it hugs pills and
+   rounded-lg rename fields instead of painting a 6px square */
+input[type="text"]:focus-visible {
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.35);
+  border-radius: inherit;
+}
+/* Tailwind preflight gives buttons no pointer cursor — every clickable
+   element in the app was showing a plain arrow */
+button:not(:disabled) {
+  cursor: pointer;
+}
+/* keyboard navigation needs a visible cue on non-input interactives too —
+   default outline is invisible on #0a0a0a */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+[role="menuitem"]:focus-visible {
+  outline: 2px solid rgb(255 255 255 / 0.55);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ------- reduced motion ------- */
+/* MotionConfig reducedMotion="user" covers JS-driven animation — these are
+   the CSS-animated pieces (equalizer bars, skeleton shimmer, spinners) */
+@media (prefers-reduced-motion: reduce) {
+  .eq > span {
+    animation: none;
+    transform: scaleY(0.45);
+  }
+  .shimmer::after {
+    animation: none;
+    display: none;
+  }
+  .animate-spin,
+  .animate-pulse {
+    animation: none;
+  }
+}
