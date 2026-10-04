@@ -46,3 +46,7 @@ Strictly neutral (user request): blacks/grays only (`--color-*` tokens in index.
 ## Shortcuts
 
 Space play/pause · ←/→ seek 10s · M mute · L like · N now-playing overlay.
+
+## Commits
+
+Never add tool/agent attribution (no "Generated with", no Co-Authored-By trailers) — commits read as the repo owner's own work.
