@@ -11,18 +11,16 @@
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #0a0a0a;
-    --panel: #0e0e0e;
-    --line: #232323;
-    --line-soft: #191919;
+    --panel: #101010;
+    --line: #222222;
     --ink: #f2f2f2;
-    --dim: #8f8f8f;
-    --faint: #5c5c5c;
-    --ghost: #3a3a3a;
-    --mono: "JetBrains Mono", ui-monospace, monospace;
+    --dim: #9a9a9a;
+    --faint: #666666;
+    --ghost: #3c3c3c;
     --sans: "Inter Tight", "Inter", system-ui, sans-serif;
     --serif: "Instrument Serif", Georgia, serif;
     --ease: cubic-bezier(0.16, 1, 0.3, 1);
@@ -30,6 +28,7 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html.lenis, html.lenis body { height: auto; }
   .lenis.lenis-smooth { scroll-behavior: auto !important; }
+  html { scroll-behavior: smooth; }
   body {
     background: var(--bg); color: var(--ink);
     font-family: var(--sans);
@@ -43,257 +42,188 @@
   ::-webkit-scrollbar-thumb:hover { background: #3d3d3d; }
   img { display: block; }
   a { color: inherit; }
-  .mono { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 400; }
-
-  /* film grain — kills the flat digital look */
-  .grain {
-    position: fixed; inset: -50%; z-index: 200; pointer-events: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-    opacity: 0.028;
-    animation: grain 0.9s steps(4) infinite;
-  }
-  @keyframes grain {
-    0% { transform: translate(0,0); } 25% { transform: translate(-2%,3%); }
-    50% { transform: translate(3%,-2%); } 75% { transform: translate(-3%,-3%); }
-    100% { transform: translate(2%,2%); }
-  }
 
   /* ============ LOADER ============ */
   .loader {
     position: fixed; inset: 0; z-index: 300; background: var(--bg);
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px;
+    display: flex; align-items: center; justify-content: center;
   }
-  .loader .mark svg { display: block; animation: spinArc 1.6s cubic-bezier(.6,.1,.3,.9) infinite; }
+  .loader svg { display: block; animation: spinArc 1.5s cubic-bezier(.6,.1,.3,.9) infinite; }
   @keyframes spinArc { to { transform: rotate(360deg); } }
-  .loader .word { font-family: var(--mono); font-size: 13px; letter-spacing: 0.42em; text-indent: 0.42em; color: var(--dim); }
-  .loader .num { font-family: var(--mono); font-size: 11px; color: var(--ghost); letter-spacing: 0.14em; }
-  .loader .bar { position: absolute; left: 0; bottom: 0; height: 2px; width: 0%; background: var(--ink); }
   .loader.done { transform: translateY(-100%); transition: transform 0.85s var(--ease); }
 
   /* ============ NAV ============ */
   nav {
     position: fixed; inset: 0 0 auto 0; z-index: 100;
-    display: flex; align-items: stretch; height: 52px;
-    border-bottom: 1px solid var(--line);
-    background: rgb(10 10 10 / 0.78);
-    backdrop-filter: blur(16px);
+    display: flex; align-items: center; height: 64px; padding: 0 28px;
+    background: rgb(10 10 10 / 0.7);
+    backdrop-filter: blur(18px);
+    border-bottom: 1px solid transparent;
     transform: translateY(-100%);
-    transition: transform 0.7s var(--ease) 0.15s;
+    transition: transform 0.7s var(--ease) 0.15s, border-color .3s;
   }
-  nav.in { transform: none; }
+  nav.in { transform: none; border-color: var(--line); }
   nav .brand {
-    display: flex; align-items: center; gap: 10px; padding: 0 22px;
-    font-family: var(--mono); font-weight: 500; font-size: 13px; letter-spacing: 0.16em;
-    text-decoration: none; border-right: 1px solid var(--line); color: var(--ink);
+    display: flex; align-items: center; gap: 9px;
+    font-size: 15px; font-weight: 600; letter-spacing: -0.01em;
+    text-decoration: none; color: var(--ink);
   }
   nav .brand svg { flex: none; }
-  nav .links { display: flex; align-items: stretch; margin-left: auto; }
+  nav .links { display: flex; align-items: center; gap: 30px; margin-left: auto; }
   nav .links a {
-    display: flex; align-items: center; padding: 0 20px;
-    font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
-    color: var(--dim); text-decoration: none; border-left: 1px solid var(--line);
-    transition: color .18s, background .18s;
+    font-size: 14px; color: var(--dim); text-decoration: none; transition: color .18s;
   }
-  nav .links a:hover { color: var(--ink); background: #161616; }
-  nav .links a.dl { color: #000; background: var(--ink); font-weight: 500; }
-  nav .links a.dl:hover { background: #fff; }
-  @media (max-width: 640px) {
-    nav .links a:not(.dl) { display: none; }
-    .hero h1 { font-size: 10.4vw; letter-spacing: -0.045em; }
-    .get h2 { font-size: 9.8vw; }
-    .foot-brand h2 { font-size: 12vw; }
-    .hero-meta span:nth-child(3) { display: none; }
+  nav .links a:hover { color: var(--ink); }
+  nav .links a.dl {
+    color: #0a0a0a; background: var(--ink); font-weight: 600;
+    padding: 9px 18px; border-radius: 999px; margin-right: -8px;
+    transition: background .18s, transform .3s var(--ease);
   }
+  nav .links a.dl:hover { background: #fff; transform: translateY(-1px); }
+  @media (max-width: 640px) { nav .links a:not(.dl) { display: none; } }
 
   /* ============ HERO ============ */
-  .hero { padding-top: 52px; min-height: 100svh; display: flex; flex-direction: column; }
-  .hero-meta {
-    display: flex; justify-content: space-between; gap: 16px;
-    padding: 24px 24px 0; color: var(--faint);
-  }
-  .hero-meta span:nth-child(2) { display: none; }
-  @media (min-width: 720px) { .hero-meta span:nth-child(2) { display: inline; } }
+  .hero { padding-top: 64px; min-height: 100svh; display: flex; flex-direction: column; }
   .hero h1 {
-    margin-top: clamp(26px, 5vh, 60px); padding: 0 24px;
+    margin-top: clamp(64px, 12vh, 140px); padding: 0 24px;
     font-size: clamp(54px, 10.8vw, 176px);
-    font-weight: 900; letter-spacing: -0.055em; line-height: 0.88;
+    font-weight: 900; letter-spacing: -0.055em; line-height: 0.9;
     text-transform: uppercase; font-kerning: normal;
+    text-align: center;
   }
   .hero h1 .row { display: block; overflow: hidden; padding-block: 0.02em; }
   .hero h1 .row > span { display: block; transform: translateY(112%); }
   .hero h1 .row:nth-child(2) > span { color: var(--ghost); }
-  .hero h1 .row > span em {
-    font-family: var(--serif); font-style: italic; font-weight: 400;
-    text-transform: none; letter-spacing: -0.02em;
-  }
   .hero h1 .row > span.play { animation: rise 1.15s var(--ease) forwards; }
   .hero h1 .row:nth-child(2) > span.play { animation-delay: 0.14s; }
   .hero h1 .row:nth-child(3) > span.play { animation-delay: 0.28s; }
   @keyframes rise { to { transform: translateY(0); } }
 
   .hero-sub {
-    display: flex; justify-content: space-between; align-items: flex-end; gap: 32px;
-    padding: 30px 24px 44px; flex-wrap: wrap;
+    display: flex; flex-direction: column; align-items: center; gap: 34px;
+    padding: 44px 24px 64px; text-align: center;
   }
-  .hero-sub p { max-width: 470px; color: var(--dim); font-size: clamp(15px, 1.6vw, 18px); line-height: 1.6; font-weight: 400; }
+  .hero-sub p { max-width: 520px; color: var(--dim); font-size: 17px; line-height: 1.65; font-weight: 400; }
   .hero-sub p b { color: var(--ink); font-weight: 600; }
-  .cta-row { display: flex; gap: 12px; }
+  .cta-row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
   .btn {
-    display: inline-flex; align-items: center; gap: 10px; text-decoration: none;
-    font-family: var(--mono); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;
-    padding: 17px 28px; transition: transform .35s var(--ease), background .2s, color .2s, border-color .2s;
+    display: inline-flex; align-items: center; gap: 9px; text-decoration: none;
+    font-size: 15px; font-weight: 600;
+    padding: 15px 30px; border-radius: 999px;
+    transition: transform .35s var(--ease), background .2s, color .2s, border-color .2s;
   }
-  .btn.solid { background: var(--ink); color: #000; font-weight: 500; }
+  .btn.solid { background: var(--ink); color: #0a0a0a; }
   .btn.solid:hover { background: #fff; transform: translateY(-2px); }
-  .btn.line { border: 1px solid var(--line); color: var(--dim); }
+  .btn.line { border: 1px solid #2e2e2e; color: var(--dim); }
   .btn.line:hover { border-color: #4a4a4a; color: var(--ink); transform: translateY(-2px); }
 
   .hero-visual { position: relative; margin-top: auto; }
   .hero-visual .frame {
-    width: min(1400px, calc(100vw - 48px)); margin: 0 auto;
-    border: 1px solid var(--line); border-bottom: 0;
-    overflow: hidden; max-height: 62vh; position: relative;
+    width: min(1360px, calc(100vw - 48px)); margin: 0 auto;
+    border-radius: 16px 16px 0 0;
+    overflow: hidden; max-height: 60vh; position: relative;
     background: var(--panel);
+    box-shadow: 0 -1px 0 rgb(255 255 255 / 0.06), 0 30px 80px rgb(0 0 0 / 0.55);
   }
   .hero-visual img { width: 100%; will-change: transform; }
-  .hero-visual .fade { position: absolute; inset: 0; background: linear-gradient(180deg, transparent 60%, rgb(10 10 10 / 0.7)); pointer-events: none; }
-
-  /* ticker */
-  .ticker { border-block: 1px solid var(--line); overflow: hidden; white-space: nowrap; background: var(--bg); }
-  .ticker .inner { display: inline-flex; will-change: transform; }
-  .ticker span {
-    display: inline-flex; align-items: center; padding: 14px 0;
-    font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint);
-  }
-  .ticker span::after { content: "·"; margin: 0 30px; color: #2e2e2e; }
-  .ticker b { color: var(--ink); font-weight: 500; }
-  .ticker i { font-style: normal; color: var(--dim); margin: 0 8px; }
-  .ticker .live { color: #4ade80; margin-right: 10px; animation: blink 2.4s infinite; }
-  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+  .hero-visual .fade { position: absolute; inset: 0; background: linear-gradient(180deg, transparent 62%, rgb(10 10 10 / 0.72)); pointer-events: none; }
 
   /* ============ MANIFESTO ============ */
-  .manifesto { padding: clamp(100px, 18vh, 200px) 24px; max-width: 1240px; margin: 0 auto; }
-  .manifesto .mono { color: var(--faint); margin-bottom: 44px; display: block; }
+  .manifesto { padding: clamp(120px, 20vh, 220px) 24px; max-width: 1180px; margin: 0 auto; }
   .manifesto p {
-    font-size: clamp(31px, 4.8vw, 64px); font-weight: 700; letter-spacing: -0.028em; line-height: 1.15;
+    font-size: clamp(30px, 4.6vw, 60px); font-weight: 700; letter-spacing: -0.028em; line-height: 1.18;
   }
   .manifesto p .w { opacity: 0.16; transition: opacity 0.5s linear; }
   .manifesto p .w.lit { opacity: 1; }
   .manifesto p em { font-family: var(--serif); font-style: italic; font-weight: 400; letter-spacing: -0.01em; }
 
-  /* ============ SPEC ============ */
-  .index { border-top: 1px solid var(--line); }
-  .index-head {
-    display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 20px;
-    padding: clamp(64px, 10vh, 120px) 24px 48px; max-width: 1380px; margin: 0 auto;
+  /* ============ FEATURES ============ */
+  .feats { max-width: 1100px; margin: 0 auto; padding: 0 24px clamp(90px, 14vh, 160px); }
+  .feats h2 {
+    font-size: clamp(30px, 3.4vw, 44px); font-weight: 800; letter-spacing: -0.03em;
+    margin-bottom: clamp(48px, 7vh, 80px);
   }
-  .index-head h2 { font-size: clamp(40px, 6.2vw, 92px); font-weight: 900; letter-spacing: -0.045em; line-height: 0.92; text-transform: uppercase; }
-  .index-head .mono { color: var(--faint); text-align: right; }
-  .spec { max-width: 1380px; margin: 0 auto; padding: 0 24px clamp(64px, 10vh, 120px); }
-  .spec-row {
-    position: relative;
-    display: grid; grid-template-columns: 64px minmax(150px, 320px) 1fr auto; gap: 24px;
-    padding: 28px 0; border-top: 1px solid var(--line-soft); align-items: baseline;
-    transition: background .25s;
+  .feat-row {
+    display: grid; grid-template-columns: minmax(160px, 300px) 1fr; gap: 32px;
+    padding: 30px 0; border-top: 1px solid #1c1c1c; align-items: baseline;
   }
-  .spec-row:last-child { border-bottom: 1px solid var(--line-soft); }
-  .spec-row::before { content: ""; position: absolute; inset: 0 -24px; background: #121212; opacity: 0; transition: opacity .3s; }
-  .spec-row:hover::before { opacity: 1; }
-  .spec-row > * { position: relative; }
-  .spec-row .n { font-family: var(--mono); font-size: 11px; color: var(--faint); letter-spacing: 0.08em; }
-  .spec-row .t { font-size: clamp(19px, 2.3vw, 27px); font-weight: 700; letter-spacing: -0.02em; transition: transform .4s var(--ease); }
-  .spec-row:hover .t { transform: translateX(8px); }
-  .spec-row .d { color: var(--dim); font-size: clamp(14px, 1.4vw, 16px); line-height: 1.6; max-width: 520px; }
-  .spec-row .arr { font-family: var(--mono); color: var(--ghost); font-size: 14px; transition: color .25s, transform .4s var(--ease); }
-  .spec-row:hover .arr { color: var(--ink); transform: translateX(4px); }
-  @media (max-width: 760px) {
-    .spec-row { grid-template-columns: 44px 1fr; }
-    .spec-row .d, .spec-row .arr { grid-column: 2; }
-  }
-  /* cursor-follow preview */
-  .peek {
-    position: fixed; z-index: 90; width: 300px; aspect-ratio: 16/10;
-    pointer-events: none; overflow: hidden; border: 1px solid var(--line);
-    opacity: 0; transform: scale(0.92) rotate(-2deg);
-    transition: opacity .35s var(--ease), transform .45s var(--ease);
-    filter: grayscale(0.4) contrast(1.05);
-  }
-  .peek.on { opacity: 1; transform: scale(1) rotate(-2deg); }
-  .peek img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+  .feat-row:last-child { border-bottom: 1px solid #1c1c1c; }
+  .feat-row .t { font-size: clamp(18px, 2vw, 22px); font-weight: 700; letter-spacing: -0.02em; }
+  .feat-row .d { color: var(--dim); font-size: 16px; line-height: 1.65; max-width: 540px; }
+  @media (max-width: 640px) { .feat-row { grid-template-columns: 1fr; gap: 8px; } }
 
-  /* ============ GALLERY (pinned crossfade) ============ */
-  .gallery { border-top: 1px solid var(--line); }
-  .gal-inner { display: grid; grid-template-columns: 0.9fr 1.4fr; min-height: 100svh; }
-  .gal-left { position: relative; padding: clamp(60px, 10vh, 120px) 0 clamp(60px,10vh,120px) 24px; }
-  .gal-steps { position: sticky; top: 52px; height: calc(100svh - 52px); display: flex; flex-direction: column; justify-content: center; }
-  .gal-step { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; opacity: 0; }
-  .gal-step .n { font-family: var(--mono); font-size: 11px; color: var(--faint); letter-spacing: 0.08em; margin-bottom: 18px; }
-  .gal-step h3 { font-size: clamp(30px, 4vw, 54px); font-weight: 800; letter-spacing: -0.03em; line-height: 1; text-transform: uppercase; margin-bottom: 16px; }
-  .gal-step .c { font-family: var(--mono); font-size: 11px; color: var(--faint); letter-spacing: 0.1em; text-transform: uppercase; }
-  .gal-right { position: relative; padding: clamp(60px,10vh,120px) 24px; border-left: 1px solid var(--line-soft); }
-  .gal-stack { position: sticky; top: calc(52px + 6vh); height: min(76svh, 780px); }
+  /* ============ GALLERY ============ */
+  .gallery { padding: clamp(80px, 12vh, 140px) 0; }
+  .gal-inner { display: grid; grid-template-columns: 0.85fr 1.5fr; min-height: 100svh; }
+  .gal-left { position: relative; padding-left: clamp(24px, 4vw, 72px); }
+  .gal-steps { position: sticky; top: 64px; height: calc(100svh - 64px); display: flex; flex-direction: column; justify-content: center; }
+  .gal-step { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; opacity: 0; padding-right: 40px; }
+  .gal-step .k { font-size: 14px; color: var(--faint); font-weight: 500; margin-bottom: 18px; }
+  .gal-step h3 { font-size: clamp(30px, 3.6vw, 50px); font-weight: 800; letter-spacing: -0.035em; line-height: 1.02; margin-bottom: 18px; }
+  .gal-step .c { color: var(--dim); font-size: 16px; line-height: 1.6; max-width: 340px; }
+  .gal-right { position: relative; padding: 0 clamp(24px, 4vw, 72px) 0 24px; }
+  .gal-stack { position: sticky; top: calc(64px + 7vh); height: min(72svh, 760px); }
   .gal-stack .gimg {
     position: absolute; inset: 0; overflow: hidden;
-    border: 1px solid var(--line); background: var(--panel); opacity: 0;
+    border-radius: 16px; background: var(--panel); opacity: 0;
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.06), 0 30px 80px rgb(0 0 0 / 0.5);
   }
   .gal-stack .gimg img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
   .gal-stack .gimg:first-child { opacity: 1; }
+  .mobile-cap { display: none; }
   @media (max-width: 900px) {
     .gal-inner { display: block; }
-    .gal-left { position: static; }
-    .gal-steps { position: static; height: auto; }
-    .gal-step { position: static; opacity: 1; padding: 48px 24px 8px; }
-    .gal-right { border-left: 0; padding-top: 0; }
-    .gal-stack { position: static; height: auto; display: grid; gap: 16px; }
+    .gal-left { display: none; }
+    .gal-right { padding: 0 24px; }
+    .gal-stack { position: static; height: auto; display: grid; gap: 20px; }
     .gal-stack .gimg { position: static; opacity: 1; aspect-ratio: 16/10; }
-    .gal-steps .gal-step:not(:first-of-type) { display: none; }
-    .gal-steps { display: none; }
-    .gal-right .mobile-cap { display: block; }
+    .mobile-cap { display: block; margin-top: 20px; color: var(--faint); font-size: 14px; }
   }
-  .gal-right .mobile-cap { display: none; font-family: var(--mono); font-size: 10px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 8px; }
-  @media (max-width: 900px) { .gal-right .mobile-cap { display: block; } .gal-left { display: none; } }
 
   /* ============ GET ============ */
-  .get { border-top: 1px solid var(--line); padding: clamp(90px, 15vh, 170px) 24px clamp(70px, 12vh, 130px); }
-  .get .inner { max-width: 1380px; margin: 0 auto; }
-  .get .k { color: var(--faint); display: block; margin-bottom: 26px; }
-  .get h2 { font-size: clamp(56px, 10.5vw, 172px); font-weight: 900; letter-spacing: -0.05em; line-height: 0.88; text-transform: uppercase; }
+  .get { padding: clamp(110px, 17vh, 190px) 24px clamp(90px, 14vh, 150px); text-align: center; }
+  .get h2 { font-size: clamp(52px, 9.6vw, 150px); font-weight: 900; letter-spacing: -0.05em; line-height: 0.92; text-transform: uppercase; }
   .get h2 span { color: var(--ghost); }
-  .get .row { margin-top: 60px; display: flex; align-items: center; gap: 26px; flex-wrap: wrap; }
-  .get .row .btn { padding: 24px 44px; font-size: 13px; }
-  .get .meta { display: flex; gap: 30px; flex-wrap: wrap; margin-top: 44px; color: var(--faint); }
-  .get .meta b { color: var(--dim); font-weight: 500; }
-  .get .meta .dot { color: #4ade80; }
+  .get .row { margin-top: 54px; display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
+  .get .row .btn { padding: 18px 38px; font-size: 16px; }
+  .get .note { margin-top: 34px; color: var(--faint); font-size: 14px; }
+  .get .note b { color: var(--dim); font-weight: 500; }
 
   /* ============ FOOTER ============ */
-  footer { border-top: 1px solid var(--line); overflow: hidden; }
+  footer { overflow: hidden; }
   .foot-brand {
-    padding: clamp(50px, 8vh, 90px) 24px 0; max-width: 1600px; margin: 0 auto;
+    padding: clamp(40px, 7vh, 80px) 24px 0; max-width: 1600px; margin: 0 auto;
     display: flex; align-items: flex-end; gap: clamp(12px, 2vw, 28px);
   }
-  .foot-brand .mark { flex: none; transform: translateY(-0.5vw); }
-  .foot-brand .mark svg { display: block; width: clamp(44px, 6vw, 96px); height: auto; }
+  .foot-brand .mark { flex: none; transform: translateY(-0.4vw); }
+  .foot-brand .mark svg { display: block; width: clamp(44px, 6vw, 92px); height: auto; }
   .foot-brand h2 {
     font-size: clamp(64px, 14.5vw, 230px); font-weight: 900;
-    letter-spacing: -0.055em; line-height: 0.78; text-transform: uppercase; color: #1e1e1e;
-    -webkit-text-stroke: 1px #3a3a3a; white-space: nowrap;
+    letter-spacing: -0.055em; line-height: 0.78; text-transform: uppercase; color: #1c1c1c;
+    -webkit-text-stroke: 1px #383838; white-space: nowrap;
     transition: color 1.2s var(--ease), -webkit-text-stroke-color 1.2s var(--ease);
   }
   .foot-brand:hover h2 { color: var(--ink); -webkit-text-stroke-color: transparent; }
   .foot {
-    display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap;
-    padding: 40px 24px 34px; max-width: 1380px; margin: 0 auto;
+    display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap;
+    padding: 44px 24px 30px; max-width: 1380px; margin: 0 auto;
   }
-  .foot .l { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); }
-  .foot .r { display: flex; gap: 28px; }
-  .foot .r a { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); text-decoration: none; transition: color .2s; }
+  .foot .l { font-size: 13px; color: var(--faint); }
+  .foot .r { display: flex; gap: 26px; }
+  .foot .r a { font-size: 13px; color: var(--dim); text-decoration: none; transition: color .2s; }
   .foot .r a:hover { color: var(--ink); }
-  .legal { padding: 0 24px 36px; max-width: 1380px; margin: 0 auto; color: #434343; font-size: 12px; line-height: 1.65; }
+  .legal { padding: 0 24px 40px; max-width: 1380px; margin: 0 auto; color: #454545; font-size: 12px; line-height: 1.65; }
 
   /* reveal */
-  .rv { opacity: 0; transform: translateY(30px); transition: opacity 1s var(--ease), transform 1s var(--ease); }
+  .rv { opacity: 0; transform: translateY(28px); transition: opacity 1s var(--ease), transform 1s var(--ease); }
   .rv.in { opacity: 1; transform: none; }
-  .rv.d1 { transition-delay: .1s } .rv.d2 { transition-delay: .2s } .rv.d3 { transition-delay: .3s }
+  .rv.d1 { transition-delay: .1s } .rv.d2 { transition-delay: .2s }
+
+  @media (max-width: 640px) {
+    .hero h1 { font-size: 10.4vw; letter-spacing: -0.045em; }
+    .get h2 { font-size: 9.8vw; }
+    .foot-brand h2 { font-size: 12.4vw; }
+  }
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition-duration: 0.01ms !important; }
@@ -301,7 +231,6 @@
     .rv { opacity: 1; transform: none; }
     .loader { display: none; }
     nav { transform: none; }
-    .grain { animation: none; }
     .manifesto p .w { opacity: 1; }
     .gal-step { opacity: 1 !important; position: static; }
     .gal-stack .gimg { opacity: 1 !important; position: static; }
@@ -311,56 +240,42 @@
 </head>
 <body>
 
-<div class="grain" aria-hidden="true"></div>
-
-<!-- ============ LOADER ============ -->
 <div class="loader" id="loader" aria-hidden="true">
-  <div class="mark">
-    <svg width="56" height="56" viewBox="0 0 48 48" fill="none" style="color:#f2f2f2">
-      <path d="M41.5 33A19 19 0 1 1 24 5" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
-      <circle cx="24" cy="24" r="10" stroke="currentColor" stroke-width="5"/>
-      <circle cx="24" cy="24" r="3.5" fill="currentColor"/>
-    </svg>
-  </div>
-  <div class="word">FREEBIFY</div>
-  <div class="num" id="loadNum">0</div>
-  <div class="bar" id="loadBar"></div>
+  <svg width="52" height="52" viewBox="0 0 48 48" fill="none" style="color:#f2f2f2">
+    <path d="M41.5 33A19 19 0 1 1 24 5" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="24" cy="24" r="10" stroke="currentColor" stroke-width="5"/>
+    <circle cx="24" cy="24" r="3.5" fill="currentColor"/>
+  </svg>
 </div>
 
 <nav id="nav">
   <a class="brand" href="#top" data-scroll>
-    <svg width="19" height="19" viewBox="0 0 48 48" fill="none">
+    <svg width="20" height="20" viewBox="0 0 48 48" fill="none">
       <path d="M41.5 33A19 19 0 1 1 24 5" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
       <circle cx="24" cy="24" r="10" stroke="currentColor" stroke-width="5"/>
       <circle cx="24" cy="24" r="3.5" fill="currentColor"/>
     </svg>
-    FREEBIFY
+    Freebify
   </a>
   <div class="links">
-    <a href="#spec" data-scroll>Spec</a>
+    <a href="#features" data-scroll>Features</a>
     <a href="#shots" data-scroll>Interface</a>
-    <a href="https://github.com/govu/freebify" target="_blank" rel="noopener">GitHub ↗</a>
+    <a href="https://github.com/govu/freebify" target="_blank" rel="noopener">GitHub</a>
     <a class="dl" href="#get" data-scroll>Download</a>
   </div>
 </nav>
 
 <header class="hero" id="top">
-  <div class="hero-meta mono">
-    <span>FBF—001</span>
-    <span>Desktop music player — YTM + Audius catalogs</span>
-    <span>Windows 10 / 11</span>
-    <span><span id="verTag">v1.0.3</span> · MIT</span>
-  </div>
   <h1>
     <span class="row"><span>All the music.</span></span>
     <span class="row"><span>None of the</span></span>
-    <span class="row"><span>ads<em>.</em></span></span>
+    <span class="row"><span>ads.</span></span>
   </h1>
   <div class="hero-sub">
     <p>Freebify is a desktop music player that streams <b>original studio recordings</b> — no ads between songs, no subscriptions, no account. Just the music.</p>
     <div class="cta-row">
-      <a class="btn solid" href="#get" data-scroll>Download free ↓</a>
-      <a class="btn line" href="https://github.com/govu/freebify" target="_blank" rel="noopener">Source ↗</a>
+      <a class="btn solid" href="#get" data-scroll>Download for Windows</a>
+      <a class="btn line" href="https://github.com/govu/freebify" target="_blank" rel="noopener">GitHub ↗</a>
     </div>
   </div>
   <div class="hero-visual">
@@ -368,38 +283,30 @@
   </div>
 </header>
 
-<div class="ticker" aria-hidden="true"><div class="inner" id="ticker"></div></div>
-
 <section class="manifesto" id="manifesto">
-  <span class="mono rv">( The idea )</span>
   <p id="maniText">Streaming made music free, then charged you in ads. <em>Freebify removes the business model and keeps the player</em> — every search returns the real studio version, every transition is instant, and nothing ever interrupts a song.</p>
 </section>
 
-<section class="index" id="spec">
-  <div class="index-head">
-    <h2 class="rv">What’s<br>inside</h2>
-    <span class="mono rv d1">Spec / 001–008</span>
-  </div>
-  <div class="spec" id="specList">
-    <div class="spec-row rv" data-img="shots/artist.png"><span class="n">001</span><span class="t">Original recordings</span><span class="d">Search returns the real studio release — not a slowed edit, a sped-up rip or a cover with the same title.</span><span class="arr">→</span></div>
-    <div class="spec-row rv" data-img="shots/home.png"><span class="n">002</span><span class="t">Zero ads</span><span class="d">No audio interruptions, no banners, no “go premium” nags. The player plays. That’s the deal.</span><span class="arr">→</span></div>
-    <div class="spec-row rv" data-img="shots/nowplaying.png"><span class="n">003</span><span class="t">Live synced lyrics</span><span class="d">Line-by-line karaoke that follows the song, auto-calibrated to the exact version you’re hearing.</span><span class="arr">→</span></div>
-    <div class="spec-row rv" data-img="shots/search.png"><span class="n">004</span><span class="t">Genre radio</span><span class="d">Start a radio from any track and the queue stays on-vibe — the same sound, not the same song rehashed.</span><span class="arr">→</span></div>
-    <div class="spec-row rv"><span class="n">005</span><span class="t">Discord presence</span><span class="d">Your status shows the song, the artist, the artwork and live progress — like the big players do.</span><span class="arr">→</span></div>
-    <div class="spec-row rv"><span class="n">006</span><span class="t">Silent auto-updates</span><span class="d">New versions download in the background and install when you quit. You never manage the app.</span><span class="arr">→</span></div>
-    <div class="spec-row rv" data-img="shots/home.png"><span class="n">007</span><span class="t">Your library</span><span class="d">Likes, playlists, queue and history — stored locally on your machine, not our servers.</span><span class="arr">→</span></div>
-    <div class="spec-row rv"><span class="n">008</span><span class="t">No account</span><span class="d">Install and press play. No email, no login, no trial clock. That’s the entire signup flow.</span><span class="arr">→</span></div>
-  </div>
+<section class="feats" id="features">
+  <h2 class="rv">Everything inside.</h2>
+  <div class="feat-row rv"><span class="t">Original recordings</span><span class="d">Search returns the real studio release — not a slowed edit, a sped-up rip or a cover with the same title.</span></div>
+  <div class="feat-row rv"><span class="t">Zero ads</span><span class="d">No audio interruptions, no banners, no “go premium” nags. The player plays. That’s the deal.</span></div>
+  <div class="feat-row rv"><span class="t">Live synced lyrics</span><span class="d">Line-by-line karaoke that follows the song, auto-calibrated to the exact version you’re hearing.</span></div>
+  <div class="feat-row rv"><span class="t">Genre radio</span><span class="d">Start a radio from any track and the queue stays on-vibe — the same sound, not the same song rehashed.</span></div>
+  <div class="feat-row rv"><span class="t">Discord presence</span><span class="d">Your status shows the song, the artist, the artwork and live progress — like the big players do.</span></div>
+  <div class="feat-row rv"><span class="t">Silent auto-updates</span><span class="d">New versions download in the background and install when you quit. You never manage the app.</span></div>
+  <div class="feat-row rv"><span class="t">Your library</span><span class="d">Likes, playlists, queue and history — stored locally on your machine, not our servers.</span></div>
+  <div class="feat-row rv"><span class="t">No account</span><span class="d">Install and press play. No email, no login, no trial clock. That’s the entire signup flow.</span></div>
 </section>
 
 <section class="gallery" id="shots">
   <div class="gal-inner">
     <div class="gal-left">
       <div class="gal-steps" id="galSteps">
-        <div class="gal-step"><div class="n">01 / Home</div><h3>Pick up where<br>you left off</h3><div class="c">Recents · charts · editorial</div></div>
-        <div class="gal-step"><div class="n">02 / Lyrics</div><h3>Lyrics that keep<br>the tempo</h3><div class="c">Line-synced · auto-calibrated</div></div>
-        <div class="gal-step"><div class="n">03 / Search</div><h3>Find it in<br>three letters</h3><div class="c">Songs · artists · playlists</div></div>
-        <div class="gal-step"><div class="n">04 / Artists</div><h3>Every artist,<br>properly profiled</h3><div class="c">Bio · top tracks · monthly listeners</div></div>
+        <div class="gal-step"><div class="k">Home</div><h3>Pick up where<br>you left off</h3><div class="c">Recently played, weekly charts and editorial picks — the moment you open the app.</div></div>
+        <div class="gal-step"><div class="k">Lyrics</div><h3>Lyrics that keep<br>the tempo</h3><div class="c">Line-synced karaoke that follows the song. Tap any line to jump to it.</div></div>
+        <div class="gal-step"><div class="k">Search</div><h3>Find it in<br>three letters</h3><div class="c">Songs, artists, albums and playlists — ranked the way you'd expect.</div></div>
+        <div class="gal-step"><div class="k">Artists</div><h3>Every artist,<br>properly profiled</h3><div class="c">Top tracks, monthly listeners and full discographies.</div></div>
       </div>
     </div>
     <div class="gal-right">
@@ -409,26 +316,21 @@
         <div class="gimg"><img src="shots/search.png" alt="Search"></div>
         <div class="gimg"><img src="shots/artist.png" alt="Artist page"></div>
       </div>
-      <div class="mobile-cap">Interface — home · lyrics · search · artist</div>
+      <div class="mobile-cap">Home · lyrics · search · artist</div>
     </div>
   </div>
 </section>
 
 <section class="get" id="get">
   <div class="inner">
-    <span class="k mono rv">( Download )</span>
     <h2 class="rv">Get Freebify.<br><span>Keep the money.</span></h2>
     <div class="row rv d1">
       <a class="btn solid" id="dlBtn" href="https://github.com/govu/freebify/releases/latest" target="_blank" rel="noopener">Download for Windows</a>
       <a class="btn line" id="portableBtn" href="https://github.com/govu/freebify/releases/latest" target="_blank" rel="noopener">Portable .exe</a>
     </div>
-    <div class="meta mono rv d2">
-      <span>VERSION <b id="verMeta">1.0.3</b></span>
-      <span>SIZE <b>~120 MB</b></span>
-      <span>OS <b>Windows 10/11 · 64-bit</b></span>
-      <span>PRICE <b>$0 — forever</b></span>
-      <span id="dlCount" style="display:none">DOWNLOADS <b id="dlCountN"></b></span>
-      <span><span class="dot">●</span> <b>AUTO-UPDATES</b></span>
+    <div class="note rv d2">
+      Free forever · Windows 10/11 · ~120 MB · <b id="verMeta">v1.0.3</b> · updates itself
+      <span id="dlCount" style="display:none"> · <b id="dlCountN"></b> downloads</span>
     </div>
   </div>
 </section>
@@ -455,8 +357,6 @@
   <p class="legal">Freebify is an independent open-source project. Not affiliated with Spotify or YouTube. Music metadata and streams are provided by their respective public sources.</p>
 </footer>
 
-<div class="peek" id="peek"><img id="peekImg" src="shots/home.png" alt=""></div>
-
 <script src="https://unpkg.com/lenis@1.3.11/dist/lenis.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.7/gsap.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.7/ScrollTrigger.min.js"></script>
@@ -465,22 +365,13 @@
 
   /* ---------- loader ---------- */
   const loader = document.getElementById("loader");
-  const num = document.getElementById("loadNum");
-  const bar = document.getElementById("loadBar");
-  let p = 0;
-  const tickLoad = () => {
-    p = Math.min(100, p + Math.random() * 26 + 8);
-    num.textContent = String(Math.round(p)).padStart(3, "0");
-    bar.style.width = p + "%";
-    if (p < 100) setTimeout(tickLoad, 90 + Math.random() * 120);
-    else setTimeout(() => {
-      loader.classList.add("done");
-      document.getElementById("nav").classList.add("in");
-      document.querySelectorAll(".hero h1 .row > span").forEach(s => s.classList.add("play"));
-      setTimeout(() => loader.remove(), 900);
-    }, 320);
+  const open = () => {
+    loader.classList.add("done");
+    document.getElementById("nav").classList.add("in");
+    document.querySelectorAll(".hero h1 .row > span").forEach(s => s.classList.add("play"));
+    setTimeout(() => loader.remove(), 900);
   };
-  reduced ? (loader.remove(), document.getElementById("nav").classList.add("in"), document.querySelectorAll(".hero h1 .row > span").forEach(s => s.classList.add("play"))) : setTimeout(tickLoad, 180);
+  reduced ? (loader.remove(), document.getElementById("nav").classList.add("in"), document.querySelectorAll(".hero h1 .row > span").forEach(s => s.classList.add("play"))) : setTimeout(open, 1100);
 
   /* ---------- lenis smooth scroll ---------- */
   let lenis = null;
@@ -496,7 +387,7 @@
       e.preventDefault();
       const el = document.querySelector(id);
       if (!el) return;
-      lenis ? lenis.scrollTo(el, { offset: -52, duration: 1.4 }) : el.scrollIntoView({ behavior: "smooth" });
+      lenis ? lenis.scrollTo(el, { offset: -64, duration: 1.4 }) : el.scrollIntoView({ behavior: "smooth" });
     });
   });
 
@@ -504,37 +395,9 @@
   const io = new IntersectionObserver(es => es.forEach(e => e.isIntersecting && e.target.classList.add("in")), { threshold: 0.12 });
   document.querySelectorAll(".rv").forEach(el => io.observe(el));
 
-  /* ---------- ticker ---------- */
-  const tracks = [
-    ["De Mí Enamórate", "Tito Nieves", "5:12"],
-    ["La Gozadera", "Gente de Zona", "3:24"],
-    ["PARADIXE", "El Americano 4KT", "5:42"],
-    ["Vivir Mi Vida", "Marc Anthony", "4:13"],
-    ["Fabricando Fantasías", "Tito Nieves", "4:35"],
-    ["Amanece", "Anuel AA", "3:31"],
-    ["Las 8 am", "Andres Franco", "2:58"],
-    ["BbY WOW", "rusowsky", "3:46"],
-  ];
-  const half = tracks.map(([t, a, d], i) =>
-    `<span>${i === 0 ? '<b class="live">●</b>' : ''}<b>${t}</b><i>${a}</i>${d}</span>`).join("");
-  const tickerEl = document.getElementById("ticker");
-  tickerEl.innerHTML = half + half;
-  // translateX loop via transform for perf
-  if (!reduced) {
-    let tx = 0, wHalf = 0;
-    const measure = () => (wHalf = tickerEl.scrollWidth / 2);
-    addEventListener("load", measure); setTimeout(measure, 800);
-    const move = () => {
-      if (wHalf) { tx -= 0.55; if (-tx >= wHalf) tx += wHalf; tickerEl.style.transform = `translate3d(${tx}px,0,0)`; }
-      requestAnimationFrame(move);
-    };
-    requestAnimationFrame(move);
-  }
-
   /* ---------- manifesto word scrub ---------- */
   const mani = document.getElementById("maniText");
   (() => {
-    // wrap words in spans, preserving the <em> styling
     const wrapWords = (node) => {
       [...node.childNodes].forEach(ch => {
         if (ch.nodeType === 3) {
@@ -562,22 +425,6 @@
     lit();
   })();
 
-  /* ---------- spec hover peek ---------- */
-  const peek = document.getElementById("peek");
-  const peekImg = document.getElementById("peekImg");
-  let px = 0, py = 0, tx2 = 0, ty2 = 0;
-  addEventListener("mousemove", e => { tx2 = e.clientX; ty2 = e.clientY; });
-  const follow = () => {
-    px += (tx2 - px) * 0.12; py += (ty2 - py) * 0.12;
-    peek.style.left = px + 24 + "px"; peek.style.top = py - 130 + "px";
-    requestAnimationFrame(follow);
-  };
-  requestAnimationFrame(follow);
-  document.querySelectorAll(".spec-row[data-img]").forEach(row => {
-    row.addEventListener("mouseenter", () => { peekImg.src = row.dataset.img; peek.classList.add("on"); });
-    row.addEventListener("mouseleave", () => peek.classList.remove("on"));
-  });
-
   /* ---------- hero parallax ---------- */
   const heroImg = document.getElementById("heroImg");
   if (!reduced) addEventListener("scroll", () => {
@@ -604,7 +451,6 @@
         steps.forEach((st, i) => gsap.to(st, { opacity: i === idx ? 1 : 0, y: i === idx ? 0 : 14, duration: 0.45, ease: "power2.out", overwrite: "auto" }));
       },
     });
-    // section needs extra scroll length for the pin
     document.querySelector(".gallery").style.height = `${N * 100}svh`;
   }
 
@@ -621,8 +467,7 @@
       const setup = rel.assets?.find(a => /setup\.exe$/i.test(a.name));
       const portable = rel.assets?.find(a => /portable\.exe$/i.test(a.name));
       if (v) {
-        document.getElementById("verTag").textContent = "v" + v;
-        document.getElementById("verMeta").textContent = v;
+        document.getElementById("verMeta").textContent = "v" + v;
         document.getElementById("dlBtn").textContent = `Download Freebify ${v}`;
       }
       if (setup) document.getElementById("dlBtn").href = setup.browser_download_url;
