@@ -6,6 +6,15 @@ const path = require("path")
 const fs = require("fs")
 const { app } = require("electron")
 
+// mirror of main.cjs logLine — same file so a grep reads the whole story
+function log(tag, msg) {
+  try {
+    const dir = path.join(app.getPath("userData"), "logs")
+    fs.mkdirSync(dir, { recursive: true })
+    fs.appendFileSync(path.join(dir, "freebify.log"), `${new Date().toISOString()} [${tag}] ${msg}\n`)
+  } catch {}
+}
+
 // ---------- yt-dlp ----------
 function binPath() {
   const rel = app?.isPackaged
@@ -733,10 +742,10 @@ async function artist(channelIdOrName, nameHint) {
   // prefix, don't re-add UC (UC${id.slice(4)} produced the invalid UCUCxxx)
   if (id?.startsWith("MPLA")) id = id.slice(4)
   const searchArtists = async (query) => {
-    const res = await yt.music.search(query, { type: "artist" }).catch(() => null)
-    return collect(res?.contents ?? res?.results ?? res ?? [], ["MusicTwoRowItem", "MusicResponsiveListItem"])
-      .map(mapArtist)
-      .find(Boolean)
+    const res = await yt.music.search(query, { type: "artist" }).catch((e) => (log("artist", `searchArtists ${query}: ${e?.message}`), null))
+    const items = collect(res?.contents ?? res?.results ?? res ?? [], ["MusicTwoRowItem", "MusicResponsiveListItem"])
+    log("artist", `searchArtists '${query}' → res ${res ? res.constructor?.name : "null"}, items ${items.length}`)
+    return items.map(mapArtist).find(Boolean)
   }
   let searchHit = null
   if (!id || !/^UC[\w-]{8,}/.test(id)) {
@@ -746,6 +755,9 @@ async function artist(channelIdOrName, nameHint) {
     searchHit = a
     id = a.streamId
   }
+  // nameHint rescue runs in PARALLEL with the channel fetch — a dead UC id
+  // would otherwise burn most of the IPC timeout before the rescue started
+  const hitP = !searchHit && nameHint ? searchArtists(nameHint).catch(() => null) : Promise.resolve(null)
   const degrade = async (hit) => {
     if (!hit) return null
     const res = await yt.music.search(hit.name, { type: "song" }).catch(() => null)
@@ -756,9 +768,14 @@ async function artist(channelIdOrName, nameHint) {
       .map(mapSong)
       .filter((t) => t?.streamId)
       .slice(0, 30)
-    return { user: { ...hit, id: `yt-${hit.streamId}`, track_count: tracks.length }, tracks }
+    // mapArtist can come back as bare "Artist" when the row's title lives in
+    // flex_columns — the caller's display name is the better label
+    return { user: { ...hit, name: nameHint || hit.name, id: `yt-${hit.streamId}`, track_count: tracks.length }, tracks }
   }
-  let page = await yt.music.getArtist(id).catch((e) => (ytFail(e), null))
+  const [page0, hit0] = await Promise.all([yt.music.getArtist(id).catch((e) => (ytFail(e), null)), hitP])
+  let page = page0
+  if (!searchHit) searchHit = hit0
+  log("artist", `'${channelIdOrName}' hint=${nameHint ?? "-"} → page ${page ? "y" : "n"}, hit ${searchHit?.name ?? "null"}`)
   if (page) {
     // getArtist resolves "valid but empty" pages for garbage channel ids —
     // no header name AND no shelves means the channel is a phantom; treat it
@@ -769,7 +786,6 @@ async function artist(channelIdOrName, nameHint) {
   if (!page) {
     // channel-shaped but dead (private/deleted/bogus browseId) — the artist
     // still exists; recover by name before giving up on them entirely
-    if (!searchHit && nameHint) searchHit = (await searchArtists(nameHint)) ?? null
     if (!searchHit) return null
     // re-resolve: the search hit's real channel may load a full page
     if (searchHit.streamId && searchHit.streamId !== id) {
@@ -779,9 +795,14 @@ async function artist(channelIdOrName, nameHint) {
         id = searchHit.streamId
       }
     }
-    if (!page) return degrade(searchHit)
+    if (!page) {
+      const d = await degrade(searchHit)
+      log("artist", `degrade '${searchHit.name}' → ${d ? `${d.tracks.length} tracks` : "null"}`)
+      return d
+    }
   }
 
+  try {
   const header = page.header?.contents ?? page.header ?? {}
   const name = text(header.title ?? header.name) || searchHit?.name || nameHint || channelIdOrName
   const thumb = headerArt(header)
@@ -829,11 +850,18 @@ async function artist(channelIdOrName, nameHint) {
       follower_count,
       track_count: tracks.length,
       profile_picture: thumb
-        ? { "150x150": smallThumb(item) ?? thumb, "480x480": bigThumb(thumb) ?? thumb, "1000x1000": bigThumb(thumb) ?? thumb }
+        ? { "150x150": thumb, "480x480": bigThumb(thumb) ?? thumb, "1000x1000": bigThumb(thumb) ?? thumb }
         : null,
       cover_photo: thumb ? { "640x": thumb, "2000x": bigThumb(thumb) ?? thumb } : null,
     },
     tracks,
+  }
+  } catch (e) {
+    // a malformed shelf/header shouldn't nuke a whole artist page — degrade
+    // to the search hit instead of "Artist not found"
+    log("artist", `post-process failed for '${channelIdOrName}': ${e?.message ?? e}`)
+    if (searchHit) return degrade(searchHit)
+    return null
   }
 }
 
@@ -1244,7 +1272,7 @@ function register(ipcMain) {
   })
   ipcMain.handle("yt:artist", (_e, id, nameHint) =>
     typeof id === "string" && id.length < 80
-      ? withTimeout(artist(id, typeof nameHint === "string" && nameHint.length < 80 ? nameHint : undefined), 20000).catch(
+      ? withTimeout(artist(id, typeof nameHint === "string" && nameHint.length < 80 ? nameHint : undefined), 25000).catch(
           () => null
         )
       : null
