@@ -201,6 +201,35 @@ const alignOffset = (lrc: LrcLine[], caps: LrcLine[]): number | null => {
   return Math.abs(off) <= 90 ? off : null
 }
 
+// A same-title WRONG SONG's sheet can slide past every metadata gate
+// (identical runtime, artist word overlap) — alignOffset only judges
+// timing, not content. The video's own captions are the ground truth:
+// sample ~18 spread lines and ask whether their words appear in them at
+// all. A real match hits repeatedly even through ASR noise; a foreign
+// sheet barely matches anywhere.
+const lrcContentOk = (lrc: LrcLine[], caps: LrcLine[]): boolean => {
+  if (caps.length < 12) return true // too sparse to judge — don't veto on nothing
+  const pool = caps.map((c) => ({ t: c.t, w: new Set(simTokens(c.text)), bi: simBigrams(c.text) }))
+  const step = Math.max(1, Math.floor(lrc.length / 18))
+  let hit = 0
+  let n = 0
+  for (let i = 0; i < lrc.length; i += step) {
+    const l = lrc[i]
+    const w = new Set(simTokens(l.text))
+    const bi = simBigrams(l.text)
+    let best = 0
+    for (const c of pool) {
+      const dt = c.t - l.t
+      if (dt < -120 || dt > 180) continue
+      const s = lineSim(w, bi, c.w, c.bi)
+      if (s > best) best = s
+    }
+    n++
+    if (best >= 0.45) hit++
+  }
+  return n === 0 || hit / n >= 0.34
+}
+
 const lrcGet = async (path: string, p: Record<string, string>): Promise<LrcRec[]> => {
   try {
     const u = new URL(path, "https://lrclib.net")
@@ -610,6 +639,15 @@ export function NowPlaying() {
         if (!vid || !sameTrack()) return
         const cap = await yt.captions(vid)
         if (!cap?.lines?.length || !sameTrack()) return
+        // content veto: a same-title DIFFERENT song's sheet passes the
+        // metadata gates but its words aren't in this audio. When the
+        // video's own captions can't find the lyrics at all, swap the
+        // sheet for the captions — they are the right words by definition
+        const clipped = cap.lines.filter((l) => !dur || l.t <= dur + 15)
+        if (!lrcContentOk(lrc, clipped) && clipped.length >= 4) {
+          setLyrics((cur) => (cur && "synced" in cur && cur.synced === lrc ? { synced: clipped, autoOff: 0 } : cur))
+          return
+        }
         const off = alignOffset(lrc, cap.lines)
         // measured ~0 also matters: it vetoes a wrong duration-delta guess
         if (off == null || Math.abs(off - fallback) < 1.5) return
