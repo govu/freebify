@@ -124,7 +124,7 @@ export function ImportPlaylist() {
     try {
       const res = await yt.playlist(id.replace(/^VL/, ""))
       if (!res || res.tracks.length === 0) {
-        notify("Playlist not found — check it isn't private")
+        notify("Playlist not found. Check it isn't private")
         setBusy(false)
         return
       }
@@ -132,7 +132,7 @@ export function ImportPlaylist() {
       addTracksToPlaylist(pid, res.tracks)
       finish(pid, res.tracks.length)
     } catch {
-      notify("Import failed — try again")
+      notify("Import failed. Try again")
       setBusy(false)
     }
   }
@@ -142,13 +142,13 @@ export function ImportPlaylist() {
     try {
       const res = await yt.spotifyList(id)
       if (!res) {
-        notify("Couldn't read that playlist — check it's public")
+        notify("Couldn't read that playlist. Check it's public")
         setBusy(false)
         return
       }
       await matchEntries(res.name, res.tracks)
     } catch {
-      notify("Import failed — try again")
+      notify("Import failed. Try again")
       setBusy(false)
       setProgress(null)
     }

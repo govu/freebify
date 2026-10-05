@@ -161,10 +161,11 @@ async function setPresence(payload) {
     if (seq !== presenceSeq) return
   }
   // Discord's IPC rewrites external https in large_image to mp:external/*
-  // automatically — no dev-portal assets or OAuth needed. large_url makes
-  // the artwork clickable (opens the source video).
+  // automatically — no dev-portal assets or OAuth needed. Clicks go to our
+  // own page, not the source video (that's free user acquisition).
   if (art) activity.largeImageKey = art
-  if (typeof payload.url === "string" && /^https:/.test(payload.url)) activity.largeImageUrl = payload.url
+  activity.largeImageUrl = "https://govu.github.io/freebify/"
+  activity.buttons = [{ label: "Get Freebify", url: "https://govu.github.io/freebify/" }]
   const dur = Number(payload.durationMs)
   const pos = Number(payload.positionMs)
   if (Number.isFinite(dur) && dur > 0 && Number.isFinite(pos) && pos >= 0) {

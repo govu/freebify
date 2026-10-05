@@ -44,7 +44,7 @@ export function StatsPage() {
       <motion.h1 initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="text-3xl font-black tracking-tight">
         Your stats
       </motion.h1>
-      <p className="mt-1 text-sm text-dim">Private — counted on this device, never uploaded.</p>
+      <p className="mt-1 text-sm text-dim">Counted on this device. Never uploaded.</p>
 
       {empty ? (
         <div className="mt-16 flex flex-col items-center rounded-2xl border border-dashed border-line py-20 text-center">
@@ -75,7 +75,7 @@ export function StatsPage() {
                   <div
                     key={d.day}
                     className="group flex flex-1 flex-col items-center gap-1.5"
-                    title={`${date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })} — ${d.ms ? hm(d.ms) : "no listening"}`}
+                    title={`${date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })} · ${d.ms ? hm(d.ms) : "no listening"}`}
                   >
                     <motion.div
                       initial={{ scaleY: 0 }}

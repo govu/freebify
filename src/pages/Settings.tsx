@@ -47,7 +47,7 @@ export function SettingsPage() {
       const r = await fn()
       if (r?.pending) notify(`v${r.pending} is ready — restart from the banner`)
       else if (r?.update) notify(`v${r.latest} available — downloading in the background`)
-      else if (r?.failed) notify("Update check failed — try again later")
+      else if (r?.failed) notify("Update check failed. Try again later")
       else notify("You're up to date")
     } catch {
       notify("Update check failed")
@@ -76,7 +76,7 @@ export function SettingsPage() {
       for (const k of Object.keys(localStorage)) {
         if (!keep.has(k)) localStorage.removeItem(k)
       }
-      notify("Cache cleared — your library is untouched")
+      notify("Cache cleared. Your library is untouched")
     } catch {
       notify("Couldn't clear the cache")
     }

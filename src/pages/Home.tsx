@@ -216,7 +216,7 @@ export function Home() {
         {failed && (
           <div className="mx-6 mb-6 rounded-xl border border-line bg-card px-5 py-4">
             <p className="text-sm font-semibold">Couldn't load your music</p>
-            <p className="mt-1 text-xs text-dim">Check your connection — both catalogs are unreachable.</p>
+            <p className="mt-1 text-xs text-dim">Check your connection. Both catalogs are unreachable.</p>
             <button
               onClick={() => setRun((r) => r + 1)}
               className="mt-3 rounded-full bg-ink px-4 py-1.5 text-xs font-semibold text-black transition hover:scale-105"

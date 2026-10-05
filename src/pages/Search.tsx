@@ -248,7 +248,7 @@ export function SearchPage() {
       {debounced && !loading && failed && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="py-24 text-center">
           <p className="text-lg font-semibold">Search failed</p>
-          <p className="mt-2 text-sm text-dim">Both catalogs are unreachable right now — check your connection.</p>
+          <p className="mt-2 text-sm text-dim">Both catalogs are unreachable right now. Check your connection.</p>
           <button
             onClick={() => setRetryTick((n) => n + 1)}
             className="mt-5 rounded-full bg-white px-5 py-2 text-sm font-bold text-black transition hover:scale-[1.04]"

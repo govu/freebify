@@ -687,37 +687,57 @@ export function NowPlaying() {
       (!dur || !x.duration || Math.abs(x.duration - dur) <= 10)
     const byDur = <T extends { duration?: number }>(a: T, b: T) =>
       Math.abs((a.duration ?? 0) - dur) - Math.abs((b.duration ?? 0) - dur)
+    // measuring offsets needs a wider gate than borrowing caption sheets:
+    // an official-video reupload carries the intro INSIDE its duration —
+    // the very lead-in we're trying to measure — so ±10 would exclude it
+    const fitsLoose = (x: { streamId?: string; title: string; duration?: number; user?: { name?: string } }) =>
+      !!x.streamId &&
+      titleLike(x.title, title) &&
+      !/karaoke|cover|tribute|instrumental|in the style of|live|en vivo/i.test(x.title) &&
+      artistOkTwin(x) &&
+      (!dur || !x.duration || Math.abs(x.duration - dur) <= 30)
     // walk uploads lazily — ownVid first, then same-recording twins (music
     // catalog, then general YouTube for fan lyric videos). `alternates:false`
     // stops after ownVid — only the PLAYING upload can time this audio.
     const forEachVideo = async (
-      fn: (vid: string, own: boolean) => Promise<boolean>,
-      { alternates = true, alive = () => true }: { alternates?: boolean; alive?: () => boolean } = {},
+      fn: (vid: string, own: boolean, meta?: { title?: string }) => Promise<boolean>,
+      {
+        alternates = true,
+        alive = () => true,
+        loose = false,
+        budget = 6,
+      }: { alternates?: boolean; alive?: () => boolean; loose?: boolean; budget?: number } = {},
     ) => {
       const seen = new Set<string>()
       let tried = 0
-      const attempt = async (vid: string | null | undefined, own = false) => {
+      const gate = loose ? fitsLoose : fits
+      // lyric-titled uploads often strip the intro — measuring them first
+      // would veto the real offset, so when measuring (loose) they go last
+      const lyricish = (t: { title?: string }) => (/lyrics?|letra|lyric video/i.test(t.title ?? "") ? 1 : 0)
+      const rank = (a: { title?: string; duration?: number }, b: { title?: string; duration?: number }) =>
+        loose ? lyricish(a) - lyricish(b) || byDur(a, b) : byDur(a, b)
+      const attempt = async (vid: string | null | undefined, own = false, meta?: { title?: string }) => {
         if (!vid || seen.has(vid) || !alive()) return false
         seen.add(vid)
-        return ++tried <= 4 ? fn(vid, own) : true // budget spent → done
+        return ++tried <= budget ? fn(vid, own, meta) : true // budget spent → done
       }
       if (await attempt(ownVid, true)) return
       if (!alternates) return
       for (const q of twinQueries) {
-        if (!alive() || tried > 4) return
+        if (!alive() || tried > budget) return
         const res = await yt.search(q).catch(() => null)
-        for (const t of (res?.tracks ?? []).filter(fits).sort(byDur)) {
-          if (await attempt(t.streamId)) return
+        for (const t of (res?.tracks ?? []).filter(gate).sort(rank)) {
+          if (await attempt(t.streamId, false, t)) return
         }
       }
       // the music catalog carries no captions on many official uploads —
       // general YouTube adds fan lyric videos (they nearly always ship
       // ASR/manual subs for the same recording)
       for (const q of [...new Set([`${artist} ${title} lyrics`, `${title} lyrics`].filter((x) => x.trim() !== "lyrics"))]) {
-        if (!alive() || tried > 4) return
+        if (!alive() || tried > budget) return
         const vids = await yt.videoSearch(q).catch(() => [])
-        for (const t of vids.filter(fits).sort(byDur)) {
-          if (await attempt(t.streamId)) return
+        for (const t of vids.filter(gate).sort(rank)) {
+          if (await attempt(t.streamId, false, t)) return
         }
       }
     }
@@ -746,48 +766,70 @@ export function NowPlaying() {
             if (typeof p !== "object" || p.f === undefined || p.f === sheetFp(lrc)) return
           }
         } catch { /* unparsable/manual — honor it */ return }
-        // only the PLAYING upload's captions can time this audio; a twin's
-        // offset describes that upload's lead-in. Audius has no ownVid —
-        // its closest twin is the only truth available, so it may measure.
+        // ownVid's captions are ground truth when they exist — but many
+        // official uploads ship none, so twins may measure too. A twin's
+        // offset describes ITS lead-in, so several are collected and only a
+        // quorum-backed value commits; lyric/letra uploads are deprioritized
+        // since they often strip the video's spoken intro.
+        const measured: { off: number; lyric: boolean }[] = []
+        const applyOff = (off: number) => {
+          if (Math.abs(off) > 90 || Math.abs(off - fallback) < 1.5) return
+          setLyrics((cur) => (cur && "synced" in cur && cur.synced === lrc ? { synced: lrc, autoOff: off } : cur))
+          // persist AFTER the note can surface (the render effect reads
+          // keys when autoOff changes — writing first would suppress it);
+          // a Shift+click meanwhile wins the key
+          setTimeout(() => {
+            try {
+              if (localStorage.getItem(`lrcoff2-${current.id}`) === null) {
+                localStorage.setItem(`lrcoffa-${current.id}`, JSON.stringify({ o: off, f: sheetFp(lrc) }))
+              }
+            } catch { /* correction stays session-only */ }
+          }, 4000)
+        }
         await forEachVideo(
-          async (vid) => {
+          async (vid, own, meta) => {
             const cap = await yt.captions(vid)
             if (!cap?.lines?.length || !sameTrack()) return false
             const clipped = cap.lines.filter((l) => !dur || l.t <= dur + 15)
             // content veto: a same-title DIFFERENT song's sheet passes the
             // metadata gates but its words aren't in this audio — swap for
-            // the captions, the right words by definition. ownVid only on
-            // yt; on Audius the twin stands in for ground truth
+            // the captions, the right words by definition. Only ground truth
+            // may overwrite: ownVid on yt, the stand-in twin on Audius
             if (!lrcContentOk(lrc, clipped) && clipped.length >= 4) {
+              if (ownVid && !own) return false
               setLyrics((cur) => (cur && "synced" in cur && cur.synced === lrc ? { synced: clipped, autoOff: 0 } : cur))
               return true
             }
             const off = alignOffset(lrc, clipped)
             // a failed quorum here doesn't preclude the next upload
             if (off == null) return false
-            // measured ~0 also matters: it vetoes a wrong duration-delta
-            // guess — but only when measured on OUR upload (or the stand-in
-            // twin for Audius); agreement on a stranger's upload means nothing
-            if (Math.abs(off - fallback) < 1.5) return true
-            // sanity before committing: with the shift applied, sampled
+            // sanity before counting a vote: with the shift applied, sampled
             // lines must land near their own caption match — a twin whose
             // structure differs can still quorum on hooky lines
             if (!timingOk(lrc, clipped, off)) return false
-            setLyrics((cur) => (cur && "synced" in cur && cur.synced === lrc ? { synced: lrc, autoOff: off } : cur))
-            // persist AFTER the note can surface (the render effect reads
-            // keys when autoOff changes — writing first would suppress it);
-            // a Shift+click meanwhile wins the key
-            setTimeout(() => {
-              try {
-                if (localStorage.getItem(`lrcoff2-${current.id}`) === null) {
-                  localStorage.setItem(`lrcoffa-${current.id}`, JSON.stringify({ o: off, f: sheetFp(lrc) }))
-                }
-              } catch { /* correction stays session-only */ }
-            }, 4000)
-            return true
+            if (own) {
+              applyOff(off)
+              return true
+            }
+            measured.push({ off, lyric: /lyrics?|letra|lyric video/i.test(meta?.title ?? "") })
+            return measured.length >= 3
           },
-          { alternates: !ownVid, alive: sameTrack },
+          { alternates: true, alive: sameTrack, loose: true, budget: 9 },
         )
+        if (!sameTrack() || measured.length === 0) return
+        // prefer non-lyric-titled uploads (they carry the real intro); when
+        // none measured, the lyric pool is still better than nothing
+        const cands = measured.filter((m) => !m.lyric)
+        const pool = cands.length ? cands : measured
+        const clusters: number[][] = []
+        for (const m of pool) {
+          const c = clusters.find((c) => Math.abs(c[0] - m.off) <= 4)
+          if (c) c.push(m.off)
+          else clusters.push([m.off])
+        }
+        const win = clusters.sort((a, b) => b.length - a.length)[0]
+        const off = win.slice().sort((a, b) => a - b)[Math.floor(win.length / 2)]
+        applyOff(off)
       } catch { /* best-effort — the unaligned lyrics still display */ }
     }
     // YouTube's own captions as the synced catch-all — ASR tracks exist for

@@ -121,7 +121,7 @@ export function DownloadsPage() {
             <p className="mt-4 text-lg font-semibold">Nothing downloaded yet</p>
             <p className="mt-1 max-w-sm text-sm text-dim">
               {canDl
-                ? "Open the ··· menu on any track and choose Download — it plays instantly, even offline."
+                ? "Open the ··· menu on any track and choose Download. It plays instantly, even offline."
                 : "Downloads need the desktop app."}
             </p>
             {canDl && (

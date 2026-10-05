@@ -108,7 +108,7 @@ export function ArtistPage() {
           </div>
           <p className="mt-4 text-lg font-semibold">Artist not found</p>
           <p className="mt-1 max-w-64 text-sm leading-5 text-dim">
-            {nameHint ? `Couldn't load ${nameHint}'s page — it may have moved or the network hiccuped.` : "They may have moved or the network hiccuped."}
+            {nameHint ? `Couldn't load ${nameHint}'s page. It may have moved or the network hiccuped.` : "They may have moved or the network hiccuped."}
           </p>
           <button
             onClick={() => setRetry((r) => r + 1)}
