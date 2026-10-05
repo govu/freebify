@@ -2,6 +2,7 @@ import { useRef, useState } from "react"
 
 interface SliderProps {
   value: number
+  min?: number
   max: number
   onScrub?: (v: number) => void
   onCommit?: (v: number) => void
@@ -13,12 +14,13 @@ interface SliderProps {
   disabled?: boolean
 }
 
-export function Slider({ value, max, onScrub, onCommit, className = "", smooth = false, ariaLabel, disabled = false }: SliderProps) {
+export function Slider({ value, min = 0, max, onScrub, onCommit, className = "", smooth = false, ariaLabel, disabled = false }: SliderProps) {
   const ref = useRef<HTMLDivElement>(null)
   const [dragRatio, setDragRatio] = useState<number | null>(null)
   const last = useRef(0)
+  const span = max - min
 
-  const ratio = dragRatio ?? (max > 0 ? Math.min(1, Math.max(0, value / max)) : 0)
+  const ratio = dragRatio ?? (span > 0 ? Math.min(1, Math.max(0, (value - min) / span)) : 0)
 
   const ratioFrom = (clientX: number) => {
     const rect = ref.current!.getBoundingClientRect()
@@ -41,9 +43,9 @@ export function Slider({ value, max, onScrub, onCommit, className = "", smooth =
       aria-label={ariaLabel}
       aria-orientation="horizontal"
       aria-disabled={disabled || undefined}
-      aria-valuemin={0}
+      aria-valuemin={min}
       aria-valuemax={max}
-      aria-valuenow={Math.round(Math.min(max, (dragRatio ?? (max > 0 ? value / max : 0)) * max) * 10) / 10}
+      aria-valuenow={Math.round(min + (dragRatio ?? (span > 0 ? (value - min) / span : 0)) * span * 10) / 10}
       className={`group relative flex h-4 items-center outline-none select-none ${
         disabled ? "cursor-default opacity-50" : "cursor-pointer"
       } ${className}`}
@@ -55,7 +57,7 @@ export function Slider({ value, max, onScrub, onCommit, className = "", smooth =
         if (e.key === "Home") {
           e.preventDefault()
           e.stopPropagation()
-          onCommit ? onCommit(0) : onScrub?.(0)
+          onCommit ? onCommit(min) : onScrub?.(min)
           return
         }
         if (e.key === "End") {
@@ -74,7 +76,7 @@ export function Slider({ value, max, onScrub, onCommit, className = "", smooth =
         if (!d) return
         e.preventDefault()
         e.stopPropagation() // App-level arrow shortcuts seek — don't double-fire
-        const v = Math.min(max, Math.max(0, value + d * max))
+        const v = Math.min(max, Math.max(min, value + d * span))
         onCommit ? onCommit(v) : onScrub?.(v)
       }}
       onPointerDown={(e) => {
@@ -87,14 +89,14 @@ export function Slider({ value, max, onScrub, onCommit, className = "", smooth =
           /* pointer already inactive (synthetic event) */
         }
         const r = ratioFrom(e.clientX)
-        last.current = r * max
+        last.current = min + r * span
         setDragRatio(r)
         onScrub?.(last.current)
       }}
       onPointerMove={(e) => {
         if (dragRatio === null || !e.isPrimary) return
         const r = ratioFrom(e.clientX)
-        last.current = r * max
+        last.current = min + r * span
         setDragRatio(r)
         onScrub?.(last.current)
       }}

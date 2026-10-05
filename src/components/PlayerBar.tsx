@@ -9,6 +9,7 @@ import { useLibrary } from "../store/library"
 import { usePlayer, applyVolume } from "../store/player"
 import { fmtDuration } from "../utils/format"
 import { ArtworkImg } from "./ArtworkImg"
+import { EqPopover } from "./EqPopover"
 import { Equalizer } from "./Equalizer"
 import { Marquee } from "./Marquee"
 import { Slider } from "./Slider"
@@ -183,6 +184,7 @@ export function PlayerBar() {
         >
           <ListMusic size={18} />
         </button>
+        <EqPopover />
         <button onClick={toggleMute} aria-label={muted ? "Unmute" : "Mute"} aria-pressed={muted} className="text-dim transition hover:text-ink">
           <VolumeIcon size={18} />
         </button>

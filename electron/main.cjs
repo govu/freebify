@@ -253,31 +253,34 @@ if (!gotLock) {
 
     // production ships no application menu — the default one leaks
     // Ctrl+R reloads and devtools accelerators into the packaged app
-    if (!isDev) {
-      Menu.setApplicationMenu(null)
-      // CSP via headers (a meta tag would also apply in dev and kill HMR):
-      // self + https media/images/scripts the app legitimately needs —
-      // YouTube iframe API, googlevideo/audius streams, remote artwork.
-      const { session } = require("electron")
-      const CSP = [
-        "default-src 'self'",
-        "script-src 'self' https://www.youtube.com https://s.ytimg.com",
-        "style-src 'self' 'unsafe-inline'", // React inline styles
-        "img-src 'self' https: data:",
-        "media-src 'self' https: fbx:",
-        "connect-src 'self' https:",
-        "font-src 'self' data:",
-        "frame-src https://www.youtube.com https://www.youtube-nocookie.com",
-        "object-src 'none'",
-        "base-uri 'self'",
-      ].join("; ")
-      session.defaultSession.webRequest.onHeadersReceived((d, cb) => {
-        // only OUR document — stamping this CSP onto YouTube's own embed
-        // responses would replace their policy (and break on their changes)
-        if (d.resourceType !== "mainFrame") return cb({})
-        cb({ responseHeaders: { ...d.responseHeaders, "Content-Security-Policy": [CSP] } })
-      })
-    }
+    const { session } = require("electron")
+    const CSP = [
+      "default-src 'self'",
+      "script-src 'self' https://www.youtube.com https://s.ytimg.com",
+      "style-src 'self' 'unsafe-inline'", // React inline styles
+      "img-src 'self' https: data:",
+      "media-src 'self' https: fbx:",
+      "connect-src 'self' https:",
+      "font-src 'self' data:",
+      "frame-src https://www.youtube.com https://www.youtube-nocookie.com",
+      "object-src 'none'",
+      "base-uri 'self'",
+    ].join("; ")
+    // One webRequest hook per session — merge both concerns:
+    // 1. media responses get ACAO:* so the renderer can route <audio> through
+    //    Web Audio (EQ / loudness / crossfade). Only media resourceType is
+    //    touched — the header is meaningless to page/document loads.
+    // 2. our own document gets the CSP (prod only — it would kill HMR in dev)
+    session.defaultSession.webRequest.onHeadersReceived((d, cb) => {
+      if (d.resourceType === "media") {
+        return cb({ responseHeaders: { ...d.responseHeaders, "access-control-allow-origin": ["*"] } })
+      }
+      if (!isDev && d.resourceType === "mainFrame") {
+        return cb({ responseHeaders: { ...d.responseHeaders, "Content-Security-Policy": [CSP] } })
+      }
+      cb({})
+    })
+    if (!isDev) Menu.setApplicationMenu(null)
 
     // frameless window controls — the renderer draws its own min/max/close
     ipcMain.on("win:control", (e, action) => {

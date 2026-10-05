@@ -18,6 +18,7 @@ import { MoodPage } from "./pages/MoodPage"
 import { PlaylistPage } from "./pages/Playlist"
 import { SearchPage } from "./pages/Search"
 import { SettingsPage } from "./pages/Settings"
+import { StatsPage } from "./pages/Stats"
 import { useLibrary } from "./store/library"
 import { applyVolume, notify, usePlayer } from "./store/player"
 
@@ -193,6 +194,7 @@ export default function App() {
                     <Route path="/search" element={<SearchPage />} />
                     <Route path="/library" element={<LibraryPage />} />
                     <Route path="/downloads" element={<DownloadsPage />} />
+                    <Route path="/stats" element={<StatsPage />} />
                     <Route path="/artist/:id" element={<ArtistPage />} />
                     <Route path="/playlist/:id" element={<PlaylistPage />} />
                     <Route path="/genre/:name" element={<GenrePage />} />

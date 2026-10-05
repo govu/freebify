@@ -1,4 +1,4 @@
-import { Download, Heart, House, Library, ListMusic, Search, Settings } from "lucide-react"
+import { BarChart3, Download, Heart, House, Library, ListMusic, Search, Settings } from "lucide-react"
 import { motion } from "motion/react"
 import { Link, NavLink } from "react-router-dom"
 import { useLibrary } from "../store/library"
@@ -11,6 +11,7 @@ const NAV = [
   { to: "/", icon: House, label: "Home" },
   { to: "/search", icon: Search, label: "Search" },
   { to: "/library", icon: Library, label: "Library" },
+  { to: "/stats", icon: BarChart3, label: "Stats" },
 ]
 
 export function Sidebar() {

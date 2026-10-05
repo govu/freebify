@@ -1,5 +1,5 @@
 import { motion } from "motion/react"
-import { Check, Link2, ListMusic, Pencil, Play, Plus, Search, Trash2 } from "lucide-react"
+import { Check, Download, Link2, ListMusic, Pencil, Play, Plus, Search, Trash2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { apiClient } from "../api/audius"
@@ -10,7 +10,8 @@ import { PlaylistCover } from "../components/Cards"
 import { HeroSkeleton, RowsSkeleton } from "../components/Skeletons"
 import { TrackTable } from "../components/TrackTable"
 import { useLibrary } from "../store/library"
-import { usePlayer } from "../store/player"
+import { useDownloads } from "../store/downloads"
+import { notify, usePlayer } from "../store/player"
 import { fmtCount, fmtDuration } from "../utils/format"
 
 export function PlaylistPage() {
@@ -33,6 +34,7 @@ function RemotePlaylistView({ id }: { id: string }) {
   const playContext = usePlayer((s) => s.playContext)
   const createPlaylist = useLibrary((s) => s.createPlaylist)
   const addTracksToPlaylist = useLibrary((s) => s.addTracksToPlaylist)
+  const startAll = useDownloads((s) => s.startAll)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -184,6 +186,15 @@ function RemotePlaylistView({ id }: { id: string }) {
               <Plus size={15} /> Save to Library
             </button>
           )}
+          {tracks.length > 0 && (
+            <button
+              onClick={() => void startAll(tracks).then((n) => notify(n > 0 ? `Downloading ${n} tracks` : "Already downloaded"))}
+              title="Download all tracks for offline playback"
+              className="flex items-center gap-2 rounded-full border border-line px-5 py-2.5 text-sm font-semibold text-dim transition hover:border-dim hover:text-ink"
+            >
+              <Download size={15} /> Download all
+            </button>
+          )}
           {playlist.permalink && (
             <button
               onClick={() => {
@@ -242,6 +253,7 @@ function LocalPlaylistView({ id }: { id: string }) {
   const deletePlaylist = useLibrary((s) => s.deletePlaylist)
   const removeFromPlaylist = useLibrary((s) => s.removeFromPlaylist)
   const playContext = usePlayer((s) => s.playContext)
+  const startAll = useDownloads((s) => s.startAll)
   const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState("")
@@ -328,6 +340,15 @@ function LocalPlaylistView({ id }: { id: string }) {
             className="flex items-center gap-2 rounded-full bg-white px-8 py-3 text-sm font-bold text-black shadow-lg shadow-black/50 transition hover:scale-[1.03]"
           >
             <Play size={16} className="fill-current" /> Play
+          </button>
+        )}
+        {tracks.length > 0 && (
+          <button
+            onClick={() => void startAll(tracks).then((n) => notify(n > 0 ? `Downloading ${n} tracks` : "Already downloaded"))}
+            title="Download all tracks for offline playback"
+            className="flex items-center gap-2 rounded-full border border-line px-5 py-2.5 text-sm font-semibold text-dim transition hover:border-dim hover:text-ink"
+          >
+            <Download size={15} /> Download all
           </button>
         )}
         <button

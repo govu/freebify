@@ -2,6 +2,7 @@ import { create } from "zustand"
 import { rotateHost, streamUrl } from "../api/audius"
 import { prefetchStream, yt } from "../api/youtube"
 import { ytEngine } from "../api/ytplayer"
+import { attach, detach, fadeTo, mkAudio, resume, rmsOf, busAvailable, setEq as busSetEq, setNormGain } from "../api/audiobus"
 import type { RepeatMode, Track } from "../api/types"
 import { useLibrary } from "./library"
 import { useDownloads } from "./downloads"
@@ -10,7 +11,7 @@ import { isObj, isValidTrack, repairTrack, safeStorage, sanitizeTrackList, slimT
 // The live media element. Swapped at track boundaries for the prebuffered
 // "next" element — that's what makes auto-advance/next start in <100ms
 // instead of buffering a fresh connection every track.
-let audio = bindAudio(new Audio())
+let audio = bindAudio(mkAudio())
 
 // a fully buffered hidden Audio for the upcoming track — created while the
 // current one plays so the hand-off is instant
@@ -27,13 +28,17 @@ function dropPrebuffer() {
 // state comes along, so play() starts in <100ms
 function adoptAudio(el: HTMLAudioElement) {
   const s = usePlayer.getState()
-  audio.pause()
-  audio.removeAttribute("src")
-  audio.load()
+  const old = audio
+  old.pause()
+  old.removeAttribute("src")
+  old.load()
+  detach(old) // bus port released — the element is being discarded
   bindAudio(el)
   audio = el
   audio.volume = Math.min(1, Math.max(0, s.volume))
   audio.muted = s.muted
+  // a crossfade-in element may still be mid-ramp — snap it open
+  if (busAvailable) fadeTo(el, 1, 0.1)
 }
 
 interface PlayerState {
@@ -53,6 +58,9 @@ interface PlayerState {
   queueOpen: boolean
   notice: string | null
   autoplay: boolean
+  eq: number[] // 7-band dB gains — flat when all zero
+  normOn: boolean // loudness normalization (per-track measured gain)
+  fadeSecs: number // crossfade seconds — 0 = off
 
   playContext: (tracks: Track[], index: number) => void
   playTrack: (t: Track, context?: Track[]) => void
@@ -67,6 +75,10 @@ interface PlayerState {
   setNpOpen: (v: boolean) => void
   setQueueOpen: (v: boolean) => void
   setAutoplay: (v: boolean) => void
+  setEqBand: (i: number, db: number) => void
+  setEq: (gains: number[]) => void
+  setNormOn: (v: boolean) => void
+  setFadeSecs: (v: number) => void
   enqueue: (t: Track) => void
   playNextUp: (t: Track) => void
   removeAt: (i: number) => void
@@ -225,7 +237,7 @@ function prefetchNextTrack() {
           const s = usePlayer.getState()
           if (s.queue[s.index + 1]?.id !== first.id || engine !== "audio") return
           dropPrebuffer()
-          const el = new Audio(url)
+          const el = mkAudio(url)
           el.preload = "auto"
           el.load()
           prebuffer = { id: first.id, el }
@@ -329,10 +341,14 @@ export const usePlayer = create<PlayerState>()(
         const seq = ++loadSeq
         racingSeq = 0
         loadPendingSeq = seq
+        // an in-flight crossfade is resolved by this load — keep the
+        // incoming element only if it's the track we're adopting
+        cancelCrossfade(prebuffer?.id === track.id ? prebuffer.el : undefined)
         // stop BOTH engines immediately — the previous track must not keep
         // sounding while the next one resolves
         ytEngine.stop()
         audio.pause()
+        if (busAvailable) fadeTo(audio, 1, 0) // reset out-fade before reuse
         audio.removeAttribute("src")
         audio.load() // fully reset the media element — drops stale network/decode state
         // isPlaying MUST reset here: a stopped iframe emits no events and
@@ -424,6 +440,7 @@ export const usePlayer = create<PlayerState>()(
           void audio.play().catch(() => {})
         }
         useLibrary.getState().addRecent(track)
+        applyLoudness(track)
         updateMediaSession(track)
       }
       loadAtRef = loadAt
@@ -444,6 +461,9 @@ export const usePlayer = create<PlayerState>()(
         npOpen: false,
         queueOpen: false,
         notice: null,
+        eq: [0, 0, 0, 0, 0, 0, 0],
+        normOn: true,
+        fadeSecs: 4,
         autoplay: true,
 
         playContext: (tracks, index) => {
@@ -528,8 +548,10 @@ export const usePlayer = create<PlayerState>()(
             if (isPlaying) ytEngine.pause()
             else if (ytEngine.isActive) ytEngine.resume()
             else void loadAt(index) // dead/stopped player — reload, don't ghost-play
-          } else if (isPlaying) audio.pause()
-          else void audio.play().catch(() => {})
+          } else if (isPlaying) {
+            cancelCrossfade() // a paused fade must not keep playing the next track
+            audio.pause()
+          } else void audio.play().catch(() => {})
         },
 
         next: (auto = false) => {
@@ -629,6 +651,25 @@ export const usePlayer = create<PlayerState>()(
 
         setNpOpen: (v) => set({ npOpen: v }),
         setQueueOpen: (v) => set({ queueOpen: v }),
+
+        setEqBand: (i, db) => {
+          const eq = get().eq.slice(0, 7)
+          eq[i] = db
+          busSetEq(eq)
+          set({ eq })
+        },
+        setEq: (gains) => {
+          const eq = gains.slice(0, 7)
+          while (eq.length < 7) eq.push(0)
+          busSetEq(eq)
+          set({ eq })
+        },
+        setNormOn: (v) => {
+          set({ normOn: v })
+          const cur = get().current
+          if (cur) applyLoudness(cur) // re-measure/applies stored or resets to 1
+        },
+        setFadeSecs: (v) => set({ fadeSecs: Math.max(0, Math.min(12, Math.round(v))) }),
 
         enqueue: (t) => {
           if (!isPlayable(t)) {
@@ -743,6 +784,9 @@ const partialize = (s: PlayerState) => ({
   shuffle: s.shuffle,
   repeat: s.repeat,
   autoplay: s.autoplay,
+  eq: s.eq,
+  normOn: s.normOn,
+  fadeSecs: s.fadeSecs,
   queue: s.queue.map(slimTrack).slice(0, 300),
   index: s.index,
   current: s.current ? slimTrack(s.current) : null,
@@ -796,6 +840,15 @@ function mergePersisted(persisted: unknown, current: PlayerState): PlayerState {
           shuffle: typeof persisted.shuffle === "boolean" ? persisted.shuffle : current.shuffle,
           repeat: persisted.repeat === "all" || persisted.repeat === "one" ? persisted.repeat : "off",
           autoplay: typeof persisted.autoplay === "boolean" ? persisted.autoplay : true,
+          eq:
+            Array.isArray(persisted.eq) && persisted.eq.length === 7 && persisted.eq.every((n: unknown) => typeof n === "number" && Number.isFinite(n))
+              ? persisted.eq.map((n: number) => Math.max(-24, Math.min(24, n)))
+              : current.eq,
+          normOn: typeof persisted.normOn === "boolean" ? persisted.normOn : true,
+          fadeSecs:
+            typeof persisted.fadeSecs === "number" && Number.isFinite(persisted.fadeSecs)
+              ? Math.max(0, Math.min(12, Math.round(persisted.fadeSecs)))
+              : current.fadeSecs,
           queue,
           index,
           current: cur,
@@ -818,6 +871,8 @@ try {
   console.error("[freebify] corrupt player state, resetting", err)
   safeStorage.removeItem(PERSIST_NAME)
 }
+// hydrate the audio bus — EQ survives restarts before the first element plays
+if (busAvailable) busSetEq(usePlayer.getState().eq)
 
 // write only when a persisted key actually changed — the 4Hz currentTime
 // tick used to serialize the whole queue into GC garbage on every beat
@@ -831,7 +886,10 @@ usePlayer.subscribe((s, prev) => {
     s.muted === prev.muted &&
     s.shuffle === prev.shuffle &&
     s.repeat === prev.repeat &&
-    s.autoplay === prev.autoplay
+    s.autoplay === prev.autoplay &&
+    s.eq === prev.eq &&
+    s.normOn === prev.normOn &&
+    s.fadeSecs === prev.fadeSecs
   ) return
   if (persistTimer) return
   persistTimer = setTimeout(() => {
@@ -843,6 +901,125 @@ usePlayer.subscribe((s, prev) => {
   }, 300)
 })
 
+// ---- crossfade + loudness normalization --------------------------------
+// Crossfade rides the existing prebuffer: the next element starts early on
+// its own Web Audio gain while the live element fades out; when the ramp
+// ends we advance the store exactly like a natural boundary (next(true) →
+// loadAt → adoptAudio), so index/history/queue logic isn't duplicated.
+let fadeTimer: ReturnType<typeof setTimeout> | null = null
+let incomingEl: HTMLAudioElement | null = null
+let fadingEl: HTMLAudioElement | null = null
+
+function cancelCrossfade(keep?: HTMLAudioElement) {
+  if (fadeTimer) {
+    clearTimeout(fadeTimer)
+    fadeTimer = null
+  }
+  if (incomingEl) {
+    if (incomingEl === keep) {
+      fadeTo(incomingEl, 1, 0.1)
+    } else {
+      // stays usable as a prebuffer — back to zero, silent gain reset
+      incomingEl.pause()
+      try { incomingEl.currentTime = 0 } catch { /* metadata may not be in yet */ }
+      fadeTo(incomingEl, 1, 0)
+    }
+  }
+  if (fadingEl && fadingEl === audio) fadeTo(audio, 1, 0.12)
+  fadingEl = null
+  incomingEl = null
+}
+
+function startCrossfade(secs: number) {
+  if (!prebuffer || !busAvailable) return
+  const nxt = prebuffer.el
+  incomingEl = nxt
+  fadingEl = audio
+  attach(nxt)
+  nxt.volume = audio.volume
+  nxt.muted = audio.muted
+  fadeTo(nxt, 0, 0)
+  void nxt.play().catch(() => cancelCrossfade(nxt))
+  fadeTo(nxt, 1, secs)
+  fadeTo(audio, 0, secs)
+  fadeTimer = setTimeout(() => {
+    fadeTimer = null
+    incomingEl = null
+    fadingEl = null
+    usePlayer.getState().next(true)
+  }, secs * 1000 + 120)
+}
+
+// ---- per-track loudness -------------------------------------------------
+// First play of a track measures integrated RMS for ~8s and stores the
+// offset vs the target level; replays (and tracks already measured) get the
+// gain applied instantly. Persisted map is small: id → dB.
+const LOUD_KEY = "freebify-loudness"
+const TARGET_RMS_DB = -18
+
+function loudMap(): Record<string, number> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LOUD_KEY) ?? "{}")
+    return isObj(raw) ? (raw as Record<string, number>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function loudFor(id: string): number | undefined {
+  const v = loudMap()[id]
+  return typeof v === "number" && Number.isFinite(v) ? v : undefined
+}
+
+function loudSave(id: string, db: number) {
+  const m = loudMap()
+  m[id] = db
+  const keys = Object.keys(m)
+  if (keys.length > 3000) delete m[keys[0]] // oldest wins eviction
+  try {
+    localStorage.setItem(LOUD_KEY, JSON.stringify(m))
+  } catch { /* quota — normalization is best-effort */ }
+}
+
+let meterTimer: ReturnType<typeof setInterval> | null = null
+
+function stopLoudnessMeter() {
+  if (meterTimer) clearInterval(meterTimer)
+  meterTimer = null
+}
+
+// Apply the stored gain immediately, or start measuring. Called once the
+// audio engine owns playback for a track.
+function applyLoudness(track: Track) {
+  stopLoudnessMeter()
+  if (!busAvailable) return
+  const stored = loudFor(track.id)
+  if (stored !== undefined) {
+    setNormGain(10 ** (stored / 20))
+    return
+  }
+  setNormGain(1)
+  if (!usePlayer.getState().normOn) return
+  const el = audio
+  let acc = 0
+  let n = 0
+  meterTimer = setInterval(() => {
+    if (audio !== el || usePlayer.getState().current?.id !== track.id) return stopLoudnessMeter()
+    if (el.paused) return
+    const r = rmsOf(el)
+    if (r > 1e-4) {
+      acc += r
+      n++
+    }
+    if (n >= 20) {
+      const db = Math.max(-9, Math.min(14, TARGET_RMS_DB - 20 * Math.log10(acc / n)))
+      loudSave(track.id, db)
+      setNormGain(10 ** (db / 20))
+      stopLoudnessMeter()
+    }
+  }, 400)
+}
+
 // ---- wire the <audio> element into the store ----
 // Every listener is gated by engine === "audio": while the iframe owns
 // playback (or a load race is in flight), stale audio events must not
@@ -850,6 +1027,7 @@ usePlayer.subscribe((s, prev) => {
 // through prebuffer swaps.
 function bindAudio(a: HTMLAudioElement): HTMLAudioElement {
   a.preload = "auto"
+  if (busAvailable) attach(a)
   // events from a swapped-out element (adoptAudio paused/reset it) must not
   // touch state — only the live element owns the store
   const on = (ev: string, fn: () => void) =>
@@ -859,6 +1037,7 @@ function bindAudio(a: HTMLAudioElement): HTMLAudioElement {
     })
   on("play", () => {
     if (engine !== "audio") return
+    resume()
     usePlayer.setState({ isPlaying: true, buffering: false })
     if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing"
   })
@@ -893,6 +1072,26 @@ function bindAudio(a: HTMLAudioElement): HTMLAudioElement {
   })
   on("timeupdate", () => {
     if (engine === "audio" && !a.seeking) usePlayer.setState({ currentTime: a.currentTime })
+    // crossfade trigger — only sequential queues (shuffle resolves its pick
+    // at transition time, so no crossfade there) with a prebuffer ready
+    const st = usePlayer.getState()
+    const secs = st.fadeSecs
+    if (
+      busAvailable &&
+      secs > 0 &&
+      !incomingEl &&
+      !st.shuffle &&
+      st.repeat !== "one" &&
+      st.isPlaying &&
+      engine === "audio" &&
+      a === audio &&
+      Number.isFinite(a.duration) &&
+      a.duration - a.currentTime > 0.5 &&
+      a.duration - a.currentTime <= secs &&
+      prebuffer?.id === st.queue[st.index + 1]?.id
+    ) {
+      startCrossfade(secs)
+    }
   })
   on("durationchange", () => {
     if (engine === "audio" && Number.isFinite(a.duration) && a.duration > 0)

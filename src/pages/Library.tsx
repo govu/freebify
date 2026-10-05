@@ -3,6 +3,7 @@ import { Heart, Play, Plus, Search } from "lucide-react"
 import { useShallow } from "zustand/react/shallow"
 import { Link, useNavigate } from "react-router-dom"
 import { LocalPlaylistCard, Section, TrackCard } from "../components/Cards"
+import { ImportPlaylist } from "../components/ImportPlaylist"
 import { TrackTable } from "../components/TrackTable"
 import { useLibrary } from "../store/library"
 import { usePlayer } from "../store/player"
@@ -48,12 +49,15 @@ export function LibraryPage() {
       <div className="px-6 pb-2">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-bold tracking-tight">Your playlists</h2>
-          <button
-            onClick={() => navigate(`/playlist/${createPlaylist()}`)}
-            className="flex items-center gap-2 rounded-full border border-line px-4 py-2 text-sm font-semibold text-dim transition hover:border-dim hover:text-ink"
-          >
-            <Plus size={15} /> New playlist
-          </button>
+          <div className="flex items-center gap-2">
+            <ImportPlaylist />
+            <button
+              onClick={() => navigate(`/playlist/${createPlaylist()}`)}
+              className="flex items-center gap-2 rounded-full border border-line px-4 py-2 text-sm font-semibold text-dim transition hover:border-dim hover:text-ink"
+            >
+              <Plus size={15} /> New playlist
+            </button>
+          </div>
         </div>
         {playlists.length > 0 ? (
           <div className="no-scrollbar -mx-1 flex gap-4 overflow-x-auto px-1 pb-2">

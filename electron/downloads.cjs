@@ -27,6 +27,10 @@ const manifestFile = () => path.join(dlDir(), "downloads.json")
 let manifest = null // lazy — userData path isn't valid before app ready
 let dirty = false
 const inFlight = new Map() // id -> { kill: () => void }
+// batch downloads (album/playlist "download all") queue here — spawning a
+// yt-dlp per track unthrottled would torch CPU + rate limits
+const MAX_PARALLEL = 3
+const pending = [] // [{id, start}] FIFO
 
 function loadManifest() {
   if (manifest) return
@@ -110,6 +114,15 @@ function fail(id, msg) {
   emit({ type: "error", id, msg: String(msg ?? "download failed").slice(0, 200) })
 }
 
+// run the next queued download when a slot frees
+function drain() {
+  while (inFlight.size < MAX_PARALLEL && pending.length) {
+    const job = pending.shift()
+    if (!job || manifest[job.id]) continue
+    job.start()
+  }
+}
+
 // YouTube track → yt-dlp writes the file itself; progress parsed from the
 // "[download]  42.3%" lines it prints on stderr
 function downloadYt(id, streamId, track) {
@@ -141,6 +154,7 @@ function downloadYt(id, streamId, track) {
   child.stderr.on("data", onData)
   const finish = (ok) => {
     inFlight.delete(id)
+    drain()
     const file = ok ? findOutput(base) : null
     if (file) commit(id, file, track)
     else fail(id, "yt-dlp couldn't fetch this track")
@@ -192,6 +206,7 @@ async function downloadHttp(id, url, track) {
     log("dl", `${id}: ${e?.message ?? e}`)
   } finally {
     inFlight.delete(id)
+    drain()
   }
 }
 
@@ -200,7 +215,7 @@ function register(ipcMain) {
 
   // fbx://dl/<file> — serves downloaded audio to <audio>.src. Basename-only
   // resolution inside dlDir: no traversal, no absolute paths over IPC.
-  protocol.handle("fbx", (req) => {
+  protocol.handle("fbx", async (req) => {
     try {
       const u = new URL(req.url)
       if (u.hostname !== "dl") return new Response("not found", { status: 404 })
@@ -209,7 +224,12 @@ function register(ipcMain) {
       if (!file.startsWith(dlDir()) || !fs.existsSync(file)) {
         return new Response("not found", { status: 404 })
       }
-      return net.fetch(pathToFileURL(file).toString())
+      // ACAO:* — downloaded tracks route through Web Audio (EQ/normalize)
+      // in the renderer; custom-scheme media is cross-origin by default
+      const res = await net.fetch(pathToFileURL(file).toString())
+      const headers = new Headers(res.headers)
+      headers.set("access-control-allow-origin", "*")
+      return new Response(res.body, { status: res.status, headers })
     } catch {
       return new Response("bad request", { status: 400 })
     }
@@ -241,34 +261,41 @@ function register(ipcMain) {
     const { id, source, streamId, url, track } = p
     if (typeof id !== "string" || !id || id.length > 120) return false
     if (!track || typeof track !== "object") return false
-    if (manifest[id] || inFlight.has(id)) return true // already have it / on it
+    if (manifest[id] || inFlight.has(id) || pending.some((j) => j.id === id)) return true
     try {
       fs.mkdirSync(dlDir(), { recursive: true })
     } catch {
       return false
     }
     emit({ type: "progress", id, pct: 0 })
-    if (source === "yt" && typeof streamId === "string" && /^[\w-]{6,20}$/.test(streamId)) {
-      if (!ytdlpAvailable()) {
-        emit({ type: "error", id, msg: "yt-dlp unavailable" })
-        return false
+    const start = () => {
+      if (source === "yt" && typeof streamId === "string" && /^[\w-]{6,20}$/.test(streamId)) {
+        if (!ytdlpAvailable()) {
+          emit({ type: "error", id, msg: "yt-dlp unavailable" })
+          return
+        }
+        downloadYt(id, streamId, track)
+        return
       }
-      downloadYt(id, streamId, track)
-      return true
+      if (typeof url === "string" && /^https:\/\//.test(url)) {
+        void downloadHttp(id, url, track)
+        return
+      }
+      emit({ type: "error", id, msg: "unsupported source" })
     }
-    if (typeof url === "string" && /^https:\/\//.test(url)) {
-      void downloadHttp(id, url, track)
-      return true
-    }
-    emit({ type: "error", id, msg: "unsupported source" })
-    return false
+    if (inFlight.size >= MAX_PARALLEL) pending.push({ id, start })
+    else start()
+    return true
   })
 
   ipcMain.handle("dl:remove", (_e, id) => {
     loadManifest()
     if (typeof id !== "string") return false
+    const qi = pending.findIndex((j) => j.id === id)
+    if (qi >= 0) pending.splice(qi, 1)
     inFlight.get(id)?.kill()
     inFlight.delete(id)
+    drain()
     const it = manifest[id]
     if (it) {
       for (const f of [it.file, `${it.file}.part`]) {

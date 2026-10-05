@@ -17,6 +17,7 @@ interface DownloadsState {
   progress: Record<string, number>
   refresh: () => Promise<void>
   start: (t: Track) => Promise<void>
+  startAll: (tracks: Track[]) => Promise<number>
   remove: (id: string) => Promise<void>
   // drop a stale entry without touching main — used when the play path
   // discovers the file is already gone (main pruned it in dl:exists)
@@ -67,6 +68,15 @@ export const useDownloads = create<DownloadsState>()((set, get) => ({
         return { progress }
       })
     }
+  },
+
+  // batch entry point for "download album/playlist" — the main process
+  // queue caps concurrency, so this just fires every track's start()
+  startAll: async (tracks) => {
+    const s = get()
+    const fresh = tracks.filter((t) => t && !s.items[t.id] && s.progress[t.id] === undefined)
+    for (const t of fresh) void s.start(t)
+    return fresh.length
   },
 
   remove: async (id) => {
