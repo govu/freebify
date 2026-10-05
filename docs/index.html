@@ -197,13 +197,6 @@
 
   /* ============ GET ============ */
   .get { padding: clamp(110px, 17vh, 190px) 24px clamp(90px, 14vh, 150px); text-align: center; }
-  .eq { display: inline-flex; align-items: flex-end; gap: 4px; height: 26px; margin-bottom: 36px; }
-  .eq i { width: 3px; background: #e8e8e8; border-radius: 2px; height: 20%; animation: eqb 0.9s ease-in-out infinite alternate; }
-  .eq i:nth-child(2n) { animation-duration: 1.15s; }
-  .eq i:nth-child(3n) { animation-duration: 0.7s; animation-delay: -0.4s; }
-  .eq i:nth-child(4n) { animation-delay: -0.25s; }
-  .eq i:nth-child(5n) { animation-duration: 1.3s; animation-delay: -0.6s; }
-  @keyframes eqb { from { height: 16%; } to { height: 100%; } }
   .get h2 { font-size: clamp(44px, 7vw, 104px); font-weight: 900; letter-spacing: -0.05em; line-height: 0.94; text-transform: uppercase; }
   .get h2 .row { display: block; overflow: hidden; padding-block: 0.02em; }
   .get h2 .row > span { display: block; transform: translateY(112%); }
@@ -268,7 +261,6 @@
     .gal-step { opacity: 1 !important; position: static; }
     .gal-stack .gimg { opacity: 1 !important; position: static; }
     .gal-stack { position: static; height: auto; display: grid; gap: 16px; }
-    .eq { display: none; }
   }
 </style>
 </head>
@@ -356,7 +348,6 @@
 
 <section class="get" id="get">
   <div class="inner">
-    <div class="eq rv" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
     <h2 class="rv">Get Freebify.<br><span>Keep the money.</span></h2>
     <div class="row rv d1">
       <a class="btn solid" id="dlBtn" href="https://github.com/govu/freebify/releases/latest/download/Freebify-setup.exe" target="_blank" rel="noopener">Download Freebify 1.0.13</a>
