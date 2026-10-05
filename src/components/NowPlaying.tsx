@@ -304,7 +304,7 @@ const lrcGet = async (path: string, p: Record<string, string>): Promise<LrcRec[]
 // Click a line to seek to it; Shift+click pins THAT line to right now —
 // a one-tap fix for versions whose LRC timestamps are offset. Persisted
 // per track id so the correction survives restarts
-function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number }) {
+function SyncedLyrics({ lines, autoOff, onResetPin }: { lines: LrcLine[]; autoOff: number; onResetPin?: () => void }) {
   // The store clock ticks at ~4Hz (the element's timeupdate) — between
   // ticks a line can sit ~250ms behind the music, which reads as a laggy
   // highlight. Interpolate locally from the last tick while playing so
@@ -324,6 +324,7 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
   const trackId = usePlayer((s) => s.current?.id)
   const [offset, setOffset] = useState(0)
   const [note, setNote] = useState<string | null>(null)
+  const [pinned, setPinned] = useState(false)
   // saved manual correction beats the auto guess — the user knows best.
   // Both keys now carry a sheet fingerprint: an offset pinned to one sheet
   // must never slide a different one (content-veto swaps, later sources)
@@ -345,7 +346,9 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
         } catch { /* bare number — legacy manual pin, trust it */ }
         return Number(raw) || 0
       }
-      saved = read(`lrcoff2-${trackId}`) ?? read(`lrcoffa-${trackId}`)
+      const manual = read(`lrcoff2-${trackId}`)
+      saved = manual ?? read(`lrcoffa-${trackId}`)
+      setPinned(manual !== null)
       const keys = Object.keys(localStorage).filter((k) => k.startsWith("lrcoff"))
       for (const k of keys) {
         if (k.startsWith("lrcoff-")) localStorage.removeItem(k)
@@ -370,6 +373,7 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
   const applyOffset = (v: number) => {
     const next = Math.max(-90, Math.min(90, Math.round(v * 10) / 10))
     setOffset(next)
+    setPinned(true)
     if (trackId) {
       try {
         localStorage.setItem(`lrcoff2-${trackId}`, JSON.stringify({ o: next, f: fp }))
@@ -422,14 +426,36 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
       {/* transient notice when auto-calibration kicked in — tells the user
           the lyrics were nudged without adding permanent chrome */}
       <AnimatePresence>
-        {note && (
+        {(note || pinned) && (
           <motion.div
+            key={pinned ? "pinned" : "note"}
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
-            className="absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full bg-panel/80 px-3 py-1.5 text-[11px] font-medium text-ink/70 ring-1 ring-line backdrop-blur"
+            className="absolute left-1/2 top-3 z-10 -translate-x-1/2"
           >
-            {note} · Shift+click a line if it's off
+            {pinned ? (
+              <button
+                className="rounded-full bg-panel/80 px-3 py-1.5 text-[11px] font-medium text-ink/70 ring-1 ring-line backdrop-blur transition hover:text-ink"
+                onClick={() => {
+                  try {
+                    if (trackId) {
+                      localStorage.removeItem(`lrcoff2-${trackId}`)
+                      localStorage.removeItem(`lrcoffa-${trackId}`)
+                    }
+                  } catch { /* ok */ }
+                  setPinned(false)
+                  setOffset(autoOff)
+                  onResetPin?.()
+                }}
+              >
+                Synced manually — click to reset
+              </button>
+            ) : (
+              <div className="rounded-full bg-panel/80 px-3 py-1.5 text-[11px] font-medium text-ink/70 ring-1 ring-line backdrop-blur">
+                {note} · Shift+click a line if it's off
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -783,25 +809,38 @@ export function NowPlaying() {
         // the real "is this still on screen" guard.
         const sameTrack = () => usePlayer.getState().current?.id === current.id
         if (!sameTrack()) return dbg("exit: not same track")
+        // a manual Shift+click pin on THIS sheet is honored — but it is no
+        // longer a veto on measurement: a pin saved while the pipeline was
+        // buggy can pin the WRONG offset forever (this actually happened).
+        // We still walk; only a strong measurement (own captions, a non-lyric
+        // twin, or ≥2 agreeing twins) disagreeing by >3s overrides the pin.
+        let pin: number | null = null
         try {
-          // a manual Shift+click pin on THIS sheet always wins — a stale
-          // pin (fingerprint mismatch) doesn't block re-measuring
           const m = localStorage.getItem(`lrcoff2-${current.id}`)
           if (m !== null) {
             const p = JSON.parse(m) as { o?: number; f?: string } | number
-            if (typeof p !== "object" || p.f === undefined || p.f === sheetFp(lrc)) return dbg("exit: manual pin")
+            if (typeof p === "object" && p !== null && p.f !== undefined && p.f !== sheetFp(lrc))
+              return dbg("exit: pin belongs to another sheet")
+            pin = typeof p === "object" && p !== null && typeof p.o === "number" ? p.o : Number(m) || 0
           }
-        } catch { /* unparsable/manual — honor it */ return dbg("exit: pin parse") }
+        } catch { /* unparsable — treat as present, still challengeable */ pin = 0 }
         // ownVid's captions are ground truth when they exist — but many
         // official uploads ship none, so twins may measure too. A twin's
         // offset describes ITS lead-in, so several are collected and only a
         // quorum-backed value commits; lyric/letra uploads are deprioritized
         // since they often strip the video's spoken intro.
         const measured: { off: number; lyric: boolean }[] = []
-        const applyOff = (off: number) => {
+        const applyOff = (off: number, strong: boolean) => {
           if (Math.abs(off) > 90 || Math.abs(off - fallback) < 1.5) {
             dbg(`offset ${off.toFixed(1)} rejected (fallback ${fallback.toFixed(1)})`)
             return
+          }
+          if (pin !== null) {
+            if (Math.abs(off - pin) <= 3) return dbg(`pin ${pin} agrees`)
+            if (!strong) return dbg(`kept pin ${pin} over weak measurement ${off.toFixed(1)}`)
+            dbg(`overrode pin ${pin} with measured ${off.toFixed(1)}`)
+            try { localStorage.removeItem(`lrcoff2-${current.id}`) } catch { /* ok */ }
+            pin = null
           }
           dbg(`offset applied +${off.toFixed(1)}s`)
           setLyrics((cur) => (cur && "synced" in cur && cur.synced === lrc ? { synced: lrc, autoOff: off } : cur))
@@ -842,7 +881,7 @@ export function NowPlaying() {
             // structure differs can still quorum on hooky lines
             if (!timingOk(lrc, clipped, off)) return false
             if (own) {
-              applyOff(off)
+              applyOff(off, true)
               return true
             }
             measured.push({ off, lyric: /lyrics?|letra|lyric video/i.test(meta?.title ?? "") })
@@ -865,7 +904,10 @@ export function NowPlaying() {
         }
         const win = clusters.sort((a, b) => b.length - a.length)[0]
         const off = win.slice().sort((a, b) => a - b)[Math.floor(win.length / 2)]
-        applyOff(off)
+        // strong enough to challenge a manual pin: a cluster of 2+ agreeing
+        // uploads, or a single measurement from a non-lyric-titled upload
+        // (lyric videos often strip the intro — alone they can't veto)
+        applyOff(off, win.length >= 2 || measured.some((m) => !m.lyric))
       } catch { /* best-effort — the unaligned lyrics still display */ }
     }
     // YouTube's own captions as the synced catch-all — ASR tracks exist for
@@ -1075,7 +1117,7 @@ export function NowPlaying() {
                   <Loader2 size={28} className="animate-spin text-ink/50" />
                 ) : lyrics && "synced" in lyrics ? (
                   <div className="h-full w-[min(92vw,840px)] [mask-image:linear-gradient(180deg,transparent,black_10%,black_90%,transparent)]">
-                    <SyncedLyrics lines={lyrics.synced} autoOff={lyrics.autoOff} />
+                    <SyncedLyrics lines={lyrics.synced} autoOff={lyrics.autoOff} onResetPin={() => setLyricsTried(false)} />
                   </div>
                 ) : lyrics ? (
                   <div className="scroller h-full w-[min(92vw,840px)] overflow-y-auto overscroll-contain px-2 [mask-image:linear-gradient(180deg,transparent,black_8%,black_92%,transparent)]">
