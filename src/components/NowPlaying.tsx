@@ -230,6 +230,52 @@ const alignOffset = (lrc: LrcLine[], caps: LrcLine[]): number | null => {
   return Math.abs(off) <= 90 ? off : null
 }
 
+// One global offset fixes intros but NOT mid-song drift or per-line
+// mistiming. Given captions for THIS structure, anchor every line to its
+// best-matching cue inside a bounded window around (l.t + off) — per-line
+// measured timing, monotonic by clamp so display order can never invert.
+// Unmatched lines keep the global guess. Adopted only with real coverage.
+const alignLines = (lrc: LrcLine[], caps: LrcLine[], off: number): LrcLine[] | null => {
+  const pool: { t: number; w: Set<string>; bi: Set<string> }[] = []
+  for (let i = 0; i < caps.length; i++) {
+    pool.push({ t: caps[i].t, w: new Set(simTokens(caps[i].text)), bi: simBigrams(caps[i].text) })
+    const nx = caps[i + 1]
+    if (nx && nx.t - caps[i].t < 4) {
+      const text = `${caps[i].text} ${nx.text}`
+      pool.push({ t: caps[i].t, w: new Set(simTokens(text)), bi: simBigrams(text) })
+    }
+  }
+  const out = lrc.map((l) => ({ ...l }))
+  let anchored = 0
+  let searchable = 0
+  let prevT = -1e9
+  for (const l of out) {
+    const w = new Set(simTokens(l.text))
+    if (w.size < 2) {
+      l.t = Math.max(l.t + off, prevT + 0.05)
+      prevT = l.t
+      continue
+    }
+    searchable++
+    const bi = simBigrams(l.text)
+    const exp = l.t + off
+    let best = 0
+    let bestT = -1
+    for (const c of pool) {
+      if (c.t < exp - 4 || c.t > exp + 6) continue
+      const s = lineSim(w, bi, c.w, c.bi)
+      if (s > best) {
+        best = s
+        bestT = c.t
+      }
+    }
+    l.t = Math.max(best >= 0.5 ? bestT : exp, prevT + 0.05)
+    if (best >= 0.5) anchored++
+    prevT = l.t
+  }
+  return anchored >= Math.max(4, Math.ceil(searchable * 0.45)) ? out : null
+}
+
 // A same-title WRONG SONG's sheet can slide past every metadata gate
 // (identical runtime, artist word overlap) — alignOffset only judges
 // timing, not content. The video's own captions are the ground truth:
@@ -374,12 +420,12 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
         auto = null
       }
       saved = manual ?? auto
-      const keys = Object.keys(localStorage).filter((k) => k.startsWith("lrcoff"))
+      const keys = Object.keys(localStorage).filter((k) => k.startsWith("lrcoff") || k.startsWith("lrcaln"))
       for (const k of keys) {
         if (k.startsWith("lrcoff-")) localStorage.removeItem(k)
       }
       // cap the sets so a long-lived profile can't sprawl
-      const kept = keys.filter((k) => k.startsWith("lrcoff2-") || k.startsWith("lrcoffa-"))
+      const kept = keys.filter((k) => k.startsWith("lrcoff2-") || k.startsWith("lrcoffa-") || k.startsWith("lrcaln-"))
       for (const k of kept.slice(0, Math.max(0, kept.length - 140))) localStorage.removeItem(k)
     } catch { /* storage unavailable — offsets just won't persist */ }
     setOffset(saved ?? autoOff)
@@ -458,7 +504,20 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
                     : "text-ink/25 hover:text-ink/50"
               }`}
             >
-              {l.text}
+              {i === active ? (() => {
+                // karaoke word-fill: distribute the line's span across its
+                // words — reads as word-level sync without word timings
+                const words = l.text.split(/\s+/).filter(Boolean)
+                if (words.length < 2) return l.text
+                const nextT = lines[i + 1]?.t ?? l.t + 4
+                const prog = Math.min(1, Math.max(0, (adj - l.t) / Math.max(0.4, nextT - l.t)))
+                const lit = Math.floor(prog * words.length)
+                return words.map((wd, wi) => (
+                  <span key={wi} className={`transition-colors duration-150 ${wi <= lit ? "text-ink" : "text-ink/40"}`}>
+                    {wd}{wi < words.length - 1 ? " " : ""}
+                  </span>
+                ))
+              })() : l.text}
             </button>
           ))}
         </div>
@@ -727,8 +786,10 @@ export function NowPlaying() {
     // walk uploads lazily — ownVid first, then same-recording twins (music
     // catalog, then general YouTube for fan lyric videos). `alternates:false`
     // stops after ownVid — only the PLAYING upload can time this audio.
+    // Caption probes run CONCURRENTLY per source (one yt-dlp call is ~3s —
+    // serial probing burned 20-30s before a measurement could land).
     const forEachVideo = async (
-      fn: (vid: string, own: boolean, meta?: { title?: string }) => Promise<boolean>,
+      fn: (vid: string, own: boolean, meta: { title?: string } | undefined, cap: { lines: LrcLine[]; wordy?: number } | null) => Promise<boolean>,
       {
         alternates = true,
         alive = () => true,
@@ -744,32 +805,44 @@ export function NowPlaying() {
       const lyricish = (t: { title?: string }) => (/lyrics?|letra|lyric video/i.test(t.title ?? "") ? 1 : 0)
       const rank = (a: { title?: string; duration?: number }, b: { title?: string; duration?: number }) =>
         loose ? lyricish(a) - lyricish(b) || byDur(a, b) : byDur(a, b)
-      const attempt = async (vid: string | null | undefined, own = false, meta?: { title?: string }) => {
-        if (!vid || seen.has(vid) || !alive()) return false
-        seen.add(vid)
-        return ++tried <= budget ? fn(vid, own, meta) : true // budget spent → done
+      const getCaps = (vid: string) => yt.captions(vid).catch(() => null)
+      // batch-evaluate a candidate list: fetch all captions at once (bounded
+      // by remaining budget), then walk the ranked results in order
+      const batch = async (cands: { streamId?: string; title: string; duration?: number; user?: { name?: string } }[]) => {
+        const fresh = cands.filter((t) => t.streamId && !seen.has(t.streamId))
+        if (!fresh.length || !alive()) return false
+        const room = Math.max(0, budget - tried)
+        const slice = fresh.slice(0, room)
+        for (const t of slice) seen.add(t.streamId!)
+        tried += slice.length
+        const caps = await Promise.all(slice.map((t) => getCaps(t.streamId!)))
+        for (let i = 0; i < slice.length; i++) {
+          if (!alive()) return true
+          if (await fn(slice[i].streamId!, false, slice[i], caps[i])) return true
+        }
+        return tried > budget
       }
-      if (await attempt(ownVid, true)) return
+      if (ownVid && alive()) {
+        seen.add(ownVid)
+        tried++
+        if (await fn(ownVid, true, undefined, await getCaps(ownVid))) return
+      }
       if (!alternates) return
       // the playing upload's own related list — official-video reuploads
       // and lyric versions cluster there (same video family), which makes
       // it the cheapest source of same-structure captioned twins
       if (ownVid) {
         const rel = await yt.upNext(ownVid).catch(() => [] as { streamId?: string; title: string; duration?: number; user?: { name?: string } }[])
-        const gated = rel.filter(gate)
+        const gated = rel.filter(gate).sort(rank)
         dbgL(`upnext: ${rel.length} hits, ${gated.length} pass gate`)
-        for (const t of gated.sort(rank)) {
-          if (await attempt(t.streamId, false, t)) return
-        }
+        if (await batch(gated)) return
       }
       for (const q of twinQueries) {
         if (!alive() || tried > budget) return
         const res = await yt.search(q).catch(() => null)
-        const gated = (res?.tracks ?? []).filter(gate)
+        const gated = (res?.tracks ?? []).filter(gate).sort(rank)
         dbgL(`search "${q}": ${res?.tracks?.length ?? 0} hits, ${gated.length} pass gate`)
-        for (const t of gated.sort(rank)) {
-          if (await attempt(t.streamId, false, t)) return
-        }
+        if (await batch(gated)) return
       }
       // the music catalog carries no captions on many official uploads —
       // general YouTube adds fan lyric videos (they nearly always ship
@@ -780,11 +853,9 @@ export function NowPlaying() {
       for (const q of [...new Set([`${artist} ${title}`, title, `${artist} ${title} official video`, `${artist} ${title} video oficial`, `${artist} ${title} lyrics`, `${title} lyrics`].filter((x) => x.trim() && x.trim() !== "lyrics"))]) {
         if (!alive() || tried > budget) return
         const vids = await yt.videoSearch(q).catch(() => [])
-        const gated = vids.filter(gate)
+        const gated = vids.filter(gate).sort(rank)
         dbgL(`vsearch "${q}": ${vids.length} hits, ${gated.length} pass gate`)
-        for (const t of gated.sort(rank)) {
-          if (await attempt(t.streamId, false, t)) return
-        }
+        if (await batch(gated)) return
       }
     }
     // DB lyrics describe the studio take — a lyric video's intro shifts
@@ -826,14 +897,16 @@ export function NowPlaying() {
         // offset describes ITS lead-in, so several are collected and only a
         // quorum-backed value commits; lyric/letra uploads are deprioritized
         // since they often strip the video's spoken intro.
-        const measured: { off: number; caps: LrcLine[] }[] = []
+        const measured: { off: number; caps: LrcLine[]; aligned: LrcLine[] | null }[] = []
         const lyricMeasured: number[] = []
         // spoken intros live in the upload's caption track but in NO lyric
         // DB — cues sitting before where the sheet's first line lands ARE
         // that intro; show them as lyric lines so the sheet covers what
         // the audio actually says. t<0 keeps display+seek math intact.
-        const introLines = (caps: LrcLine[], off: number): LrcLine[] => {
-          const edge = (lrc[0]?.t ?? 0) + off - 0.8
+        // `edge` = where the sheet's first line lands in VIDEO time;
+        // `shift` = the autoOff the display will use (0 once lines are
+        // already video-absolute)
+        const introLines = (caps: LrcLine[], edge: number, shift: number): LrcLine[] => {
           if (edge < 4) return []
           const out: LrcLine[] = []
           let lastK = ""
@@ -843,10 +916,37 @@ export function NowPlaying() {
             const k = norm(text)
             if (k.length < 3 || k === lastK) continue
             lastK = k
-            out.push({ t: c.t - off, text })
+            out.push({ t: c.t - shift, text })
             if (out.length >= 10) break
           }
           return out.length >= 2 ? out : []
+        }
+        // the displayed sheet may already be intro-prepended or per-line
+        // aligned (new array !== lrc) — "same sheet" = tail still matches
+        const sameSheet = (cur: { synced?: LrcLine[]; plain?: string } | null): boolean => {
+          const s = cur?.synced
+          if (!s) return false
+          if (s === lrc) return true
+          return s.length >= lrc.length && s[s.length - 1]?.text === lrc[lrc.length - 1]?.text
+        }
+        const persistAln = (aligned: LrcLine[], intro: LrcLine[]) =>
+          setTimeout(() => {
+            try {
+              if (localStorage.getItem(`lrcoff2-${current.id}`) === null) {
+                localStorage.setItem(
+                  `lrcaln-${current.id}`,
+                  JSON.stringify({ f: sheetFp(lrc), t: aligned.map((l) => l.t), i: intro.slice(0, 12) }),
+                )
+              }
+            } catch { /* correction stays session-only */ }
+          }, 4000)
+        // per-line measured sheet — the "maximum expression" path: intro
+        // lines at real cue times + every lyric line anchored to its cue
+        const applyAligned = (aligned: LrcLine[], caps: LrcLine[]) => {
+          const intro = introLines(caps, aligned[0]?.t - 0.8, 0)
+          dbg(`aligned lines=${aligned.length} intro=${intro.length}`)
+          setLyrics((cur) => (sameSheet(cur) ? { synced: intro.length ? [...intro, ...aligned] : aligned, autoOff: 0 } : cur))
+          persistAln(aligned, intro)
         }
         const applyOff = (off: number, strong: boolean, caps?: LrcLine[]) => {
           if (Math.abs(off) > 90 || Math.abs(off - fallback) < 1.5) {
@@ -860,9 +960,9 @@ export function NowPlaying() {
             try { localStorage.removeItem(`lrcoff2-${current.id}`) } catch { /* ok */ }
             pin = null
           }
-          const intro = caps ? introLines(caps, off) : []
+          const intro = caps ? introLines(caps, (lrc[0]?.t ?? 0) + off - 0.8, off) : []
           dbg(`offset applied +${off.toFixed(1)}s intro=${intro.length}`)
-          setLyrics((cur) => (cur && "synced" in cur && cur.synced === lrc ? { synced: intro.length ? [...intro, ...lrc] : lrc, autoOff: off } : cur))
+          setLyrics((cur) => (sameSheet(cur) ? { synced: intro.length ? [...intro, ...lrc] : lrc, autoOff: off } : cur))
           // persist AFTER the note can surface (the render effect reads
           // keys when autoOff changes — writing first would suppress it);
           // a Shift+click meanwhile wins the key
@@ -875,8 +975,7 @@ export function NowPlaying() {
           }, 4000)
         }
         await forEachVideo(
-          async (vid, own, meta) => {
-            const cap = await yt.captions(vid)
+          async (vid, own, meta, cap) => {
             if (!cap?.lines?.length || !sameTrack()) {
               dbg(`no captions: ${vid} own=${own}`)
               return false
@@ -888,10 +987,13 @@ export function NowPlaying() {
             // content veto: a same-title DIFFERENT song's sheet passes the
             // metadata gates but its words aren't in this audio — swap for
             // the captions, the right words by definition. Only ground truth
-            // may overwrite: ownVid on yt, the stand-in twin on Audius
-            if (!lrcContentOk(lrc, clipped) && clipped.length >= 4) {
+            // may overwrite: ownVid on yt, the stand-in twin on Audius.
+            // The wordy gate stops a wrong-LANGUAGE ASR hallucination
+            // (e.g. Spanish audio mislabeled en-orig) from vetoing a good
+            // DB sheet — that transcript is noise, not a different song.
+            if (!lrcContentOk(lrc, clipped) && clipped.length >= 4 && (cap.wordy ?? 1) >= 0.6) {
               if (ownVid && !own) return false
-              setLyrics((cur) => (cur && "synced" in cur && cur.synced === lrc ? { synced: clipped, autoOff: 0 } : cur))
+              setLyrics((cur) => (sameSheet(cur) ? { synced: clipped, autoOff: 0 } : cur))
               return true
             }
             const off = alignOffset(lrc, clipped)
@@ -901,8 +1003,12 @@ export function NowPlaying() {
             // lines must land near their own caption match — a twin whose
             // structure differs can still quorum on hooky lines
             if (!timingOk(lrc, clipped, off)) return false
+            // per-line anchoring beats a global offset whenever coverage
+            // allows — it survives drift, bad canonical lines, everything
+            const aligned = alignLines(lrc, clipped, off)
             if (own) {
-              applyOff(off, true, clipped)
+              if (aligned) applyAligned(aligned, clipped)
+              else applyOff(off, true, clipped)
               return true
             }
             // lyric videos strip the video's spoken intro — their captions
@@ -910,7 +1016,7 @@ export function NowPlaying() {
             // for our upload. They never count toward quorum, never stop the
             // walk, and only serve as last resort when nothing else exists.
             const isLyric = /lyrics?|letra|lyric video/i.test(meta?.title ?? "")
-            if (!isLyric) measured.push({ off, caps: clipped })
+            if (!isLyric) measured.push({ off, caps: clipped, aligned })
             else lyricMeasured.push(off)
             dbg(`measured ${off.toFixed(1)}s on ${vid} lyric=${isLyric}`)
             return measured.length >= 3
@@ -939,7 +1045,9 @@ export function NowPlaying() {
         const off = win.slice().sort((a, b) => a - b)[Math.floor(win.length / 2)]
         // every vote here is non-lyric (lyric votes are quarantined above) —
         // a single real-structure upload is strong enough to override a pin
-        applyOff(off, true, measured.find((m) => win.includes(m.off))?.caps)
+        const winner = measured.find((m) => win.includes(m.off))
+        if (winner?.aligned) applyAligned(winner.aligned, winner.caps)
+        else applyOff(off, true, winner?.caps)
       } catch { /* best-effort — the unaligned lyrics still display */ }
     }
     // YouTube's own captions as the synced catch-all — ASR tracks exist for
@@ -949,8 +1057,7 @@ export function NowPlaying() {
         if (!ytBridge()?.captions) return null
         let out: LrcLine[] | null = null
         await forEachVideo(
-          async (vid) => {
-            const cap = await yt.captions(vid)
+          async (vid, _own, _meta, cap) => {
             if (!cap?.lines?.length) {
               dbgL(`capsheet: none on ${vid}`)
               return false
@@ -991,6 +1098,22 @@ export function NowPlaying() {
     void (async () => {
       const finish = (body: typeof lyrics) => {
         if (!live) return
+        // a previously per-line-aligned sheet for THIS song+sheet fingerprint
+        // paints perfectly on first frame — the walk re-verifies behind it.
+        // Same lyric-twin lie guard as the auto-offset persist: stored times
+        // ≈canonical against a strong intro guess means the alignment was
+        // measured on an intro-stripped upload → drop it.
+        if (body && "synced" in body && body.autoOff !== undefined) {
+          try {
+            const raw = localStorage.getItem(`lrcaln-${current.id}`)
+            const p = raw ? (JSON.parse(raw) as { f?: string; t?: number[]; i?: LrcLine[] }) : null
+            if (p?.f === sheetFp(body.synced) && p.t?.length === body.synced.length) {
+              const isLie = Math.abs((p.t[0] ?? 0) - (body.synced[0]?.t ?? 0)) < 2 && body.autoOff >= 5
+              if (isLie) localStorage.removeItem(`lrcaln-${current.id}`)
+              else body = { synced: [...(p.i ?? []), ...body.synced.map((l, i) => ({ ...l, t: p.t![i] }))], autoOff: 0 }
+            }
+          } catch { /* fall through to unaligned sheet */ }
+        }
         dbgL(`sheet: ${body === null ? "none" : "plain" in body ? "plain" : `synced n=${body.synced.length} first=${body.synced[0]?.t.toFixed(1)} last=${body.synced[body.synced.length - 1]?.t.toFixed(1)} off=${"autoOff" in body ? body.autoOff : "?"}`} src=${current.source} vid=${current.streamId ?? "?"} dur=${dur}`)
         setLyrics(body)
         setLyricsTried(true)

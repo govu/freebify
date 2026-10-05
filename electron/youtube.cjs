@@ -1517,7 +1517,11 @@ function captionLines(body, ext) {
 const CAP_LANGS = ["es", "en", "pt", "it", "fr", "de"]
 function pickCaptionFmt(dict) {
   if (!dict || typeof dict !== "object") return null
-  let keys = Object.keys(dict).filter((k) => Array.isArray(dict[k]) && dict[k].length)
+  // live_chat streams sit inside `subtitles` — they are chat replays, not
+  // a lyric transcript, and would poison every alignment check
+  let keys = Object.keys(dict).filter(
+    (k) => Array.isArray(dict[k]) && dict[k].length && !k.startsWith("live_chat")
+  )
   if (!keys.length) return null
   // automatic_captions lists ~150 machine-TRANSLATED targets alongside the
   // one real track — picking a CAP_LANGS member here hands back e.g. a
@@ -1585,7 +1589,13 @@ async function captions(videoId) {
       if (!res.ok) return null
       const lines = captionLines(await res.text(), fmt.ext)
       if (lines.length < 4) return null
-      return done({ lines })
+      // wrong-language ASR (e.g. a Spanish song whose `en-orig` track
+      // hallucinates English) emits short noise fragments — flag the track
+      // so the renderer can refuse to let it VETO a good DB sheet
+      const wordy = lines.filter(
+        (l) => (String(l.text).toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).length >= 3
+      ).length
+      return done({ lines, wordy: lines.length ? wordy / lines.length : 0 })
     } catch (e) {
       log("captions", `${videoId}: ${e?.message ?? e}`)
       return null

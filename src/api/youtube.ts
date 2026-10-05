@@ -25,7 +25,7 @@ interface YtBridge {
   mood: (params: string) => Promise<{ name: string | null; playlists: Playlist[]; tracks: Track[] } | null>
   playlistArts: (id: string) => Promise<string[]>
   lyrics: (videoId: string) => Promise<{ lyrics: string } | null>
-  captions?: (videoId: string) => Promise<{ lines: { t: number; text: string }[] } | null>
+  captions?: (videoId: string) => Promise<{ lines: { t: number; text: string }[]; wordy?: number } | null>
   timedLyrics?: (videoId: string) => Promise<{ lines: { t: number; text: string }[] } | null>
   videoSearch?: (q: string) => Promise<Track[]>
   spotifyList?: (id: string) => Promise<{ name: string; tracks: { title: string; artist: string }[] } | null>
