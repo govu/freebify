@@ -3,6 +3,11 @@ const fs = require("fs")
 const path = require("path")
 const { pathToFileURL } = require("url")
 const youtube = require("./youtube.cjs")
+const downloads = require("./downloads.cjs")
+
+// fbx:// scheme for downloaded files — privileges must be granted before
+// the app is ready (they can't be retrofitted onto a running session)
+downloads.privilege()
 
 // dev is only ever a local vite server — a packaged exe must never flip
 // into remote-URL loading via argv/env (it would hand the bridge to a
@@ -31,6 +36,10 @@ const thumbIcon = (name) => {
   return img
 }
 let thumbarPlaying = false
+// only rebuild the Windows toolbar when its contents actually change —
+// progress pushes arrive ~40x per track and flooding ITaskbarList3 makes
+// the OS drop repaints silently (icon frozen on the last painted state)
+let thumbarSig = ""
 let tray = null
 // set when an update finishes downloading — powers the explicit "restart to
 // update" affordance, since X hides to the tray and users never see a quit
@@ -40,6 +49,9 @@ let updaterRef = null
 const showWindow = () => {
   const win = BrowserWindow.getAllWindows()[0]
   if (win) {
+    // undo the tray-hide (minimize+skipTaskbar) before restore/show —
+    // the taskbar entry must exist again or the window stays invisible
+    win.setSkipTaskbar(false)
     if (win.isMinimized()) win.restore()
     win.show()
     win.focus()
@@ -166,9 +178,7 @@ function handleDeepLink(argv) {
   const win = BrowserWindow.getAllWindows()[0]
   if (win) {
     win.webContents.send("app:deeplink", link.replace(/^freebify:\/\//, "/"))
-    if (win.isMinimized()) win.restore()
-    win.show()
-    win.focus()
+    showWindow()
   }
 }
 // macOS delivers via event instead of argv
@@ -200,12 +210,7 @@ if (!gotLock) {
   app.quit()
 } else {
   app.on("second-instance", (_e, argv) => {
-    const [win] = BrowserWindow.getAllWindows()
-    if (win) {
-      if (win.isMinimized()) win.restore()
-      win.show()
-      win.focus()
-    }
+    showWindow()
     handleDeepLink(argv)
   })
 
@@ -213,6 +218,7 @@ if (!gotLock) {
     app.setName("Freebify")
     logLine("info", `Freebify ${app.getVersion()} starting (electron ${process.versions.electron}, ${process.platform})`)
     youtube.register(ipcMain)
+    downloads.register(ipcMain)
     handleDeepLink(process.argv)
 
     // auto-update via electron-updater → GitHub Releases (publish config
@@ -258,7 +264,7 @@ if (!gotLock) {
         "script-src 'self' https://www.youtube.com https://s.ytimg.com",
         "style-src 'self' 'unsafe-inline'", // React inline styles
         "img-src 'self' https: data:",
-        "media-src 'self' https:",
+        "media-src 'self' https: fbx:",
         "connect-src 'self' https:",
         "font-src 'self' data:",
         "frame-src https://www.youtube.com https://www.youtube-nocookie.com",
@@ -287,10 +293,15 @@ if (!gotLock) {
     ipcMain.on("player:thumbar", (_e, s) => {
       const win = BrowserWindow.getAllWindows()[0]
       if (!win || !s || typeof s !== "object") return
-      thumbarPlaying = s.playing === true
-      refreshThumbar(win)
+      const playing = s.playing === true
       const title = typeof s.title === "string" ? s.title.slice(0, 200) : ""
       const artist = typeof s.artist === "string" ? s.artist.slice(0, 200) : ""
+      const sig = `${playing}|${title}`
+      if (sig !== thumbarSig) {
+        thumbarSig = sig
+        thumbarPlaying = playing
+        refreshThumbar(win)
+      }
       const tip = title ? `${title} — ${artist || "Freebify"}` : "Freebify"
       win.setThumbnailToolTip(tip)
       tray?.setToolTip(tip)
@@ -389,6 +400,9 @@ function createWindow() {
     refreshThumbar(win)
   })
   win.on("show", () => refreshThumbar(win))
+  // restore-from-minimize fires 'restore', not 'show' — without this the
+  // deferred refresh queued while hidden never lands
+  win.on("restore", () => refreshThumbar(win))
   // frameless renderer needs to swap its restore/maximize glyph. A launch-
   // time maximize() fires before the page loads, so push the real state
   // once the document is up (the message above would be dropped silently)
@@ -400,10 +414,16 @@ function createWindow() {
   win.on("close", (e) => {
     saveBounds(win)
     // X hides to the tray — music apps keep playing in the background;
-    // Quit lives on the tray menu (allowQuit) so the app exits cleanly
+    // Quit lives on the tray menu (allowQuit) so the app exits cleanly.
+    // minimize()+skipTaskbar, NOT hide(): hide() kills the Windows
+    // thumbnail toolbar for good (setThumbarButtons silently no-ops on
+    // the re-shown window — the play/pause icon freezes at whatever was
+    // last painted). A skipped+minimized window keeps the taskbar group
+    // alive, so thumbar repaints keep working.
     if (!allowQuit && !isDev) {
       e.preventDefault()
-      win.hide()
+      win.minimize()
+      win.setSkipTaskbar(true)
     }
   })
 

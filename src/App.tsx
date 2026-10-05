@@ -10,6 +10,7 @@ import { TitleBar } from "./components/TitleBar"
 import { Toast } from "./components/Toast"
 import { TopBar } from "./components/TopBar"
 import { ArtistPage } from "./pages/Artist"
+import { DownloadsPage } from "./pages/Downloads"
 import { GenrePage } from "./pages/Genre"
 import { Home } from "./pages/Home"
 import { LibraryPage } from "./pages/Library"
@@ -191,6 +192,7 @@ export default function App() {
                     <Route path="/" element={<Home />} />
                     <Route path="/search" element={<SearchPage />} />
                     <Route path="/library" element={<LibraryPage />} />
+                    <Route path="/downloads" element={<DownloadsPage />} />
                     <Route path="/artist/:id" element={<ArtistPage />} />
                     <Route path="/playlist/:id" element={<PlaylistPage />} />
                     <Route path="/genre/:name" element={<GenrePage />} />

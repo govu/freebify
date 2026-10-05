@@ -1516,4 +1516,4 @@ function register(ipcMain) {
   }
 }
 
-module.exports = { register }
+module.exports = { register, binPath, ytdlpAvailable }

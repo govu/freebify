@@ -4,6 +4,7 @@ import { prefetchStream, yt } from "../api/youtube"
 import { ytEngine } from "../api/ytplayer"
 import type { RepeatMode, Track } from "../api/types"
 import { useLibrary } from "./library"
+import { useDownloads } from "./downloads"
 import { isObj, isValidTrack, repairTrack, safeStorage, sanitizeTrackList, slimTrack } from "./storage"
 
 // The live media element. Swapped at track boundaries for the prebuffered
@@ -177,6 +178,16 @@ let restoredSession = false
 let resumePos = 0
 
 async function resolveStream(track: Track): Promise<string | null> {
+  // a downloaded copy always wins — instant start and works fully offline.
+  // the manifest can lag reality (file deleted in Explorer), so verify
+  // before serving the fbx:// url; a stale entry would error-loop the
+  // <audio> element instead of falling through to the network
+  const item = useDownloads.getState().items[track.id]
+  if (item) {
+    const ok = await (window.freebify?.dl?.exists?.(track.id) ?? Promise.resolve(false)).catch(() => false)
+    if (ok) return `fbx://dl/${encodeURIComponent(item.file)}`
+    useDownloads.getState().dropLocal(track.id)
+  }
   if (track.source === "yt") {
     if (!track.streamId) return null // never send yt- ids to the Audius endpoint
     try {
@@ -190,12 +201,14 @@ async function resolveStream(track: Track): Promise<string | null> {
 
 function prefetchNextTrack() {
   const { queue, index, shuffle } = usePlayer.getState()
+  // downloaded tracks need no warm-up — the local file IS the warm path
+  const dls = useDownloads.getState().items
   if (!shuffle) {
     // warm the next few — the yt-dlp semaphore caps concurrency anyway, and
     // the cache makes repeat resolutions free. Covers instant next-track
     // starts plus clicking a few rows down without waiting for a resolve.
     for (const next of queue.slice(index + 1, index + 5)) {
-      if (next?.source === "yt" && next.streamId) {
+      if (next?.source === "yt" && next.streamId && !dls[next.id]) {
         void yt.prefetch(next.streamId).catch(() => null)
       }
     }
@@ -204,7 +217,7 @@ function prefetchNextTrack() {
     // runs on every 'playing' event (each resume!) — reuse the existing
     // buffer for the same track instead of refetching the stream
     const first = queue[index + 1]
-    if (first?.source === "yt" && first.streamId && engine === "audio" && prebuffer?.id !== first.id) {
+    if (first?.source === "yt" && first.streamId && !dls[first.id] && engine === "audio" && prebuffer?.id !== first.id) {
       void yt
         .prefetch(first.streamId)
         .then((url) => {
@@ -327,7 +340,7 @@ export const usePlayer = create<PlayerState>()(
         // watchdog and misreports state while buffering
         set({ index, current: track, isPlaying: false, currentTime: startPos, duration: track.duration ?? 0, buffering: true })
         armWatchdog(seq)
-        if (track.source === "yt" && track.streamId) {
+        if (track.source === "yt" && track.streamId && !useDownloads.getState().items[track.id]) {
           // Race: pure audio (yt-dlp, zero ads) vs hidden iframe (instant start).
           // Whichever plays first wins; if the url arrives first the iframe is
           // stopped before it ever plays. While racingSeq is set, the iframe's

@@ -22,6 +22,20 @@ contextBridge.exposeInMainWorld("freebify", {
     captions: (videoId) => ipcRenderer.invoke("yt:captions", videoId),
     suggest: (q) => ipcRenderer.invoke("yt:suggest", q),
   },
+  dl: {
+    // downloaded files live in userData/downloads — the renderer plays
+    // them back through the fbx://dl/<file> scheme
+    list: () => ipcRenderer.invoke("dl:list"),
+    exists: (id) => ipcRenderer.invoke("dl:exists", id),
+    start: (payload) => ipcRenderer.invoke("dl:start", payload),
+    remove: (id) => ipcRenderer.invoke("dl:remove", id),
+    openDir: () => ipcRenderer.send("dl:opendir"),
+    onEvent: (cb) => {
+      const h = (_e, ev) => cb(ev)
+      ipcRenderer.on("dl:event", h)
+      return () => ipcRenderer.removeListener("dl:event", h)
+    },
+  },
   player: {
     // renderer → main: player state for the taskbar thumbnail toolbar
     thumbar: (s) => ipcRenderer.send("player:thumbar", s),

@@ -1,4 +1,4 @@
-import { Check, ChevronLeft, Disc3, Heart, Link2, ListEnd, ListMusic, ListPlus, MoreHorizontal, Play, Radio, Trash2, User as UserIcon } from "lucide-react"
+import { Check, ChevronLeft, Disc3, Download, Heart, Link2, ListEnd, ListMusic, ListPlus, MoreHorizontal, Play, Radio, Trash2, User as UserIcon } from "lucide-react"
 import { motion } from "motion/react"
 import { useEffect, useRef, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
@@ -6,6 +6,7 @@ import type { Track } from "../api/types"
 import { isLongForm, isNonOriginal } from "../api/audius"
 import { prefetchStream, yt } from "../api/youtube"
 import { useLibrary } from "../store/library"
+import { useDownloads } from "../store/downloads"
 import { notify, usePlayer } from "../store/player"
 import { fmtCount, fmtDuration } from "../utils/format"
 import { ArtworkImg } from "./ArtworkImg"
@@ -22,6 +23,53 @@ interface TrackTableProps {
   numberOffset?: number
   onRemove?: (t: Track) => void
   removeLabel?: string
+}
+
+// rows are a fixed h-14 — windowing is just index math on the page
+// scroller (#main-scroll). Only worth it on long lists: short tables keep
+// the plain path untouched.
+const ROW_H = 56
+const VIRTUAL_MIN = 80
+const OVERSCAN = 8
+
+function useWindowed(total: number, enabled: boolean) {
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const [range, setRange] = useState({ start: 0, end: Math.min(total, 24) })
+
+  useEffect(() => {
+    if (!enabled) return
+    const scroller = document.getElementById("main-scroll")
+    const wrap = wrapRef.current
+    if (!scroller || !wrap) return
+    let raf = 0
+    const measure = () => {
+      raf = 0
+      const sRect = scroller.getBoundingClientRect()
+      // distance from the scroll content's top to the first row — measured
+      // fresh each tick: header art/images above the table can finish
+      // loading late and shift everything down
+      const top = wrap.getBoundingClientRect().top - sRect.top + scroller.scrollTop
+      const start = Math.min(total, Math.max(0, Math.floor((scroller.scrollTop - top) / ROW_H) - OVERSCAN))
+      const end = Math.min(
+        total,
+        Math.max(start, Math.ceil((scroller.scrollTop + sRect.height - top) / ROW_H) + OVERSCAN),
+      )
+      setRange((r) => (r.start === start && r.end === end ? r : { start, end }))
+    }
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(measure)
+    }
+    measure()
+    scroller.addEventListener("scroll", onScroll, { passive: true })
+    window.addEventListener("resize", onScroll)
+    return () => {
+      scroller.removeEventListener("scroll", onScroll)
+      window.removeEventListener("resize", onScroll)
+      if (raf) cancelAnimationFrame(raf)
+    }
+  }, [enabled, total])
+
+  return enabled ? { wrapRef, ...range } : { wrapRef, start: 0, end: total }
 }
 
 export function TrackTable({ tracks, context, showHeader = true, showPlays: wantPlays = true, numbered = true, numberOffset = 0, onRemove, removeLabel }: TrackTableProps) {
@@ -71,6 +119,11 @@ export function TrackTable({ tracks, context, showHeader = true, showPlays: want
     }
   }, [menuAlive, menuFor])
 
+  // window long lists — a 500-row playlist used to mount 500 rows' worth
+  // of motion.div/ArtworkImg/menu state; now only the visible slice exists
+  const virtual = tracks.length > VIRTUAL_MIN
+  const { wrapRef, start, end } = useWindowed(tracks.length, virtual)
+
   // the lg grid has an optional Plays column — without it the actions cell
   // lands in the 5rem slot and overflows
   const lgCols = showPlays
@@ -88,8 +141,10 @@ export function TrackTable({ tracks, context, showHeader = true, showPlays: want
           <span className="text-right">Time</span>
         </div>
       )}
-      <div className="mt-1 flex flex-col">
-        {tracks.map((t, i) => {
+      <div className="mt-1 flex flex-col" ref={wrapRef}>
+        {virtual && start > 0 && <div aria-hidden style={{ height: start * ROW_H }} />}
+        {(virtual ? tracks.slice(start, end) : tracks).map((t, k) => {
+          const i = virtual ? start + k : k
           const rowKey = `${t.id}-${i}`
           return (
             <Row
@@ -114,6 +169,9 @@ export function TrackTable({ tracks, context, showHeader = true, showPlays: want
             />
           )
         })}
+        {virtual && end < tracks.length && (
+          <div aria-hidden style={{ height: (tracks.length - end) * ROW_H }} />
+        )}
         {tracks.length === 0 && (
           <p className="px-3 py-10 text-center text-sm text-dim">Nothing here yet.</p>
         )}
@@ -168,6 +226,15 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
   const createPlaylist = useLibrary((s) => s.createPlaylist)
   const addToPlaylist = useLibrary((s) => s.addToPlaylist)
   const [copied, setCopied] = useState(false)
+  // download state — primitive selector so progress ticks only re-render
+  // the one row that's actually downloading
+  const dlState = useDownloads((s) =>
+    s.items[t.id] ? "done" : s.progress[t.id] !== undefined ? "busy" : "none",
+  )
+  const dlPct = useDownloads((s) => s.progress[t.id] ?? 0)
+  const dlStart = useDownloads((s) => s.start)
+  const dlRemove = useDownloads((s) => s.remove)
+  const canDl = Boolean(window.freebify?.dl)
   // menus near the viewport bottom flip upward instead of clipping
   const [flipUp, setFlipUp] = useState(false)
   const [flyOpen, setFlyOpen] = useState(false)
@@ -407,6 +474,24 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
               </div>
             </div>
           </div>
+          {canDl && (
+            <MenuItem
+              label={
+                dlState === "done"
+                  ? "Remove download"
+                  : dlState === "busy"
+                    ? `Downloading… ${dlPct}%`
+                    : "Download"
+              }
+              icon={dlState === "done" ? <Check size={15} /> : <Download size={15} />}
+              onClick={(e) => {
+                e.stopPropagation()
+                closeMenu()
+                if (dlState === "done") void dlRemove(t.id)
+                else if (dlState === "none") void dlStart(t)
+              }}
+            />
+          )}
           {t.source === "yt" && t.streamId && (
             <MenuItem
               label="Start radio"

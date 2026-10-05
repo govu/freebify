@@ -30,6 +30,22 @@ declare global {
   interface Window {
     freebify?: {
       yt: YtBridge
+      dl?: {
+        list: () => Promise<{ id: string; file: string; addedAt: number; track: Track }[]>
+        exists: (id: string) => Promise<boolean>
+        start: (p: {
+          id: string
+          source?: string
+          streamId?: string
+          url?: string
+          track: Track
+        }) => Promise<unknown>
+        remove: (id: string) => Promise<boolean>
+        openDir: () => void
+        onEvent: (
+          cb: (ev: { type: string; id: string; pct?: number; item?: unknown; msg?: string }) => void,
+        ) => () => void
+      }
       player?: {
         thumbar: (s: { playing: boolean; title?: string; artist?: string; progress?: number }) => void
         onCommand: (cb: (c: string) => void) => void

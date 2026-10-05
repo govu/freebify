@@ -1,7 +1,8 @@
-import { Heart, House, Library, ListMusic, Search, Settings } from "lucide-react"
+import { Download, Heart, House, Library, ListMusic, Search, Settings } from "lucide-react"
 import { motion } from "motion/react"
 import { Link, NavLink } from "react-router-dom"
 import { useLibrary } from "../store/library"
+import { useDownloads } from "../store/downloads"
 import { usePlayer } from "../store/player"
 import { ArtworkImg } from "./ArtworkImg"
 import { Logo } from "./Logo"
@@ -16,6 +17,8 @@ export function Sidebar() {
   const recents = useLibrary((s) => s.recents)
   const playlists = useLibrary((s) => s.playlists)
   const likedCount = useLibrary((s) => s.likedOrder.length)
+  const dlCount = useDownloads((s) => Object.keys(s.items).length)
+  const canDl = Boolean(window.freebify?.dl)
   const playTrack = usePlayer((s) => s.playTrack)
   const currentId = usePlayer((s) => s.current?.id)
 
@@ -78,6 +81,21 @@ export function Sidebar() {
             <span className="block text-xs text-dim">{likedCount} tracks</span>
           </span>
         </Link>
+
+        {canDl && (
+          <Link
+            to="/downloads"
+            className="flex items-center justify-center gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-hover lg:justify-start"
+          >
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg border border-line bg-card">
+              <Download size={15} className="text-ink" />
+            </span>
+            <span className="hidden min-w-0 lg:block">
+              <span className="block truncate text-sm font-medium">Downloads</span>
+              <span className="block text-xs text-dim">{dlCount} tracks</span>
+            </span>
+          </Link>
+        )}
 
         {playlists.length > 0 && (
           <div className="mt-1.5 hidden lg:block">
