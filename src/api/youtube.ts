@@ -26,6 +26,7 @@ interface YtBridge {
   playlistArts: (id: string) => Promise<string[]>
   lyrics: (videoId: string) => Promise<{ lyrics: string } | null>
   captions?: (videoId: string) => Promise<{ lines: { t: number; text: string }[] } | null>
+  timedLyrics?: (videoId: string) => Promise<{ lines: { t: number; text: string }[] } | null>
   videoSearch?: (q: string) => Promise<Track[]>
   spotifyList?: (id: string) => Promise<{ name: string; tracks: { title: string; artist: string }[] } | null>
   suggest: (q: string) => Promise<string[]>
@@ -130,6 +131,7 @@ export const yt = {
   playlistArts: (id: string) => ytBridge()?.playlistArts(id) ?? Promise.resolve([]),
   lyrics: (videoId: string) => ytBridge()?.lyrics(videoId) ?? Promise.resolve(null),
   captions: (videoId: string) => ytBridge()?.captions?.(videoId) ?? Promise.resolve(null),
+  timedLyrics: (videoId: string) => ytBridge()?.timedLyrics?.(videoId) ?? Promise.resolve(null),
   videoSearch: (q: string) => ytBridge()?.videoSearch?.(q) ?? Promise.resolve([]),
   spotifyList: (id: string) => ytBridge()?.spotifyList?.(id) ?? Promise.resolve(null),
   suggest: (q: string) => ytBridge()?.suggest(q) ?? Promise.resolve([]),

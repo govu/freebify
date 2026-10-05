@@ -771,9 +771,14 @@ export function NowPlaying() {
         // offset describes ITS lead-in, so several are collected and only a
         // quorum-backed value commits; lyric/letra uploads are deprioritized
         // since they often strip the video's spoken intro.
+        const dbg = (m: string) => window.freebify?.app?.log?.(`lyrics: ${m}`)
         const measured: { off: number; lyric: boolean }[] = []
         const applyOff = (off: number) => {
-          if (Math.abs(off) > 90 || Math.abs(off - fallback) < 1.5) return
+          if (Math.abs(off) > 90 || Math.abs(off - fallback) < 1.5) {
+            dbg(`offset ${off.toFixed(1)} rejected (fallback ${fallback.toFixed(1)})`)
+            return
+          }
+          dbg(`offset applied +${off.toFixed(1)}s`)
           setLyrics((cur) => (cur && "synced" in cur && cur.synced === lrc ? { synced: lrc, autoOff: off } : cur))
           // persist AFTER the note can surface (the render effect reads
           // keys when autoOff changes — writing first would suppress it);
@@ -789,7 +794,11 @@ export function NowPlaying() {
         await forEachVideo(
           async (vid, own, meta) => {
             const cap = await yt.captions(vid)
-            if (!cap?.lines?.length || !sameTrack()) return false
+            if (!cap?.lines?.length || !sameTrack()) {
+              dbg(`no captions: ${vid} own=${own}`)
+              return false
+            }
+            dbg(`captions: ${vid} n=${cap.lines.length} "${(meta?.title ?? "").slice(0, 40)}"`)
             const clipped = cap.lines.filter((l) => !dur || l.t <= dur + 15)
             // content veto: a same-title DIFFERENT song's sheet passes the
             // metadata gates but its words aren't in this audio — swap for
@@ -812,9 +821,10 @@ export function NowPlaying() {
               return true
             }
             measured.push({ off, lyric: /lyrics?|letra|lyric video/i.test(meta?.title ?? "") })
+            dbg(`measured ${off.toFixed(1)}s on ${vid} lyric=${measured[measured.length - 1].lyric}`)
             return measured.length >= 3
           },
-          { alternates: true, alive: sameTrack, loose: true, budget: 9 },
+          { alternates: true, alive: sameTrack, loose: true, budget: 11 },
         )
         if (!sameTrack() || measured.length === 0) return
         // prefer non-lyric-titled uploads (they carry the real intro); when
@@ -880,6 +890,18 @@ export function NowPlaying() {
         setLyrics(body)
         setLyricsTried(true)
         setLyricsLoading(false)
+      }
+      // YTM's own timed lyrics first — official LyricFind data bound to this
+      // exact videoId, so no wrong-song search risk at all. Timing is still
+      // the canonical recording's, so the intro-offset layer stays on top.
+      if (current.source === "yt" && current.streamId) {
+        const timed = await yt.timedLyrics(current.streamId).catch(() => null)
+        const timedLines = timed?.lines ? sane(timed.lines) : null
+        if (timedLines) {
+          window.freebify?.app?.log?.(`lyrics: ytm timed source — ${timedLines.length} lines`)
+          void refineOffset(timedLines, 0)
+          return finish({ synced: timedLines, autoOff: 0 })
+        }
       }
       const lrclib = await fetchLrcLib()
       if (lrclib && "synced" in lrclib) {

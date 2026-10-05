@@ -1597,6 +1597,62 @@ async function captions(videoId) {
   return job
 }
 
+// Line-timed lyrics straight from YouTube Music — official LyricFind data
+// bound to the exact videoId (no search heuristics, no wrong-song risk).
+// Two hops: /next resolves the lyrics tab's browseId, then /browse with an
+// ANDROID_MUSIC context returns timedLyricsData — the web client hides it.
+async function timedLyrics(videoId) {
+  const yt = await getYt()
+  if (!yt) return null
+  try {
+    // raw responses have no .type — walk by key name instead of collect()
+    const findKey = (o, key, out = []) => {
+      if (!o || typeof o !== "object" || out.length > 50) return out
+      if (o[key]) out.push(o[key])
+      for (const v of Object.values(o)) if (v && typeof v === "object") findKey(v, key, out)
+      return out
+    }
+    const next = await yt.actions.execute("/next", { videoId })
+    let browseId = null
+    for (const tab of findKey(next.data ?? next, "tabRenderer")) {
+      const cfg = tab?.endpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig
+      if (cfg?.pageType === "MUSIC_PAGE_TYPE_TRACK_LYRICS" && tab?.unselectable !== true) {
+        browseId = tab.endpoint.browseEndpoint.browseId
+        break
+      }
+    }
+    if (!browseId) return null
+    // actions.execute can't forge an ANDROID_MUSIC context (client_name is
+    // rejected) — raw POST with the mobile client shape instead
+    const res = await fetch("https://music.youtube.com/youtubei/v1/browse?prettyPrint=false", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-YouTube-Client-Name": "6",
+        "X-YouTube-Client-Version": "7.21.50",
+        "User-Agent": "com.google.android.apps.youtube.music/7.21.50 (Linux; U; Android 14) gzip",
+        "Accept-Language": "en-US,en",
+      },
+      body: JSON.stringify({
+        context: { client: { clientName: "ANDROID_MUSIC", clientVersion: "7.21.50", androidSdkVersion: 34, hl: "en", gl: "US" } },
+        browseId,
+      }),
+      signal: AbortSignal.timeout(15000),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    const rows = findKey(data, "timedLyricsModel")[0]?.lyricsData?.timedLyricsData
+    if (!Array.isArray(rows) || !rows.length) return null
+    const lines = rows
+      .filter((r) => r?.lyricLine && r?.cueRange?.startTimeMilliseconds != null)
+      .map((r) => ({ t: Number(r.cueRange.startTimeMilliseconds) / 1000, text: String(r.lyricLine).trim() }))
+      .filter((l) => l.text && Number.isFinite(l.t))
+    return lines.length ? { lines } : null
+  } catch {
+    return null
+  }
+}
+
 // Full synced-where-available lyrics for the Now Playing panel
 async function lyrics(videoId) {
   const yt = await getYt()
@@ -1739,6 +1795,9 @@ function register(ipcMain) {
   )
   ipcMain.handle("yt:captions", (_e, videoId) =>
     typeof videoId === "string" && VID.test(videoId) ? withTimeout(captions(videoId), 40000).catch(() => null) : null
+  )
+  ipcMain.handle("yt:timedlyrics", (_e, videoId) =>
+    typeof videoId === "string" && VID.test(videoId) ? withTimeout(timedLyrics(videoId), 25000).catch(() => null) : null
   )
   ipcMain.handle("yt:videosearch", (_e, q) =>
     typeof q === "string" && q.length < 100 ? withTimeout(videoSearch(Q(q)), 15000).catch(() => []) : []
