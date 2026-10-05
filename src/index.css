@@ -157,10 +157,11 @@ input[type="text"] {
 /* a bare color-shift is a weak focus cue — give text inputs a real ring.
    The ring inherits the element's own radius so it hugs pills and
    rounded-lg rename fields instead of painting a 6px square.
-   :where() keeps this at zero specificity — bare transparent inputs living
-   INSIDE an already-ringed container (search pill, playlist filter) opt out
-   with focus-visible:shadow-none instead of painting a second squished pill */
-:where(input[type="text"]):focus-visible {
+   :where() keeps it at near-zero specificity, and :not(.bg-transparent)
+   skips bare inputs living INSIDE an already-ringed container (the search
+   pill, the playlist filter) — there the inner ring reads as a second
+   squished pill on top of the placeholder text */
+:where(input[type="text"]:not(.bg-transparent)):focus-visible {
   box-shadow: 0 0 0 2px rgb(255 255 255 / 0.35);
   border-radius: inherit;
 }

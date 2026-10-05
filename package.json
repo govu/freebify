@@ -1,7 +1,7 @@
 {
   "name": "freebify",
   "private": true,
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "Freebify — free music streaming. No ads, no subscriptions.",
   "license": "GPL-3.0-only",
   "type": "module",
