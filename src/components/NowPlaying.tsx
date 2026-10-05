@@ -885,19 +885,28 @@ export function NowPlaying() {
         {/* meta + controls */}
         <div className="mx-auto w-full max-w-2xl pb-8">
           <div className="flex items-end justify-between gap-4">
-            <div className="min-w-0">
-              <Marquee text={current.title} className="text-2xl font-bold" />
-              {hasArtistPage(current.user) ? (
-                <Link
-                  to={`/artist/${encodeURIComponent(current.user.id)}?n=${encodeURIComponent(current.user.name)}`}
-                  onClick={() => setNpOpen(false)}
-                  className="mt-1 block truncate text-base text-ink/60 transition hover:text-ink"
-                >
-                  {current.user.name}
-                </Link>
-              ) : (
-                <span className="mt-1 block truncate text-base text-ink/60">{current.user.name}</span>
-              )}
+            <div className="flex min-w-0 items-center gap-3">
+              <ArtworkImg
+                art={current.artwork}
+                size="150x150"
+                alt=""
+                className="mb-0.5 size-12 shrink-0 rounded-md shadow-lg shadow-black/40"
+                iconSize={20}
+              />
+              <div className="min-w-0">
+                <Marquee text={current.title} className="text-2xl font-bold" />
+                {hasArtistPage(current.user) ? (
+                  <Link
+                    to={`/artist/${encodeURIComponent(current.user.id)}?n=${encodeURIComponent(current.user.name)}`}
+                    onClick={() => setNpOpen(false)}
+                    className="mt-1 block truncate text-base text-ink/60 transition hover:text-ink"
+                  >
+                    {current.user.name}
+                  </Link>
+                ) : (
+                  <span className="mt-1 block truncate text-base text-ink/60">{current.user.name}</span>
+                )}
+              </div>
             </div>
             <div className="mb-1 flex shrink-0 items-center gap-3">
               {hasLyrics && (

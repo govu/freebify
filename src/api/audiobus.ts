@@ -55,6 +55,19 @@ function ensure(): AudioContext {
     lim.connect(ctx.destination)
   }
   if (ctx.state === "suspended") void ctx.resume()
+  // A play() that lands AFTER the click's transient activation expired
+  // (stream resolution takes seconds — IPC → extractor) leaves the context
+  // suspended forever: element "plays", graph outputs silence. Every real
+  // gesture is a fresh chance to wake it.
+  for (const ev of ["pointerdown", "keydown", "touchstart"]) {
+    window.addEventListener(
+      ev,
+      () => {
+        if (ctx && ctx.state === "suspended") void ctx.resume()
+      },
+      { capture: true, passive: true },
+    )
+  }
   return ctx
 }
 
