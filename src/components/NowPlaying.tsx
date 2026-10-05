@@ -739,8 +739,11 @@ export function NowPlaying() {
       }
       // the music catalog carries no captions on many official uploads —
       // general YouTube adds fan lyric videos (they nearly always ship
-      // ASR/manual subs for the same recording)
-      for (const q of [...new Set([`${artist} ${title} lyrics`, `${title} lyrics`].filter((x) => x.trim() !== "lyrics"))]) {
+      // ASR/manual subs for the same recording). Bare-title queries come
+      // first: they surface official-video reuploads (which KEEP the spoken
+      // intro) while "… lyrics" queries only surface lyric videos (stripped
+      // intro — useless as offset references).
+      for (const q of [...new Set([`${artist} ${title}`, title, `${artist} ${title} lyrics`, `${title} lyrics`].filter((x) => x.trim() && x.trim() !== "lyrics"))]) {
         if (!alive() || tried > budget) return
         const vids = await yt.videoSearch(q).catch(() => [])
         const gated = vids.filter(gate)
@@ -790,6 +793,7 @@ export function NowPlaying() {
         // quorum-backed value commits; lyric/letra uploads are deprioritized
         // since they often strip the video's spoken intro.
         const measured: { off: number; lyric: boolean }[] = []
+        const lyricMeasured: number[] = []
         const applyOff = (off: number, strong: boolean) => {
           if (Math.abs(off) > 90 || Math.abs(off - fallback) < 1.5) {
             dbg(`offset ${off.toFixed(1)} rejected (fallback ${fallback.toFixed(1)})`)
@@ -844,30 +848,41 @@ export function NowPlaying() {
               applyOff(off, true)
               return true
             }
-            measured.push({ off, lyric: /lyrics?|letra|lyric video/i.test(meta?.title ?? "") })
-            dbg(`measured ${off.toFixed(1)}s on ${vid} lyric=${measured[measured.length - 1].lyric}`)
+            // lyric videos strip the video's spoken intro — their captions
+            // time the canonical audio, so a measured ~0 from them is a LIE
+            // for our upload. They never count toward quorum, never stop the
+            // walk, and only serve as last resort when nothing else exists.
+            const isLyric = /lyrics?|letra|lyric video/i.test(meta?.title ?? "")
+            if (!isLyric) measured.push({ off, lyric: false })
+            else lyricMeasured.push(off)
+            dbg(`measured ${off.toFixed(1)}s on ${vid} lyric=${isLyric}`)
             return measured.length >= 3
           },
           { alternates: true, alive: sameTrack, loose: true, budget: 11 },
         )
-        dbg(`walk done measured=${measured.length} alive=${sameTrack()}`)
-        if (!sameTrack() || measured.length === 0) return
-        // prefer non-lyric-titled uploads (they carry the real intro); when
-        // none measured, the lyric pool is still better than nothing
-        const cands = measured.filter((m) => !m.lyric)
-        const pool = cands.length ? cands : measured
+        dbg(`walk done measured=${measured.length} lyricOnly=${lyricMeasured.length} alive=${sameTrack()}`)
+        if (!sameTrack()) return
+        if (measured.length === 0) {
+          // no real-structure twin found — a lyric-only pool beats nothing
+          // ONLY when we have no duration guess to preserve; agreeing lyric
+          // measurements ~0 must never erase a positive intro guess
+          if (lyricMeasured.length === 0) return
+          if (Math.abs(fallback) >= 1.5) return dbg(`kept fallback ${fallback.toFixed(1)} over lyric-only measurements`)
+          lyricMeasured.sort((a, b) => a - b)
+          applyOff(lyricMeasured[Math.floor(lyricMeasured.length / 2)], false)
+          return
+        }
         const clusters: number[][] = []
-        for (const m of pool) {
+        for (const m of measured) {
           const c = clusters.find((c) => Math.abs(c[0] - m.off) <= 4)
           if (c) c.push(m.off)
           else clusters.push([m.off])
         }
         const win = clusters.sort((a, b) => b.length - a.length)[0]
         const off = win.slice().sort((a, b) => a - b)[Math.floor(win.length / 2)]
-        // strong enough to challenge a manual pin: a cluster of 2+ agreeing
-        // uploads, or a single measurement from a non-lyric-titled upload
-        // (lyric videos often strip the intro — alone they can't veto)
-        applyOff(off, win.length >= 2 || measured.some((m) => !m.lyric))
+        // every vote here is non-lyric (lyric votes are quarantined above) —
+        // a single real-structure upload is strong enough to override a pin
+        applyOff(off, true)
       } catch { /* best-effort — the unaligned lyrics still display */ }
     }
     // YouTube's own captions as the synced catch-all — ASR tracks exist for
