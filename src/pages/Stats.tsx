@@ -2,10 +2,15 @@ import { motion } from "motion/react"
 import { BarChart3, Clock3, Disc3, Play, Users } from "lucide-react"
 import { ArtworkImg } from "../components/ArtworkImg"
 import { usePlayer } from "../store/player"
-import { useStats } from "../store/stats"
+import { dayKey, useStats } from "../store/stats"
 import { fmtCount, fmtDuration } from "../utils/format"
 
 const hours = (ms: number) => (ms / 3_600_000).toFixed(1)
+const hm = (ms: number) => {
+  const h = Math.floor(ms / 3_600_000)
+  const m = Math.round((ms % 3_600_000) / 60_000)
+  return h ? `${h}h ${m}m` : `${m}m`
+}
 
 export function StatsPage() {
   const tracks = useStats((s) => s.tracks)
@@ -21,10 +26,13 @@ export function StatsPage() {
     .sort((a, b) => b.ms - a.ms)
     .slice(0, 10)
 
-  // last 7 days listening minutes — simple bar strip
+  // last 7 days — local day keys matching what recordMs writes
+  const todayKey = dayKey()
   const week = [...Array(7)].map((_, i) => {
-    const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10)
-    return { day: d, ms: days[d] ?? 0 }
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    const k = dayKey(d)
+    return { day: k, ms: days[k] ?? 0 }
   }).reverse()
   const weekMs = week.reduce((a, d) => a + d.ms, 0)
   const peak = Math.max(1, ...week.map((d) => d.ms))
@@ -57,23 +65,33 @@ export function StatsPage() {
           <div className="mt-6 rounded-2xl border border-line bg-panel p-5">
             <div className="mb-4 flex items-baseline justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-dim">Listening time</span>
-              <span className="text-xs tabular-nums text-faint">{fmtDuration(weekMs / 1000)} this week</span>
+              <span className="text-xs tabular-nums text-faint">{hm(weekMs)} this week</span>
             </div>
-            <div className="flex h-24 items-end gap-2">
-              {week.map((d) => (
-                <div key={d.day} className="flex flex-1 flex-col items-center gap-1.5">
-                  <motion.div
-                    initial={{ scaleY: 0 }}
-                    animate={{ scaleY: 1 }}
-                    transition={{ duration: 0.4 }}
-                    style={{ height: `${Math.max(2, (d.ms / peak) * 80)}px` }}
-                    className="w-full origin-bottom rounded-t-md bg-white/80"
-                  />
-                  <span className="text-[9px] uppercase text-faint">
-                    {new Date(d.day + "T12:00:00").toLocaleDateString(undefined, { weekday: "narrow" })}
-                  </span>
-                </div>
-              ))}
+            <div className="flex h-24 items-end gap-2 border-b border-line/60 pb-px">
+              {week.map((d) => {
+                const isToday = d.day === todayKey
+                const date = new Date(d.day + "T12:00:00")
+                return (
+                  <div
+                    key={d.day}
+                    className="group flex flex-1 flex-col items-center gap-1.5"
+                    title={`${date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })} — ${d.ms ? hm(d.ms) : "no listening"}`}
+                  >
+                    <motion.div
+                      initial={{ scaleY: 0 }}
+                      animate={{ scaleY: 1 }}
+                      transition={{ duration: 0.4 }}
+                      style={{ height: `${d.ms > 0 ? Math.max(8, (d.ms / peak) * 80) : 3}px` }}
+                      className={`w-9 max-w-full origin-bottom rounded-full transition-colors ${
+                        d.ms > 0 ? (isToday ? "bg-white" : "bg-white/50") : "bg-white/10"
+                      } group-hover:bg-white`}
+                    />
+                    <span className={`text-[9px] uppercase ${isToday ? "font-semibold text-dim" : "text-faint"}`}>
+                      {date.toLocaleDateString(undefined, { weekday: "narrow" })}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
           </div>
 

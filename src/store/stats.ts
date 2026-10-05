@@ -44,7 +44,10 @@ interface StatsState {
   flush: () => void
 }
 
-const dayKey = () => new Date().toISOString().slice(0, 10)
+// LOCAL calendar day — toISOString() is UTC, which lands evening sessions
+// (UTC+1/+2) on the next day and midnight sessions on the previous one
+export const dayKey = (d = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0)
 
