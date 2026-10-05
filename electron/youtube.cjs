@@ -17,9 +17,11 @@ function log(tag, msg) {
 
 // ---------- yt-dlp ----------
 function binPath() {
+  // unix builds ship the bare binary as "yt-dlp" — no .exe outside win32
+  const name = process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp"
   const rel = app?.isPackaged
-    ? path.join(process.resourcesPath, "bin", "yt-dlp.exe")
-    : path.join(__dirname, "..", "bin", "yt-dlp.exe")
+    ? path.join(process.resourcesPath, "bin", name)
+    : path.join(__dirname, "..", "bin", name)
   return rel
 }
 

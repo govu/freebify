@@ -351,11 +351,12 @@
     <h2 class="rv">Get Freebify.<br><span>Keep the money.</span></h2>
     <div class="row rv d1">
       <a class="btn solid" id="dlBtn" href="https://github.com/govu/freebify/releases/latest/download/Freebify-setup.exe" target="_blank" rel="noopener">Download Freebify 1.0.15</a>
-      <a class="btn line" id="portableBtn" href="https://github.com/govu/freebify/releases/latest/download/Freebify-portable.exe" target="_blank" rel="noopener">Portable .exe</a>
+      <a class="btn line" id="altBtn" href="https://github.com/govu/freebify/releases/latest/download/Freebify-portable.exe" target="_blank" rel="noopener">Portable .exe</a>
     </div>
     <div class="note rv d2">
-      Free forever · Windows 10/11 · ~120 MB<b id="verMeta"> · v1.0.15</b> · updates itself
+      <span id="platNote">Free forever · Windows 10/11 · ~120 MB</span><b id="verMeta"> · v1.0.15</b> · updates itself
       <span id="dlCount" style="display:none"> · <b id="dlCountN"></b> downloads</span>
+      <span id="macNote" style="display:none"><br>macOS: unsigned app — right-click → Open the first time</span>
     </div>
   </div>
 </section>
@@ -571,6 +572,17 @@
   if (new URLSearchParams(location.search).has("vw")) document.title = `W${innerWidth}x${innerHeight} DPR${devicePixelRatio}`;
 
   /* ---------- release wiring ---------- */
+  const isMac = /mac/i.test(navigator.platform || "") || /mac os/i.test(navigator.userAgent);
+  const REL = "https://github.com/govu/freebify/releases/latest/download/";
+  if (isMac) {
+    // Apple Silicon is the sane default; Intel users get the x64 dmg as alt
+    document.getElementById("dlBtn").href = REL + "Freebify-arm64.dmg";
+    const alt = document.getElementById("altBtn");
+    alt.href = REL + "Freebify-x64.dmg";
+    alt.textContent = "Intel Mac";
+    document.getElementById("platNote").textContent = "Free forever · macOS 12+ · ~120 MB";
+    document.getElementById("macNote").style.display = "";
+  }
   const relCtl = new AbortController();
   setTimeout(() => relCtl.abort(), 8000);
   fetch("https://api.github.com/repos/govu/freebify/releases/latest", { cache: "no-store", signal: relCtl.signal })
@@ -579,13 +591,21 @@
       const v = rel.tag_name?.replace(/^v/, "") || "";
       const setup = rel.assets?.find(a => /setup\.exe$/i.test(a.name));
       const portable = rel.assets?.find(a => /portable\.exe$/i.test(a.name));
+      const dmgArm = rel.assets?.find(a => /arm64\.dmg$/i.test(a.name));
+      const dmgIntel = rel.assets?.find(a => /x64\.dmg$/i.test(a.name));
       if (v) {
         document.getElementById("verMeta").textContent = " · v" + v;
         document.getElementById("dlBtn").textContent = `Download Freebify ${v}`;
         const fv = document.getElementById("footVer"); if (fv) fv.textContent = ` · v${v}`;
       }
-      if (setup) document.getElementById("dlBtn").href = setup.browser_download_url;
-      if (portable) document.getElementById("portableBtn").href = portable.browser_download_url;
+      const dlBtn = document.getElementById("dlBtn"), altBtn = document.getElementById("altBtn");
+      if (isMac) {
+        if (dmgArm) dlBtn.href = dmgArm.browser_download_url;
+        if (dmgIntel) altBtn.href = dmgIntel.browser_download_url;
+      } else {
+        if (setup) dlBtn.href = setup.browser_download_url;
+        if (portable) altBtn.href = portable.browser_download_url;
+      }
       const dls = rel.assets?.reduce((n, a) => n + (a.download_count || 0), 0);
       if (dls >= 500) {
         document.getElementById("dlCount").style.display = "";

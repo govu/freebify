@@ -1,13 +1,16 @@
-// Downloads the yt-dlp.exe binary Freebify bundles for YouTube audio
+// Downloads the yt-dlp binary Freebify bundles for YouTube audio
 // resolution. Run once after cloning: `npm run fetch-bin`
-import { createWriteStream, mkdirSync, existsSync } from "node:fs"
+// Windows → yt-dlp.exe · macOS/Linux → yt-dlp (unix binary, chmod +x)
+import { createWriteStream, mkdirSync, existsSync, chmodSync } from "node:fs"
 import { get } from "node:https"
 
-const URL = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
-const DEST = new URL("../bin/yt-dlp.exe", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1")
+const isWin = process.platform === "win32"
+const NAME = isWin ? "yt-dlp.exe" : process.platform === "darwin" ? "yt-dlp_macos" : "yt-dlp"
+const URL = `https://github.com/yt-dlp/yt-dlp/releases/latest/download/${NAME}`
+const DEST = new URL(`../bin/${isWin ? "yt-dlp.exe" : "yt-dlp"}`, import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1")
 
 if (existsSync(DEST)) {
-  console.log("[fetch-bin] bin/yt-dlp.exe already exists — skipping")
+  console.log(`[fetch-bin] ${DEST} already exists — skipping`)
   process.exit(0)
 }
 
@@ -26,6 +29,7 @@ const download = (url, redirects = 5) =>
     }).on("error", reject)
   })
 
-console.log("[fetch-bin] downloading yt-dlp.exe …")
+console.log(`[fetch-bin] downloading ${NAME} …`)
 await download(URL)
+if (!isWin) chmodSync(DEST, 0o755)
 console.log(`[fetch-bin] saved to ${DEST}`)

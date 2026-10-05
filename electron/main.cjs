@@ -104,15 +104,20 @@ function buildTrayMenu() {
 }
 
 function createTray() {
-  if (tray) return
-  tray = new Tray(thumbIcon("tray.png"))
+  // no tray on macOS — the Dock covers show/quit and the thumbar icon set
+  // isn't even shipped there (new Tray() with an empty image throws)
+  if (tray || process.platform === "darwin") return
+  const icon = thumbIcon("tray.png")
+  if (icon.isEmpty()) return
+  tray = new Tray(icon)
   tray.setToolTip("Freebify")
   buildTrayMenu()
   tray.on("click", showWindow)
 }
 
 function refreshThumbar(win) {
-  if (!win || win.isDestroyed()) return
+  // Windows-only API — on macOS the icons aren't even shipped
+  if (process.platform !== "win32" || !win || win.isDestroyed()) return
   const send = (cmd) => () => {
     if (!win.isDestroyed()) win.webContents.send("player:cmd", cmd)
   }
@@ -247,6 +252,36 @@ if (!gotLock) {
   app.whenReady().then(() => {
     app.setName("Freebify")
     logLine("info", `Freebify ${app.getVersion()} starting (electron ${process.versions.electron}, ${process.platform})`)
+
+    // macOS needs an application menu or Cmd+Q/C/V/accelerators are all dead
+    if (process.platform === "darwin") {
+      Menu.setApplicationMenu(
+        Menu.buildFromTemplate([
+          {
+            label: "Freebify",
+            submenu: [
+              { role: "about" },
+              { type: "separator" },
+              { role: "hide" },
+              { role: "hideOthers" },
+              { role: "unhide" },
+              { type: "separator" },
+              { label: "Quit Freebify", accelerator: "Cmd+Q", click: quit },
+            ],
+          },
+          { role: "editMenu" },
+          {
+            label: "Window",
+            submenu: [
+              { role: "minimize" },
+              { role: "zoom" },
+              { type: "separator" },
+              { label: "Show Freebify", click: showWindow },
+            ],
+          },
+        ])
+      )
+    }
     youtube.register(ipcMain)
     downloads.register(ipcMain)
     handleDeepLink(process.argv)
@@ -352,7 +387,7 @@ if (!gotLock) {
         refreshThumbar(win)
       }
       const tip = title ? `${title} — ${artist || "Freebify"}` : "Freebify"
-      win.setThumbnailToolTip(tip)
+      if (process.platform === "win32") win.setThumbnailToolTip(tip)
       tray?.setToolTip(tip)
       // no taskbar progress fill — a bar under the icon reads as a download
       // indicator, not a media progress bar
@@ -495,8 +530,12 @@ function createWindow() {
     // alive, so thumbar repaints keep working.
     if (!allowQuit && !isDev) {
       e.preventDefault()
-      win.minimize()
-      win.setSkipTaskbar(true)
+      // mac convention: X hides the window, app keeps living in the Dock
+      if (process.platform === "darwin") win.hide()
+      else {
+        win.minimize()
+        win.setSkipTaskbar(true)
+      }
     }
   })
 
@@ -575,3 +614,6 @@ function createWindow() {
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit()
 })
+
+// macOS: clicking the Dock icon after X-hiding the window must restore it
+app.on("activate", showWindow)

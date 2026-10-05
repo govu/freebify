@@ -1,7 +1,7 @@
 {
   "name": "freebify",
   "private": true,
-  "version": "1.0.15",
+  "version": "1.0.16",
   "description": "Freebify — free music streaming. No ads, no subscriptions.",
   "license": "GPL-3.0-only",
   "type": "module",
@@ -56,22 +56,45 @@
       "electron/**/*",
       "package.json"
     ],
-    "extraResources": [
-      {
-        "from": "bin/yt-dlp.exe",
-        "to": "bin/yt-dlp.exe"
-      },
-      {
-        "from": "resources/thumbar",
-        "to": "thumbar"
-      }
-    ],
     "win": {
       "target": [
         "portable",
         "nsis"
       ],
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "extraResources": [
+        {
+          "from": "bin/yt-dlp.exe",
+          "to": "bin/yt-dlp.exe"
+        },
+        {
+          "from": "resources/thumbar",
+          "to": "thumbar"
+        }
+      ]
+    },
+    "mac": {
+      "category": "public.app-category.music",
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "extraResources": [
+        {
+          "from": "bin/yt-dlp",
+          "to": "bin/yt-dlp"
+        }
+      ]
+    },
+    "dmg": {
+      "artifactName": "Freebify-${arch}.dmg"
     },
     "portable": {
       "artifactName": "Freebify-portable.exe"
