@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Freebify — All the music. None of the ads.</title>
+<title>Freebify · All the music. None of the ads.</title>
 <meta name="description" content="Freebify is a free, open-source desktop music player. Original studio recordings, live synced lyrics, zero ads. For Windows.">
-<meta property="og:title" content="Freebify — All the music. None of the ads.">
+<meta property="og:title" content="Freebify · All the music. None of the ads.">
 <meta property="og:description" content="Free music player for Windows. Original recordings, synced lyrics, zero ads.">
 <meta property="og:image" content="https://govu.github.io/freebify/shots/home.png">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -108,10 +108,11 @@
     display: inline-flex; align-items: center; gap: 9px; text-decoration: none;
     font-size: 15px; font-weight: 600;
     padding: 15px 30px; border-radius: 999px;
-    transition: transform .35s var(--ease), background .2s, color .2s, border-color .2s;
+    transition: transform .35s var(--ease), background .2s, color .2s, border-color .2s, box-shadow .35s var(--ease);
   }
   .btn.solid { background: var(--ink); color: #0a0a0a; }
-  .btn.solid:hover { background: #fff; transform: translateY(-2px); }
+  .btn.solid:hover { background: #fff; transform: translateY(-2px); box-shadow: 0 10px 40px rgba(255,255,255,.14); }
+  .btn.solid:active { transform: translateY(0); transition-duration: .1s; }
   .btn.line { border: 1px solid #2e2e2e; color: var(--dim); }
   .btn.line:hover { border-color: #4a4a4a; color: var(--ink); transform: translateY(-2px); }
 
@@ -298,30 +299,30 @@
     <span class="row"><span><span class="swap" id="swapW" aria-hidden="true">ads.</span></span></span>
   </h1>
   <div class="hero-sub">
-    <p>Freebify is a desktop music player that streams <b>original studio recordings</b> — no ads between songs, no subscriptions, no account. Just the music.</p>
+    <p>Freebify is a desktop music player that streams <b>original studio recordings</b>: no ads between songs, no subscriptions, no account. Just the music.</p>
     <div class="cta-row">
       <a class="btn solid" href="#get" data-scroll>Download for Windows</a>
       <a class="btn line" href="https://github.com/govu/freebify" target="_blank" rel="noopener">GitHub ↗</a>
     </div>
   </div>
   <div class="hero-visual">
-    <div class="frame"><img src="shots/home.png" alt="Freebify — home" id="heroImg"><div class="fade"></div></div>
+    <div class="frame"><img src="shots/home.png" alt="Freebify home" id="heroImg"><div class="fade"></div></div>
   </div>
 </header>
 
 <section class="manifesto" id="manifesto">
-  <p id="maniText">Streaming made music free, then charged you in ads. <em>Freebify removes the business model and keeps the player</em> — every search returns the real studio version, every transition is instant, and nothing ever interrupts a song.</p>
+  <p id="maniText">Streaming made music free, then charged you in ads. <em>Freebify removes the business model and keeps the player</em>. Every search returns the real studio version, every transition is instant, and nothing ever interrupts a song.</p>
 </section>
 
 <section class="feats" id="features">
   <h2 class="rv">Everything inside.</h2>
-  <div class="feat-row rv"><span class="t">Original recordings</span><span class="d">Search returns the real studio release — not a slowed edit, a sped-up rip or a cover with the same title.</span><span class="arr">→</span></div>
+  <div class="feat-row rv"><span class="t">Original recordings</span><span class="d">Search returns the real studio release, not a slowed edit, a sped-up rip or a cover with the same title.</span><span class="arr">→</span></div>
   <div class="feat-row rv"><span class="t">Zero ads</span><span class="d">No audio interruptions, no banners, no “go premium” nags. The player plays. That’s the deal.</span><span class="arr">→</span></div>
   <div class="feat-row rv"><span class="t">Live synced lyrics</span><span class="d">Line-by-line karaoke that follows the song, auto-calibrated to the exact version you’re hearing.</span><span class="arr">→</span></div>
-  <div class="feat-row rv"><span class="t">Genre radio</span><span class="d">Start a radio from any track and the queue stays on-vibe — the same sound, not the same song rehashed.</span><span class="arr">→</span></div>
-  <div class="feat-row rv"><span class="t">Discord presence</span><span class="d">Your status shows the song, the artist, the artwork and live progress — like the big players do.</span><span class="arr">→</span></div>
+  <div class="feat-row rv"><span class="t">Genre radio</span><span class="d">Start a radio from any track and the queue stays on-vibe: the same sound, not the same song rehashed.</span><span class="arr">→</span></div>
+  <div class="feat-row rv"><span class="t">Discord presence</span><span class="d">Your status shows the song, the artist, the artwork and live progress, like the big players do.</span><span class="arr">→</span></div>
   <div class="feat-row rv"><span class="t">Silent auto-updates</span><span class="d">New versions download in the background and install when you quit. You never manage the app.</span><span class="arr">→</span></div>
-  <div class="feat-row rv"><span class="t">Your library</span><span class="d">Likes, playlists, queue and history — stored locally on your machine, not our servers.</span><span class="arr">→</span></div>
+  <div class="feat-row rv"><span class="t">Your library</span><span class="d">Likes, playlists, queue and history, stored locally on your machine, not our servers.</span><span class="arr">→</span></div>
   <div class="feat-row rv"><span class="t">No account</span><span class="d">Install and press play. No email, no login, no trial clock. That’s the entire signup flow.</span><span class="arr">→</span></div>
 </section>
 
@@ -329,9 +330,9 @@
   <div class="gal-inner">
     <div class="gal-left">
       <div class="gal-steps" id="galSteps">
-        <div class="gal-step"><h3>Pick up where<br>you left off</h3><div class="c">Recently played, weekly charts and editorial picks — the moment you open the app.</div></div>
+        <div class="gal-step"><h3>Pick up where<br>you left off</h3><div class="c">Recently played, weekly charts and editorial picks, the moment you open the app.</div></div>
         <div class="gal-step"><h3>Lyrics that keep<br>the tempo</h3><div class="c">Line-synced karaoke that follows the song. Tap any line to jump to it.</div></div>
-        <div class="gal-step"><h3>Find it in<br>three letters</h3><div class="c">Songs, artists, albums and playlists — ranked the way you'd expect.</div></div>
+        <div class="gal-step"><h3>Find it in<br>three letters</h3><div class="c">Songs, artists, albums and playlists, ranked the way you'd expect.</div></div>
         <div class="gal-step"><h3>Every artist,<br>properly profiled</h3><div class="c">Top tracks, monthly listeners and full discographies.</div></div>
       </div>
     </div>
@@ -357,7 +358,7 @@
     <div class="note rv d2">
       <span id="platNote">Free forever · Windows 10/11 · ~120 MB</span><b id="verMeta"> · v1.0.17</b><span id="updNote"> · updates itself</span>
       <span id="dlCount" style="display:none"> · <b id="dlCountN"></b> downloads</span>
-      <span id="macNote" style="display:none"><br>macOS: unsigned app — right-click → Open on first launch. Updates don't auto-install on Mac (sorry for the extra step) — new versions get downloaded manually from right here.</span>
+      <span id="macNote" style="display:none"><br>macOS: unsigned app: right-click → Open on first launch. Updates don't auto-install on Mac (sorry for the extra step). New versions get downloaded manually from right here.</span>
     </div>
   </div>
 </section>
@@ -374,7 +375,7 @@
     <h2>FREEBIFY</h2>
   </div>
   <div class="foot">
-    <span class="l">© 2026 Freebify — free software, free music.<span id="footVer"> · v1.0.17</span></span>
+    <span class="l">© 2026 Freebify · free software, free music.<span id="footVer"> · v1.0.17</span></span>
     <div class="r">
       <a href="https://github.com/govu/freebify" target="_blank" rel="noopener">GitHub</a>
       <a href="https://github.com/govu/freebify/releases" target="_blank" rel="noopener">Releases</a>
@@ -384,7 +385,7 @@
       <a href="https://github.com/govu/freebify/blob/main/PRIVACY.md" target="_blank" rel="noopener">Privacy</a>
     </div>
   </div>
-  <p class="legal">Freebify is an independent, non-commercial open-source project (GPL-3.0). It is a media player, not a music service: it hosts, stores, uploads and sells nothing. All audio, metadata and artwork are requested by the user's own device, directly from the third-party platforms that serve them (YouTube / YouTube Music and the public Audius API), under those platforms' own terms — the software itself contains no copyrighted material. Not affiliated with, endorsed by, or sponsored by Spotify, YouTube, Google, Audius, or any label or rights holder; all trademarks belong to their respective owners. Intended for personal, non-commercial use — responsibility for complying with each platform's terms and local law rests with the user. Provided "as is", without warranty; the authors accept no liability for how the software is used.</p>
+  <p class="legal">Freebify is an independent, non-commercial open-source project (GPL-3.0). It is a media player, not a music service: it hosts, stores, uploads and sells nothing. All audio, metadata and artwork are requested by the user's own device, directly from the third-party platforms that serve them (YouTube / YouTube Music and the public Audius API), under those platforms' own terms; the software itself contains no copyrighted material. Not affiliated with, endorsed by, or sponsored by Spotify, YouTube, Google, Audius, or any label or rights holder; all trademarks belong to their respective owners. Intended for personal, non-commercial use; responsibility for complying with each platform's terms and local law rests with the user. Provided "as is", without warranty; the authors accept no liability for how the software is used.</p>
 </footer>
 
 <script src="https://unpkg.com/lenis@1.3.11/dist/lenis.min.js"></script>
@@ -523,17 +524,6 @@
     document.fonts?.ready.then(() => ScrollTrigger.refresh());
   }
 
-  /* ---------- magnetic buttons (fine pointers only) ---------- */
-  if (!reduced && matchMedia("(pointer:fine)").matches) {
-    document.querySelectorAll(".btn.solid").forEach(btn => {
-      btn.addEventListener("mousemove", e => {
-        const r = btn.getBoundingClientRect();
-        btn.style.transform = `translate(${(e.clientX - r.left - r.width / 2) * 0.2}px, ${(e.clientY - r.top - r.height / 2) * 0.3}px)`;
-      });
-      btn.addEventListener("mouseleave", () => (btn.style.transform = ""));
-    });
-  }
-
   /* ---------- hero screenshot tilt ---------- */
   const frame = document.querySelector(".hero-visual .frame");
   if (!reduced && matchMedia("(pointer:fine)").matches && frame) {
@@ -587,7 +577,7 @@
     document.getElementById("platNote").textContent = "Free forever · Linux · ~120 MB";
     document.getElementById("updNote").style.display = "none";
     document.getElementById("macNote").style.display = "";
-    document.getElementById("macNote").innerHTML = "<br>AppImage: mark it executable (<i>chmod +x</i>) before the first run — it updates itself after that.";
+    document.getElementById("macNote").innerHTML = "<br>AppImage: mark it executable (<i>chmod +x</i>) before the first run, then it updates itself after that.";
   } else if (isMac) {
     // Apple Silicon is the sane default; Intel users get the x64 dmg as alt
     document.getElementById("dlBtn").href = REL + "Freebify-arm64.dmg";
