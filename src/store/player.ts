@@ -2,7 +2,7 @@ import { create } from "zustand"
 import { rotateHost, streamUrl } from "../api/audius"
 import { prefetchStream, yt } from "../api/youtube"
 import { ytEngine } from "../api/ytplayer"
-import { attach, detach, fadeTo, mkAudio, resume, rmsOf, busAvailable, setEq as busSetEq, setNormGain } from "../api/audiobus"
+import { attach, detach, fadeTo, fadeCurve, mkAudio, resume, rmsOf, busAvailable, setEq as busSetEq, setNormGain } from "../api/audiobus"
 import type { RepeatMode, Track } from "../api/types"
 import { useLibrary } from "./library"
 import { useDownloads } from "./downloads"
@@ -25,20 +25,56 @@ function dropPrebuffer() {
 }
 
 // promote the prebuffered element to the live one — the buffer/network
-// state comes along, so play() starts in <100ms
-function adoptAudio(el: HTMLAudioElement) {
+// Elements being faded out live here until their curve lands — a hard
+// pause mid-ramp chops the tail and pops. retireAudio() lets the
+// scheduled AudioParam curve die naturally, then tears the element down.
+const retiring = new Set<HTMLAudioElement>()
+let fadeEndsAt = 0 // wall-clock when the longest scheduled fade-out lands
+
+function retireAudio(el: HTMLAudioElement, midFade = false, tailSecs = 0.3) {
+  if (!el || retiring.has(el)) return
+  retiring.add(el)
+  // midFade: its cos curve is already running to zero — re-ramping would
+  // double-fade it; just wait for the scheduled landing, then tear down.
+  if (!midFade && busAvailable) {
+    try {
+      attach(el)
+      fadeCurve(el, 0, tailSecs)
+    } catch { /* detached/empty element — kill handles it */ }
+  }
+  const wait = midFade
+    ? Math.max(0, fadeEndsAt - Date.now()) + 150
+    : tailSecs * 1000 + 120
+  setTimeout(() => {
+    try {
+      el.pause()
+      el.removeAttribute("src")
+      el.load()
+    } catch { /* element already gone */ }
+    detach(el)
+    retiring.delete(el)
+  }, Math.max(80, wait))
+}
+
+// state comes along, so play() starts in <100ms. `keepRamp` = the element
+// is mid fade-in curve — leave the sine arc to land at 1; snapping it
+// open is the audible "jump" crossfades get wrong.
+function adoptAudio(el: HTMLAudioElement, keepRamp = false) {
   const s = usePlayer.getState()
   const old = audio
-  old.pause()
-  old.removeAttribute("src")
-  old.load()
-  detach(old) // bus port released — the element is being discarded
+  // keepRamp means old is the element mid fade-out — its curve is
+  // scheduled; we just wait for it to land instead of cutting the tail
+  retireAudio(old, keepRamp)
   bindAudio(el)
   audio = el
   audio.volume = Math.min(1, Math.max(0, s.volume))
   audio.muted = s.muted
-  // a crossfade-in element may still be mid-ramp — snap it open
-  if (busAvailable) fadeTo(el, 1, 0.1)
+  if (busAvailable && !keepRamp) fadeTo(el, 1, 0.1)
+  // the adopted element was already playing through its fade-in, so its
+  // "playing"/"canplay" events fired while still gated (a !== audio) —
+  // without this, a `waiting` blip on the outgoing element would leave
+  // the transport spinner stuck on forever
+  if (!el.paused) usePlayer.setState({ buffering: false, isPlaying: true })
 }
 
 interface PlayerState {
@@ -169,9 +205,18 @@ function disarmWatchdog() {
 let stallTimer: number | null = null
 function armStall() {
   if (stallTimer) clearTimeout(stallTimer)
+  const mark = usePlayer.getState().currentTime
   stallTimer = window.setTimeout(() => {
     const s = usePlayer.getState()
-    if (s.buffering && s.isPlaying) failAdvance()
+    if (!(s.buffering && s.isPlaying)) return
+    // the playback clock is still moving — the buffering flag got stuck
+    // (a gated event cleared nothing), not the audio. Clearing it beats
+    // failAdvance() killing a track the user is happily listening to
+    if (s.currentTime > mark + 0.5) {
+      usePlayer.setState({ buffering: false })
+      return
+    }
+    failAdvance()
   }, 20000)
 }
 function disarmStall() {
@@ -239,6 +284,18 @@ function prefetchNextTrack() {
           dropPrebuffer()
           const el = mkAudio(url)
           el.preload = "auto"
+          // a dead stream URL must not sit here invisibly — flush it from
+          // the stream cache and rebuild once, so the boundary gets either
+          // a healthy buffer or a fresh resolve instead of the corpse
+          el.addEventListener("error", () => {
+            if (prebuffer?.el !== el) return
+            dropPrebuffer()
+            if (first.streamId) void yt.invalidate?.(first.streamId).catch(() => null)
+            if (prebufferFailedFor !== first.id) {
+              prebufferFailedFor = first.id
+              setTimeout(() => prefetchNextTrack(), 4000)
+            }
+          }, { once: true })
           el.load()
           prebuffer = { id: first.id, el }
         })
@@ -341,21 +398,49 @@ export const usePlayer = create<PlayerState>()(
         const seq = ++loadSeq
         racingSeq = 0
         loadPendingSeq = seq
-        // an in-flight crossfade is resolved by this load — keep the
-        // incoming element only if it's the track we're adopting
-        cancelCrossfade(prebuffer?.id === track.id ? prebuffer.el : undefined)
+        // an in-flight crossfade is resolved by this load — if we're
+        // adopting the element that's mid fade-in, BOTH scheduled curves
+        // must keep running (outgoing dies to zero, incoming climbs to 1)
+        const adopting = Boolean(
+          busAvailable && prebuffer && prebuffer.el === incomingEl && prebuffer.id === track.id
+        )
+        cancelCrossfade(prebuffer?.id === track.id ? prebuffer.el : undefined, adopting)
         // stop BOTH engines immediately — the previous track must not keep
-        // sounding while the next one resolves
+        // sounding while the next one resolves. NOT on adopt: `audio` is
+        // the fading element; retireAudio lets its tail die on schedule.
         ytEngine.stop()
-        audio.pause()
-        if (busAvailable) fadeTo(audio, 1, 0) // reset out-fade before reuse
-        audio.removeAttribute("src")
-        audio.load() // fully reset the media element — drops stale network/decode state
+        if (!adopting) {
+          audio.pause()
+          if (busAvailable) fadeTo(audio, 1, 0) // reset out-fade before reuse
+          audio.removeAttribute("src")
+          audio.load() // fully reset the media element — drops stale network/decode state
+        }
         // isPlaying MUST reset here: a stopped iframe emits no events and
         // the audio 'pause' is gated out — leaving it true kills the
-        // watchdog and misreports state while buffering
-        set({ index, current: track, isPlaying: false, currentTime: startPos, duration: track.duration ?? 0, buffering: true })
+        // watchdog and misreports state while buffering. EXCEPT on adopt:
+        // the incoming element is already audible — flipping isPlaying
+        // for ~100ms is the "play button while music plays" flicker.
+        set({
+          index, current: track,
+          isPlaying: adopting,
+          currentTime: adopting ? prebuffer?.el.currentTime ?? 0 : startPos,
+          duration: track.duration ?? 0,
+          buffering: !adopting,
+        })
         armWatchdog(seq)
+        // mid-fade adoption: the element already owns the stream and its
+        // sine arc — no re-resolve, no iframe race, no double audio
+        if (adopting && prebuffer) {
+          engine = "audio"
+          audioLoadSeq = seq
+          adoptAudio(prebuffer.el, true)
+          prebuffer = null
+          useLibrary.getState().addRecent(track)
+          applyLoudness(track)
+          updateMediaSession(track)
+          prefetchNextTrack()
+          return
+        }
         if (track.source === "yt" && track.streamId && !useDownloads.getState().items[track.id]) {
           // Race: pure audio (yt-dlp, zero ads) vs hidden iframe (instant start).
           // Whichever plays first wins; if the url arrives first the iframe is
@@ -387,7 +472,7 @@ export const usePlayer = create<PlayerState>()(
             ytEngine.stop()
             if (prebuffer?.id === track.id && !prebuffer.el.error) {
               // the upcoming element was already buffering — instant start
-              adoptAudio(prebuffer.el)
+              adoptAudio(prebuffer.el, adopting)
               prebuffer = null
             } else {
               dropPrebuffer()
@@ -442,6 +527,9 @@ export const usePlayer = create<PlayerState>()(
         useLibrary.getState().addRecent(track)
         applyLoudness(track)
         updateMediaSession(track)
+        // an adopted mid-fade element never re-fires 'playing' — without
+        // this the NEXT transition would have no prebuffer and hard-cut
+        prefetchNextTrack()
       }
       loadAtRef = loadAt
 
@@ -550,8 +638,26 @@ export const usePlayer = create<PlayerState>()(
             else void loadAt(index) // dead/stopped player — reload, don't ghost-play
           } else if (isPlaying) {
             cancelCrossfade() // a paused fade must not keep playing the next track
-            audio.pause()
-          } else void audio.play().catch(() => {})
+            // dip, don't cut: 220ms fade-out then pause. UI flips to
+            // "paused" instantly; the sound eases out underneath
+            pauseRequested = true
+            set({ isPlaying: false })
+            if (busAvailable && audio.src) {
+              const el = audio
+              fadeCurve(el, 0, 0.22)
+              setTimeout(() => {
+                pauseRequested = false
+                // a resume during the dip must win — el stays put
+                if (el === audio && !usePlayer.getState().isPlaying) el.pause()
+              }, 260)
+            } else audio.pause()
+          } else {
+            pauseRequested = false
+            void audio.play().catch(() => {})
+            // if the element just dipped out (gain ≈ 0), climb back in —
+            // no-op for elements already at full gain
+            if (busAvailable) fadeCurve(audio, 1, 0.15)
+          }
         },
 
         next: (auto = false) => {
@@ -577,6 +683,9 @@ export const usePlayer = create<PlayerState>()(
             if (repeat === "all") nextIndex = 0
             else if (!auto) return // manual next on the last track — nothing after
             else {
+              // queue ran out mid-fade — tear down the overlap cleanly
+              // instead of leaving a playing orphan element
+              cancelCrossfade()
               set({ isPlaying: false, buffering: false })
               if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused"
               return
@@ -616,6 +725,7 @@ export const usePlayer = create<PlayerState>()(
             saveResume()
             return
           }
+          if (incomingEl) cancelCrossfade() // scrubbing mid-fade — snap back, the outgoing track is the one being moved
           if (engine === "yt") ytEngine.seek(clamped)
           else audio.currentTime = clamped
           set({ currentTime: clamped })
@@ -909,23 +1019,42 @@ usePlayer.subscribe((s, prev) => {
 let fadeTimer: ReturnType<typeof setTimeout> | null = null
 let incomingEl: HTMLAudioElement | null = null
 let fadingEl: HTMLAudioElement | null = null
+// set while the pause dip is draining — 'ended' inside that window is the
+// track dying, not an advance request
+let pauseRequested = false
+// one prebuffer rebuild per track id — a persistent bad host shouldn't
+// spin a resolve/error loop forever
+let prebufferFailedFor: string | null = null
 
-function cancelCrossfade(keep?: HTMLAudioElement) {
+function cancelCrossfade(keep?: HTMLAudioElement, adopt = false) {
   if (fadeTimer) {
     clearTimeout(fadeTimer)
     fadeTimer = null
   }
   if (incomingEl) {
     if (incomingEl === keep) {
-      fadeTo(incomingEl, 1, 0.1)
+      // adopt: the sine curve is still climbing to 1 — hands off. Any
+      // other keep (resume after pause) needs the snap-open.
+      if (!adopt) fadeTo(incomingEl, 1, 0.1)
     } else {
-      // stays usable as a prebuffer — back to zero, silent gain reset
-      incomingEl.pause()
-      try { incomingEl.currentTime = 0 } catch { /* metadata may not be in yet */ }
-      fadeTo(incomingEl, 1, 0)
+      // stays usable as a prebuffer — but if it was mid fade-in it's
+      // audibly up; pausing hard pops. Ease it silent first, then reset.
+      const el = incomingEl
+      if (busAvailable) fadeCurve(el, 0, 0.2)
+      setTimeout(() => {
+        // reborn inside the window — adopted as live or re-faded — leave it
+        if (el === incomingEl || el === audio) return
+        try {
+          el.pause()
+          el.currentTime = 0
+        } catch { /* metadata may not be in yet */ }
+        fadeTo(el, 1, 0)
+      }, 220)
     }
   }
-  if (fadingEl && fadingEl === audio) fadeTo(audio, 1, 0.12)
+  // adopt: the outgoing's cos curve keeps running to zero — restoring it
+  // to 1 would pop it back to full volume for the rest of the fade
+  if (fadingEl && fadingEl === audio && !adopt) fadeTo(audio, 1, 0.12)
   fadingEl = null
   incomingEl = null
 }
@@ -933,21 +1062,46 @@ function cancelCrossfade(keep?: HTMLAudioElement) {
 function startCrossfade(secs: number) {
   if (!prebuffer || !busAvailable) return
   const nxt = prebuffer.el
+  // HAVE_FUTURE_DATA: fading into an element that can't produce samples
+  // yet is just a silent dip, not a crossfade — let the natural 'ended'
+  // handoff take it instead
+  if (nxt.error) {
+    dropPrebuffer()
+    return
+  }
+  if (nxt.readyState < 3) return
+  const s = usePlayer.getState()
   incomingEl = nxt
   fadingEl = audio
   attach(nxt)
   nxt.volume = audio.volume
   nxt.muted = audio.muted
+  // the incoming track's own measured loudness — both sides of the fade
+  // are already leveled, so the blend never swells or sinks
+  const ndb = loudFor(prebuffer.id)
+  if (ndb !== undefined && s.normOn) setNormGain(nxt, 10 ** (ndb / 20))
   fadeTo(nxt, 0, 0)
   void nxt.play().catch(() => cancelCrossfade(nxt))
-  fadeTo(nxt, 1, secs)
-  fadeTo(audio, 0, secs)
+  // equal-power arcs: power sums to ~1 through the midpoint — no dip,
+  // no sudden jump at either end (d(sin)/dx → 0 as x → 1)
+  fadeCurve(nxt, 1, secs)
+  fadeCurve(audio, 0, secs)
+  fadeEndsAt = Date.now() + secs * 1000
+  // hand over at ~55% — the incoming dominates the mix from there on, so
+  // the UI flips (title, progress, controls) while the outgoing tail is
+  // still audibly dying underneath. Waiting for 100% made the bar show a
+  // dead track while a different song was already the one you hear.
   fadeTimer = setTimeout(() => {
     fadeTimer = null
-    incomingEl = null
-    fadingEl = null
+    // keep incomingEl/fadingEl set — next(true) → loadAt reads incomingEl
+    // to adopt the element while its sine curve is still climbing, and to
+    // let the outgoing cos tail die on schedule instead of pausing mid-ramp
     usePlayer.getState().next(true)
-  }, secs * 1000 + 120)
+    // if nothing adopted them (e.g. queue ended), don't leak ghost elements
+    setTimeout(() => {
+      if (incomingEl || fadingEl) cancelCrossfade()
+    }, Math.max(0, fadeEndsAt - Date.now()) + 400)
+  }, secs * 550)
 }
 
 // ---- per-track loudness -------------------------------------------------
@@ -989,18 +1143,20 @@ function stopLoudnessMeter() {
 }
 
 // Apply the stored gain immediately, or start measuring. Called once the
-// audio engine owns playback for a track.
+// audio engine owns playback for a track. The gain lives ON the element's
+// port — a crossfade keeps each song at its own normalized level.
 function applyLoudness(track: Track) {
   stopLoudnessMeter()
   if (!busAvailable) return
+  const el = audio
   const stored = loudFor(track.id)
+  const want = usePlayer.getState().normOn
   if (stored !== undefined) {
-    setNormGain(10 ** (stored / 20))
+    setNormGain(el, want ? 10 ** (stored / 20) : 1)
     return
   }
-  setNormGain(1)
-  if (!usePlayer.getState().normOn) return
-  const el = audio
+  setNormGain(el, 1)
+  if (!want) return
   let acc = 0
   let n = 0
   meterTimer = setInterval(() => {
@@ -1014,7 +1170,9 @@ function applyLoudness(track: Track) {
     if (n >= 20) {
       const db = Math.max(-9, Math.min(14, TARGET_RMS_DB - 20 * Math.log10(acc / n)))
       loudSave(track.id, db)
-      setNormGain(10 ** (db / 20))
+      // the element may have been adopted into a fade meanwhile — apply to
+      // whichever port this element still owns
+      setNormGain(el, usePlayer.getState().normOn ? 10 ** (db / 20) : 1)
       stopLoudnessMeter()
     }
   }, 400)
@@ -1052,6 +1210,9 @@ function bindAudio(a: HTMLAudioElement): HTMLAudioElement {
   })
   on("waiting", () => {
     if (engine !== "audio") return
+    // a stall on the element being faded OUT isn't user-visible — the
+    // incoming track is already covering it; don't flash the spinner
+    if (a === fadingEl) return
     usePlayer.setState({ buffering: true })
     armStall()
   })
@@ -1086,6 +1247,9 @@ function bindAudio(a: HTMLAudioElement): HTMLAudioElement {
       engine === "audio" &&
       a === audio &&
       Number.isFinite(a.duration) &&
+      // a fade longer than the track itself would kick in at second 0 —
+      // cap the window so crossfade always means "the last N seconds"
+      a.duration > secs + 2 &&
       a.duration - a.currentTime > 0.5 &&
       a.duration - a.currentTime <= secs &&
       prebuffer?.id === st.queue[st.index + 1]?.id
@@ -1098,10 +1262,25 @@ function bindAudio(a: HTMLAudioElement): HTMLAudioElement {
       usePlayer.setState({ duration: a.duration })
   })
   on("ended", () => {
-    if (engine === "audio" && audioLoadSeq === loadSeq) usePlayer.getState().next(true)
+    // the fade timer already scheduled the advance — an 'ended' landing on
+    // top would count as a SECOND next
+    if (engine !== "audio" || audioLoadSeq !== loadSeq || a === fadingEl) return
+    // user just hit pause — the dip keeps the element live ~260ms, and if it
+    // reaches the end inside that window the stray advance would ghost-play.
+    // NOT isPlaying-based: Chrome fires 'pause' before 'ended', so isPlaying
+    // is always false here — gating on it kills every natural advance.
+    if (pauseRequested) {
+      pauseRequested = false
+      return
+    }
+    usePlayer.getState().next(true)
   })
   on("error", () => {
     if (engine !== "audio" || audioLoadSeq !== loadSeq) return
+    // a dying element mid-crossfade may error from the pause/reset dance —
+    // the incoming track already owns the listener's ears; retrying this
+    // element (or failAdvance) would double-skip
+    if (a === fadingEl) return
     const s = usePlayer.getState()
     if (streamRetries < 1 && s.current) {
       // stream hiccup — rotate host / re-resolve and retry the same track once
@@ -1207,7 +1386,23 @@ export function applyVolume(v: number) {
 }
 
 // expose store for debugging / e2e verification
-if (typeof window !== "undefined") (window as unknown as Record<string, unknown>).__player = usePlayer
+if (typeof window !== "undefined") {
+  const w = window as unknown as Record<string, unknown>
+  w.__player = usePlayer
+  if (import.meta.env.DEV)
+    w.__fade = () => ({
+      incoming: incomingEl
+        ? { t: incomingEl.currentTime, paused: incomingEl.paused, rs: incomingEl.readyState }
+        : null,
+      fading: fadingEl ? { t: fadingEl.currentTime, paused: fadingEl.paused } : null,
+      prebuffer: prebuffer
+        ? { id: prebuffer.id, rs: prebuffer.el.readyState, err: !!prebuffer.el.error, t: prebuffer.el.currentTime }
+        : null,
+      timer: fadeTimer !== null,
+      retiring: retiring.size,
+      engine,
+    })
+}
 
 // restore persisted audio settings on boot
 {

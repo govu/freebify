@@ -15,6 +15,11 @@ interface DownloadsState {
   items: Record<string, DlItem>
   // in-flight downloads — id → 0-99 (entries vanish on done/error)
   progress: Record<string, number>
+  // track metadata for in-flight rows — the manifest only knows finished
+  // downloads, so without this a queued job renders as a raw "yt-…" id
+  pendingTracks: Record<string, Track>
+  // ids sitting in the main-process queue (not yet started)
+  queued: Record<string, true>
   refresh: () => Promise<void>
   start: (t: Track) => Promise<void>
   startAll: (tracks: Track[]) => Promise<number>
@@ -29,6 +34,8 @@ const bridge = () => window.freebify?.dl ?? null
 export const useDownloads = create<DownloadsState>()((set, get) => ({
   items: {},
   progress: {},
+  pendingTracks: {},
+  queued: {},
 
   refresh: async () => {
     const b = bridge()
@@ -49,24 +56,19 @@ export const useDownloads = create<DownloadsState>()((set, get) => ({
     const b = bridge()
     if (!b) return
     const s = get()
-    if (s.items[t.id] || s.progress[t.id] !== undefined) return
-    set((st) => ({ progress: { ...st.progress, [t.id]: 0 } }))
+    if (s.items[t.id] || s.progress[t.id] !== undefined || s.queued[t.id]) return
+    set((st) => ({
+      pendingTracks: { ...st.pendingTracks, [t.id]: slimTrack(t) },
+      queued: { ...st.queued, [t.id]: true },
+    }))
     // Audius streams need their resolved URL up front — the yt path only
     // needs the videoId (yt-dlp handles the rest)
     const url = t.source === "yt" ? undefined : streamUrl(t.id)
     try {
       const ok = await b.start({ id: t.id, source: t.source, streamId: t.streamId, url, track: slimTrack(t) })
-      if (ok === false) set((st) => {
-        const progress = { ...st.progress }
-        delete progress[t.id]
-        return { progress }
-      })
+      if (ok === false) cleanup(t.id)
     } catch {
-      set((st) => {
-        const progress = { ...st.progress }
-        delete progress[t.id]
-        return { progress }
-      })
+      cleanup(t.id)
     }
   },
 
@@ -84,9 +86,13 @@ export const useDownloads = create<DownloadsState>()((set, get) => ({
     set((st) => {
       const items = { ...st.items }
       const progress = { ...st.progress }
+      const pendingTracks = { ...st.pendingTracks }
+      const queued = { ...st.queued }
       delete items[id]
       delete progress[id]
-      return { items, progress }
+      delete pendingTracks[id]
+      delete queued[id]
+      return { items, progress, pendingTracks, queued }
     })
     if (b) await b.remove(id).catch(() => {})
   },
@@ -100,6 +106,20 @@ export const useDownloads = create<DownloadsState>()((set, get) => ({
     }),
 }))
 
+// clear every trace of an in-flight id — shared by start() rejection and
+// the done/error event paths
+function cleanup(id: string) {
+  useDownloads.setState((s) => {
+    const progress = { ...s.progress }
+    const pendingTracks = { ...s.pendingTracks }
+    const queued = { ...s.queued }
+    delete progress[id]
+    delete pendingTracks[id]
+    delete queued[id]
+    return { progress, pendingTracks, queued }
+  })
+}
+
 // boot wiring — pull the manifest once, then live off dl:event pushes
 {
   const b = bridge()
@@ -107,25 +127,27 @@ export const useDownloads = create<DownloadsState>()((set, get) => ({
     void useDownloads.getState().refresh()
     b.onEvent?.((ev) => {
       if (!ev || typeof ev.id !== "string") return
-      if (ev.type === "progress") {
-        useDownloads.setState((s) => ({ progress: { ...s.progress, [ev.id]: ev.pct ?? 0 } }))
-      } else if (ev.type === "done") {
+      if (ev.type === "queued") {
+        useDownloads.setState((s) => ({ queued: { ...s.queued, [ev.id]: true } }))
+      } else if (ev.type === "progress") {
+        // first progress from a job = it actually started — off the waitlist
         useDownloads.setState((s) => {
-          const progress = { ...s.progress }
-          delete progress[ev.id]
+          const queued = { ...s.queued }
+          delete queued[ev.id]
+          return { progress: { ...s.progress, [ev.id]: ev.pct ?? 0 }, queued }
+        })
+      } else if (ev.type === "done") {
+        const item = ev.item as Partial<DlItem> | undefined
+        useDownloads.setState((s) => {
           const items = { ...s.items }
-          const item = ev.item as Partial<DlItem> | undefined
           if (item?.file && item.track) {
             items[ev.id] = { file: item.file, addedAt: item.addedAt ?? Date.now(), track: item.track }
           }
-          return { items, progress }
+          return { items }
         })
+        cleanup(ev.id)
       } else if (ev.type === "error") {
-        useDownloads.setState((s) => {
-          const progress = { ...s.progress }
-          delete progress[ev.id]
-          return { progress }
-        })
+        cleanup(ev.id)
       }
     })
   }

@@ -1,7 +1,8 @@
 import { motion } from "motion/react"
-import { Download, FolderOpen, Play, Search } from "lucide-react"
+import { Download, FolderOpen, Loader2, Play, Search, X } from "lucide-react"
 import { useMemo } from "react"
 import { Link } from "react-router-dom"
+import { ArtworkImg } from "../components/ArtworkImg"
 import { TrackTable } from "../components/TrackTable"
 import { useDownloads } from "../store/downloads"
 import { usePlayer } from "../store/player"
@@ -9,6 +10,8 @@ import { usePlayer } from "../store/player"
 export function DownloadsPage() {
   const items = useDownloads((s) => s.items)
   const progress = useDownloads((s) => s.progress)
+  const pendingTracks = useDownloads((s) => s.pendingTracks)
+  const queued = useDownloads((s) => s.queued)
   const remove = useDownloads((s) => s.remove)
   const playContext = usePlayer((s) => s.playContext)
   const canDl = Boolean(window.freebify?.dl)
@@ -21,7 +24,14 @@ export function DownloadsPage() {
         .map((i) => i.track),
     [items],
   )
-  const busy = Object.entries(progress)
+  // every row the renderer knows about: actively downloading OR queued
+  const busyIds = Object.keys({ ...progress, ...queued })
+  const busy = busyIds.map((id) => ({
+    id,
+    track: pendingTracks[id] ?? items[id]?.track,
+    isQueued: progress[id] === undefined,
+    pct: progress[id] ?? 0,
+  }))
 
   return (
     <div className="-mt-12 pb-10">
@@ -61,13 +71,38 @@ export function DownloadsPage() {
       <div className="px-6">
         {busy.length > 0 && (
           <div className="mb-6 space-y-1.5">
-            {busy.map(([id, pct]) => (
-              <div key={id} className="flex items-center gap-3 rounded-lg border border-line bg-card px-4 py-2.5">
-                <Download size={14} className="shrink-0 animate-pulse text-dim" />
-                <span className="min-w-0 flex-1 truncate text-sm">
-                  {items[id]?.track.title ?? id}
-                </span>
-                <span className="w-10 text-right text-xs tabular-nums text-dim">{pct}%</span>
+            {busy.map(({ id, track, isQueued, pct }) => (
+              <div key={id} className="flex items-center gap-3 rounded-lg border border-line bg-card px-3 py-2">
+                {track?.artwork ? (
+                  <ArtworkImg art={track.artwork} size="150x150" alt="" className="size-9 shrink-0 rounded-md" />
+                ) : (
+                  <div className="grid size-9 shrink-0 place-items-center rounded-md bg-panel">
+                    <Download size={13} className="text-faint" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{track?.title ?? id}</p>
+                  <p className="truncate text-xs text-dim">{track?.user?.name}</p>
+                </div>
+                {/* thin progress line under the row content is overkill —
+                    a pill + percent reads cleaner and matches the table */}
+                {isQueued ? (
+                  <span className="rounded-full border border-line px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-faint">
+                    Queued
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1.5 text-xs tabular-nums text-dim">
+                    <Loader2 size={11} className="animate-spin" />
+                    {pct}%
+                  </span>
+                )}
+                <button
+                  onClick={() => void remove(id)}
+                  aria-label="Cancel download"
+                  className="grid size-7 shrink-0 place-items-center rounded-full text-faint transition hover:bg-white/10 hover:text-ink"
+                >
+                  <X size={13} />
+                </button>
               </div>
             ))}
           </div>

@@ -267,8 +267,9 @@ function register(ipcMain) {
     } catch {
       return false
     }
-    emit({ type: "progress", id, pct: 0 })
+    emit({ type: "queued", id })
     const start = () => {
+      emit({ type: "progress", id, pct: 0 }) // a real start — distinguishes "downloading" from "waiting in queue"
       if (source === "yt" && typeof streamId === "string" && /^[\w-]{6,20}$/.test(streamId)) {
         if (!ytdlpAvailable()) {
           emit({ type: "error", id, msg: "yt-dlp unavailable" })

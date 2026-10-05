@@ -47,6 +47,10 @@ Strictly neutral (user request): blacks/grays only (`--color-*` tokens in index.
 
 Space play/pause · ←/→ seek 10s · M mute · L like · N now-playing overlay.
 
+## Repo / releases
+
+GitHub: **govu** (owner) — `https://github.com/govu/freebify`. Releases are tagged `v<version>` and published via `gh release create` with `Freebify-setup.exe`, `Freebify-portable.exe`, `latest.yml`, blockmap. Landing page at `docs/index.html` resolves `releases/latest` at runtime (versionless asset names).
+
 ## Commits
 
 Never add tool/agent attribution (no "Generated with", no Co-Authored-By trailers) — commits read as the repo owner's own work.

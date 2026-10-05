@@ -1,9 +1,9 @@
 // Web Audio bus — every audible <audio> element routes through a shared
 // graph instead of straight to the speakers:
 //
-//   element → MediaElementSource → fadeGain ─┐
-//                                          ├→ EQ chain → normGain → out
-//   next element (crossfade)  → fadeGain ──┘
+//   element → MediaElementSource → fadeGain → elGain ─┐
+//                                                    ├→ EQ chain → out
+//   next element (crossfade)  → fadeGain → elGain ────┘
 //
 // Why the main-process CORS injection matters: createMediaElementSource on a
 // cross-origin URL without ACAO outputs silence. electron/main.cjs stamps
@@ -15,11 +15,11 @@ export const EQ_BANDS = [60, 250, 500, 1_000, 4_000, 8_000, 14_000]
 
 let ctx: AudioContext | null = null
 let eqNodes: BiquadFilterNode[] = []
-let norm: GainNode | null = null
 
 interface Port {
   src: MediaElementAudioSourceNode
   fade: GainNode
+  gain: GainNode // per-element loudness — each track keeps its own level mid-crossfade
   meter: AnalyserNode
 }
 const ports = new Map<HTMLAudioElement, Port>()
@@ -40,19 +40,13 @@ function ensure(): AudioContext {
       b.gain.value = eqGains[i] ?? 0
       return b
     })
-    norm = ctx.createGain()
-    // chain: ports → eqNodes[0..n] → norm → destination
+    // chain: ports → eqNodes[0..n] → destination
     for (let i = 0; i < eqNodes.length - 1; i++) eqNodes[i].connect(eqNodes[i + 1])
-    eqNodes[eqNodes.length - 1].connect(norm)
-    norm.connect(ctx.destination)
-    // apply any gain set before first element attached
-    norm.gain.value = normGainLinear
+    eqNodes[eqNodes.length - 1].connect(ctx.destination)
   }
   if (ctx.state === "suspended") void ctx.resume()
   return ctx
 }
-
-let normGainLinear = 1
 
 /** Route an element into the bus. Safe to call once per element — later
  *  calls return the existing port (MediaElementSource is 1:1 per element). */
@@ -62,12 +56,16 @@ export function attach(el: HTMLAudioElement): Port {
   if (existing) return existing
   const src = c.createMediaElementSource(el)
   const fade = c.createGain()
+  const gain = c.createGain()
   const meter = c.createAnalyser()
   meter.fftSize = 2048
   src.connect(fade)
-  fade.connect(eqNodes[0])
-  fade.connect(meter)
-  const p = { src, fade, meter }
+  fade.connect(gain)
+  gain.connect(eqNodes[0])
+  // meter taps the raw signal — a mid-fade measurement must not read the
+  // ramping level as the track's true loudness
+  src.connect(meter)
+  const p = { src, fade, gain, meter }
   ports.set(el, p)
   return p
 }
@@ -93,6 +91,27 @@ export function fadeTo(el: HTMLAudioElement, to: number, secs: number) {
   if (secs > 0) p.fade.gain.linearRampToValueAtTime(to, t + secs)
 }
 
+/** Equal-power fade — the one that sounds right. A linear ramp on both
+ *  elements dips the summed loudness ~3dB at the midpoint (that's the
+ *  "volume drops during the transition" effect); cosine out + sine in
+ *  keeps the power constant so the mix stays level through the whole
+ *  crossfade. From any current value toward `to`, along the circle arc. */
+export function fadeCurve(el: HTMLAudioElement, to: number, secs: number) {
+  const p = ports.get(el)
+  if (!p || !ctx) return
+  const t = ctx.currentTime
+  const from = Math.min(1, Math.max(0, p.fade.gain.value))
+  const N = 64
+  const curve = new Float32Array(N)
+  for (let i = 0; i < N; i++) {
+    const x = i / (N - 1)
+    curve[i] = from * Math.cos((x * Math.PI) / 2) + to * Math.sin((x * Math.PI) / 2)
+  }
+  p.fade.gain.cancelScheduledValues(t)
+  p.fade.gain.setValueAtTime(from, t)
+  p.fade.gain.setValueCurveAtTime(curve, t, Math.max(0.01, secs))
+}
+
 export function fadeValue(el: HTMLAudioElement): number {
   return ports.get(el)?.fade.gain.value ?? 1
 }
@@ -109,14 +128,12 @@ export function getEq(): number[] {
   return [...eqGains]
 }
 
-/** Loudness normalization gain (linear). */
-export function setNormGain(linear: number) {
-  normGainLinear = Math.max(0, Math.min(8, linear))
-  if (ctx && norm) norm.gain.setTargetAtTime(normGainLinear, ctx.currentTime, 0.25)
-}
-
-export function getNormGain(): number {
-  return normGainLinear
+/** Per-element loudness gain (linear) — each element carries its own
+ *  normalization so a crossfade blends two already-leveled signals. */
+export function setNormGain(el: HTMLAudioElement, linear: number) {
+  const p = ports.get(el)
+  if (!p || !ctx) return
+  p.gain.gain.setTargetAtTime(Math.max(0, Math.min(8, linear)), ctx.currentTime, 0.25)
 }
 
 /** Integrated RMS (linear) of an element's signal — used by the loudness
