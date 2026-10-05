@@ -69,9 +69,9 @@ declare global {
         openLogs: () => void
         log: (msg: string) => void
         onDeepLink: (cb: (path: string) => void) => () => void
-        onUpdateReady: (cb: (version: string) => void) => () => void
+        onUpdateReady: (cb: (upd: { version: string; manual: boolean }) => void) => () => void
         installUpdate: () => Promise<void>
-        updateStatus: () => Promise<{ pending: string | null }>
+        updateStatus: () => Promise<{ pending: string | null; manual?: boolean }>
         checkUpdate: () => Promise<{ pending?: string | null; latest?: string; update?: boolean; checking?: boolean }>
       }
     }

@@ -230,23 +230,24 @@ export default function App() {
 // already happened in the background (autoDownload); a transient toast was
 // too easy to miss and the tray item is one menu too deep.
 function UpdateBanner() {
-  const [version, setVersion] = useState<string | null>(null)
+  const [upd, setUpd] = useState<{ version: string; manual: boolean } | null>(null)
   const [dismissed, setDismissed] = useState(false)
   useEffect(() => {
-    const off = window.freebify?.app?.onUpdateReady?.((v) => {
-      setVersion(v)
+    const off = window.freebify?.app?.onUpdateReady?.((p) => {
+      // payload is {version, manual} — tolerate a bare string from older builds
+      setUpd(typeof p === "string" ? { version: p, manual: false } : p)
       setDismissed(false)
     })
     window.freebify?.app?.updateStatus?.()
       .then((s) => {
-        if (s?.pending) setVersion(s.pending)
+        if (s?.pending) setUpd({ version: s.pending, manual: s.manual === true })
       })
       .catch(() => {})
     return () => off?.()
   }, [])
   return (
     <AnimatePresence>
-      {version && !dismissed && (
+      {upd && !dismissed && (
         <motion.div
           initial={{ opacity: 0, y: 14, scale: 0.97 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -256,14 +257,14 @@ function UpdateBanner() {
         >
           <ArrowDownToLine size={15} className="shrink-0 text-ink" />
           <div className="min-w-0">
-            <p className="text-[13px] font-semibold leading-tight text-ink">v{version} ready</p>
-            <p className="text-[11px] leading-tight text-dim">Restart to update</p>
+            <p className="text-[13px] font-semibold leading-tight text-ink">v{upd.version} {upd.manual ? "available" : "ready"}</p>
+            <p className="text-[11px] leading-tight text-dim">{upd.manual ? "Download the new dmg" : "Restart to update"}</p>
           </div>
           <button
             onClick={() => void window.freebify?.app?.installUpdate?.()}
             className="ml-1 shrink-0 rounded-full bg-white px-3.5 py-1.5 text-xs font-bold text-black transition hover:scale-[1.04]"
           >
-            Restart
+            {upd.manual ? "Download" : "Restart"}
           </button>
           <button
             onClick={() => setDismissed(true)}

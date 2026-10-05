@@ -352,6 +352,7 @@
     <div class="row rv d1">
       <a class="btn solid" id="dlBtn" href="https://github.com/govu/freebify/releases/latest/download/Freebify-setup.exe" target="_blank" rel="noopener">Download Freebify 1.0.16</a>
       <a class="btn line" id="altBtn" href="https://github.com/govu/freebify/releases/latest/download/Freebify-portable.exe" target="_blank" rel="noopener">Portable .exe</a>
+      <a class="btn line" id="osBtn" href="https://github.com/govu/freebify/releases/latest/download/Freebify-arm64.dmg" target="_blank" rel="noopener">macOS .dmg</a>
     </div>
     <div class="note rv d2">
       <span id="platNote">Free forever · Windows 10/11 · ~120 MB</span><b id="verMeta"> · v1.0.16</b><span id="updNote"> · updates itself</span>
@@ -580,6 +581,9 @@
     const alt = document.getElementById("altBtn");
     alt.href = REL + "Freebify-x64.dmg";
     alt.textContent = "Intel Mac";
+    const osBtn0 = document.getElementById("osBtn");
+    osBtn0.href = REL + "Freebify-setup.exe";
+    osBtn0.textContent = "Windows .exe";
     document.getElementById("platNote").textContent = "Free forever · macOS 12+ · ~120 MB";
     document.getElementById("updNote").style.display = "none";
     document.getElementById("macNote").style.display = "";
@@ -599,13 +603,15 @@
         document.getElementById("dlBtn").textContent = `Download Freebify ${v}`;
         const fv = document.getElementById("footVer"); if (fv) fv.textContent = ` · v${v}`;
       }
-      const dlBtn = document.getElementById("dlBtn"), altBtn = document.getElementById("altBtn");
+      const dlBtn = document.getElementById("dlBtn"), altBtn = document.getElementById("altBtn"), osBtn = document.getElementById("osBtn");
       if (isMac) {
         if (dmgArm) dlBtn.href = dmgArm.browser_download_url;
         if (dmgIntel) altBtn.href = dmgIntel.browser_download_url;
+        if (setup) osBtn.href = setup.browser_download_url;
       } else {
         if (setup) dlBtn.href = setup.browser_download_url;
         if (portable) altBtn.href = portable.browser_download_url;
+        if (dmgArm) osBtn.href = dmgArm.browser_download_url;
       }
       const dls = rel.assets?.reduce((n, a) => n + (a.download_count || 0), 0);
       if (dls >= 500) {

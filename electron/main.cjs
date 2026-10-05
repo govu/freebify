@@ -95,7 +95,7 @@ function buildTrayMenu() {
   ]
   if (pendingUpdate && updaterRef) {
     template.push({
-      label: `Restart to update — v${pendingUpdate}`,
+      label: `Restart to update — v${pendingUpdate.version}`,
       click: () => updaterRef.quitAndInstall(true, true),
     })
   }
@@ -295,7 +295,36 @@ if (!gotLock) {
     // electron-builder signals them via PORTABLE_EXECUTABLE_DIR, NOT an
     // argv flag; the old check never fired, so portable exes downloaded a
     // 100MB update they could never install
-    if (app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR) {
+    if (app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR && process.platform === "darwin") {
+      // unsigned macOS builds can't self-update (Squirrel.mac requires a
+      // signature) — poll GitHub for a newer tag and offer the dmg instead
+      const macUrl = () =>
+        `https://github.com/govu/freebify/releases/latest/download/Freebify-${process.arch === "arm64" ? "arm64" : "x64"}.dmg`
+      const checkMac = async () => {
+        try {
+          const res = await fetch("https://api.github.com/repos/govu/freebify/releases/latest", {
+            headers: { "User-Agent": "freebify" },
+          })
+          const rel = await res.json()
+          const latest = rel.tag_name?.replace(/^v/, "")
+          if (latest && latest !== app.getVersion() && !pendingUpdate) {
+            pendingUpdate = { version: latest, manual: true, url: macUrl() }
+            logLine("update", `mac manual update available: ${latest}`)
+            BrowserWindow.getAllWindows()[0]?.webContents.send("app:update-ready", { version: latest, manual: true })
+          }
+        } catch {}
+      }
+      ipcMain.handle("app:install-update", () => {
+        if (pendingUpdate?.url) void shell.openExternal(pendingUpdate.url)
+      })
+      ipcMain.handle("app:update-status", () => ({ pending: pendingUpdate?.version ?? null, manual: true }))
+      ipcMain.handle("app:check-update", async () => {
+        await checkMac()
+        return { pending: pendingUpdate?.version ?? null, manual: true }
+      })
+      checkMac()
+      setInterval(checkMac, 30 * 60 * 1000).unref()
+    } else if (app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR) {
       try {
         const { autoUpdater } = require("electron-updater")
         autoUpdater.logger = { info: (m) => logLine("update", m), warn: (m) => logLine("update", m), error: (m) => logLine("update", m), debug: () => {} }
@@ -303,23 +332,23 @@ if (!gotLock) {
         autoUpdater.autoInstallOnAppQuit = true
         autoUpdater.on("update-downloaded", (info) => {
           logLine("update", `downloaded ${info.version} — installs on quit`)
-          pendingUpdate = info.version
+          pendingUpdate = { version: info.version, manual: false }
           updaterRef = autoUpdater
           buildTrayMenu()
           const win = BrowserWindow.getAllWindows()[0]
-          win?.webContents.send("app:update-ready", info.version)
+          win?.webContents.send("app:update-ready", { version: info.version, manual: false })
         })
         ipcMain.handle("app:install-update", () => {
           if (pendingUpdate && updaterRef) updaterRef.quitAndInstall(true, true)
         })
         // a renderer that mounted after the toast still learns about the
         // pending update — the banner isn't a one-shot message
-        ipcMain.handle("app:update-status", () => ({ pending: pendingUpdate }))
+        ipcMain.handle("app:update-status", () => ({ pending: pendingUpdate?.version ?? null, manual: pendingUpdate?.manual === true }))
         ipcMain.handle("app:check-update", async () => {
           const r = await checkForUpdatesNow(true)
-          if (!r) return { checking: true, pending: pendingUpdate } // a check was already in flight
+          if (!r) return { checking: true, pending: pendingUpdate?.version ?? null } // a check was already in flight
           const latest = r?.updateInfo?.version
-          return { pending: pendingUpdate, latest, update: Boolean(latest && latest !== app.getVersion()) }
+          return { pending: pendingUpdate?.version ?? null, latest, update: Boolean(latest && latest !== app.getVersion()) }
         })
         autoUpdater.on("error", (e) => logLine("update", `check failed: ${e?.message ?? e}`))
         autoUpdaterRef = autoUpdater
