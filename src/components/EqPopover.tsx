@@ -79,10 +79,24 @@ export function EqPopover() {
             style={{ transformOrigin: "bottom right", right: popRight }}
             className="fixed bottom-[96px] w-[324px] rounded-2xl border border-line bg-panel p-5 shadow-2xl shadow-black/70 transition-[right] duration-200"
           >
-            {/* header: preset chips + reset */}
-            <div className="mb-4 flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-dim">Equalizer</span>
-              <div className="flex items-center gap-1">
+            {/* header: title+reset on one row, preset chips wrap below —
+                5 chips + the label don't fit one line at 324px (V-shape
+                used to overflow the panel's right edge) */}
+            <div className="mb-4">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-dim">Equalizer</span>
+                {custom && (
+                  <button
+                    onClick={() => setEq(PRESETS.Flat)}
+                    title="Reset to flat"
+                    aria-label="Reset equalizer"
+                    className="grid size-6 place-items-center rounded-md text-dim transition hover:bg-white/10 hover:text-ink"
+                  >
+                    <RotateCcw size={12} />
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-1">
                 {Object.keys(PRESETS).map((name) => (
                   <button
                     key={name}
@@ -94,16 +108,6 @@ export function EqPopover() {
                     {name}
                   </button>
                 ))}
-                {custom && (
-                  <button
-                    onClick={() => setEq(PRESETS.Flat)}
-                    title="Reset to flat"
-                    aria-label="Reset equalizer"
-                    className="ml-1 grid size-6 place-items-center rounded-md text-dim transition hover:bg-white/10 hover:text-ink"
-                  >
-                    <RotateCcw size={12} />
-                  </button>
-                )}
               </div>
             </div>
 

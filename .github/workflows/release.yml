@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [windows-latest, macos-latest, ubuntu-latest]
 
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +28,12 @@ jobs:
 
       - run: npm ci
 
-      # platform-aware: yt-dlp.exe on Windows, yt-dlp (universal mac binary) on macOS
+      # AppImageTool needs FUSE — ubuntu runners don't ship libfuse2
+      - name: Linux build deps
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y libfuse2
+
+      # platform-aware: yt-dlp.exe on Windows, unix yt-dlp on macOS/Linux
       - run: npm run fetch-bin
 
       # builds dist/ then electron-builder; --publish always uploads artifacts

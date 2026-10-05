@@ -157,19 +157,31 @@ const alignOffset = (lrc: LrcLine[], caps: LrcLine[]): number | null => {
     }
   }
   const cands: number[] = []
+  // two guards against hooky songs: a repeated line ("oh-eh" every 30s)
+  // can latch onto a LATER chorus and manufacture a huge false offset.
+  // (a) monotonic — caption time can only move forward as lyrics advance;
+  // (b) plausible window — a record↔upload shift lives inside [-45, 120]s
+  let lastT = -Infinity
   for (const l of lrc.slice(0, 14)) {
     const w = new Set(simTokens(l.text))
     const bi = simBigrams(l.text)
     let best = 0
     let bestT = 0
     for (const c of pool) {
+      if (c.t < lastT - 1) continue
+      const dt = c.t - l.t
+      if (dt < -45 || dt > 120) continue
       const s = lineSim(w, bi, c.w, c.bi)
       if (s > best) {
         best = s
         bestT = c.t
       }
     }
-    if (best >= 0.55) cands.push(bestT - l.t)
+    // unmatched lines don't move the cursor — later lines can still anchor
+    if (best >= 0.55) {
+      cands.push(bestT - l.t)
+      lastT = bestT
+    }
   }
   if (cands.length < 3) return null
   cands.sort((a, b) => a - b)
@@ -235,11 +247,16 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
     if (!trackId) return
     let saved: string | null = null
     try {
-      saved = localStorage.getItem(`lrcoff-${trackId}`)
-      // lrcoff-* keys grow one per corrected track — cap the set so a
-      // long-lived profile can't sprawl
-      const keys = Object.keys(localStorage).filter((k) => k.startsWith("lrcoff-"))
-      for (const k of keys.slice(0, Math.max(0, keys.length - 120))) localStorage.removeItem(k)
+      // lrcoff2-* — v1 keys may hold offsets measured by the pre-monotonic
+      // aligner (repeat-hook false matches) → legacy keys are purged, not read
+      saved = localStorage.getItem(`lrcoff2-${trackId}`)
+      const keys = Object.keys(localStorage).filter((k) => k.startsWith("lrcoff"))
+      for (const k of keys) {
+        if (k.startsWith("lrcoff-")) localStorage.removeItem(k)
+      }
+      // cap the set so a long-lived profile can't sprawl
+      const v2 = keys.filter((k) => k.startsWith("lrcoff2-"))
+      for (const k of v2.slice(0, Math.max(0, v2.length - 120))) localStorage.removeItem(k)
     } catch { /* storage unavailable — offsets just won't persist */ }
     if (saved !== null) {
       setOffset(Number(saved) || 0)
@@ -259,7 +276,7 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
     setOffset(next)
     if (trackId) {
       try {
-        localStorage.setItem(`lrcoff-${trackId}`, String(next))
+        localStorage.setItem(`lrcoff2-${trackId}`, String(next))
       } catch { /* quota/security — correction stays session-only */ }
     }
   }
@@ -586,7 +603,7 @@ export function NowPlaying() {
         if (!sameTrack()) return
         let saved: string | null = null
         try {
-          saved = localStorage.getItem(`lrcoff-${current.id}`)
+          saved = localStorage.getItem(`lrcoff2-${current.id}`)
         } catch { /* storage unavailable — measure anyway */ }
         if (saved !== null) return
         const vid = await resolveVideoId()
@@ -602,8 +619,8 @@ export function NowPlaying() {
         // surfaces this run; a Shift+click meanwhile wins the key
         setTimeout(() => {
           try {
-            if (localStorage.getItem(`lrcoff-${current.id}`) === null) {
-              localStorage.setItem(`lrcoff-${current.id}`, String(off))
+            if (localStorage.getItem(`lrcoff2-${current.id}`) === null) {
+              localStorage.setItem(`lrcoff2-${current.id}`, String(off))
             }
           } catch { /* correction stays session-only */ }
         }, 6000)

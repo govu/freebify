@@ -102,6 +102,27 @@
     "dmg": {
       "artifactName": "Freebify-${arch}.dmg"
     },
+    "linux": {
+      "category": "Audio",
+      "maintainer": "Freebify",
+      "icon": "build/icon.png",
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "extraResources": [
+        {
+          "from": "bin/yt-dlp",
+          "to": "bin/yt-dlp"
+        }
+      ]
+    },
+    "appImage": {
+      "artifactName": "Freebify.AppImage"
+    },
+    "deb": {
+      "artifactName": "Freebify-amd64.deb"
+    },
     "portable": {
       "artifactName": "Freebify-portable.exe"
     },

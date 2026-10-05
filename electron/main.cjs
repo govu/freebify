@@ -295,12 +295,16 @@ if (!gotLock) {
     // electron-builder signals them via PORTABLE_EXECUTABLE_DIR, NOT an
     // argv flag; the old check never fired, so portable exes downloaded a
     // 100MB update they could never install
-    if (app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR && process.platform === "darwin") {
-      // unsigned macOS builds can't self-update (Squirrel.mac requires a
-      // signature) — poll GitHub for a newer tag and offer the dmg instead
-      const macUrl = () =>
-        `https://github.com/govu/freebify/releases/latest/download/Freebify-${process.arch === "arm64" ? "arm64" : "x64"}.dmg`
-      const checkMac = async () => {
+    // manual-update path: unsigned macOS (Squirrel.mac needs a signature) and
+    // non-AppImage linux (deb can't self-update — only AppImage works with
+    // electron-updater). Poll GitHub for a newer tag, offer the download.
+    const manualUpdate = process.platform === "darwin" || (process.platform === "linux" && !process.env.APPIMAGE)
+    const manualUrl = () =>
+      process.platform === "darwin"
+        ? `https://github.com/govu/freebify/releases/latest/download/Freebify-${process.arch === "arm64" ? "arm64" : "x64"}.dmg`
+        : "https://github.com/govu/freebify/releases/latest/download/Freebify.AppImage"
+    if (app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR && manualUpdate) {
+      const checkManual = async () => {
         try {
           const res = await fetch("https://api.github.com/repos/govu/freebify/releases/latest", {
             headers: { "User-Agent": "freebify" },
@@ -308,8 +312,8 @@ if (!gotLock) {
           const rel = await res.json()
           const latest = rel.tag_name?.replace(/^v/, "")
           if (latest && latest !== app.getVersion() && !pendingUpdate) {
-            pendingUpdate = { version: latest, manual: true, url: macUrl() }
-            logLine("update", `mac manual update available: ${latest}`)
+            pendingUpdate = { version: latest, manual: true, url: manualUrl() }
+            logLine("update", `manual update available: ${latest}`)
             BrowserWindow.getAllWindows()[0]?.webContents.send("app:update-ready", { version: latest, manual: true })
           }
         } catch {}
@@ -319,11 +323,11 @@ if (!gotLock) {
       })
       ipcMain.handle("app:update-status", () => ({ pending: pendingUpdate?.version ?? null, manual: true }))
       ipcMain.handle("app:check-update", async () => {
-        await checkMac()
+        await checkManual()
         return { pending: pendingUpdate?.version ?? null, manual: true }
       })
-      checkMac()
-      setInterval(checkMac, 30 * 60 * 1000).unref()
+      checkManual()
+      setInterval(checkManual, 30 * 60 * 1000).unref()
     } else if (app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR) {
       try {
         const { autoUpdater } = require("electron-updater")
@@ -558,13 +562,21 @@ function createWindow() {
     // last painted). A skipped+minimized window keeps the taskbar group
     // alive, so thumbar repaints keep working.
     if (!allowQuit && !isDev) {
-      e.preventDefault()
       // mac convention: X hides the window, app keeps living in the Dock
-      if (process.platform === "darwin") win.hide()
-      else {
+      if (process.platform === "darwin") {
+        e.preventDefault()
+        win.hide()
+      } else if (tray) {
+        // minimize()+skipTaskbar, NOT hide(): hide() kills the Windows
+        // thumbnail toolbar for good (setThumbarButtons silently no-ops on
+        // the re-shown window). Only safe when a tray exists to restore
+        // from — linux desktops without a tray applet would orphan it
+        e.preventDefault()
         win.minimize()
         win.setSkipTaskbar(true)
       }
+      // no tray (linux DEs without an applet, or icon failure): real close
+      // → window-all-closed quits cleanly
     }
   })
 
