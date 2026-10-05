@@ -1,7 +1,7 @@
 {
   "name": "freebify",
   "private": true,
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "Freebify — free music streaming. No ads, no subscriptions.",
   "license": "GPL-3.0-only",
   "type": "module",
@@ -74,7 +74,7 @@
       "icon": "build/icon.ico"
     },
     "portable": {
-      "artifactName": "Freebify-${version}-portable.exe"
+      "artifactName": "Freebify-portable.exe"
     },
     "nsis": {
       "oneClick": false,
@@ -82,7 +82,7 @@
       "license": "build/license.txt",
       "allowToChangeInstallationDirectory": true,
       "shortcutName": "Freebify",
-      "artifactName": "Freebify-${version}-setup.exe"
+      "artifactName": "Freebify-setup.exe"
     },
     "publish": {
       "provider": "github",
