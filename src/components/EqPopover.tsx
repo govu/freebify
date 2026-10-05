@@ -28,14 +28,16 @@ export function EqPopover() {
   const setFadeSecs = usePlayer((s) => s.setFadeSecs)
   const queueOpen = usePlayer((s) => s.queueOpen)
   const [readout, setReadout] = useState<number | null>(null)
-  // below lg the queue is a fixed 320px overlay over the right edge — the
-  // popover (anchored off a button near that edge) would slide under it
-  const [narrow, setNarrow] = useState(() => window.innerWidth < 1024)
+  // the queue owns the right 320px of the window whenever it's open (inline
+  // at lg+, overlay below it) — the popover must dodge it either way; clamped
+  // so a very narrow window never pushes it off the LEFT edge instead
+  const [vw, setVw] = useState(() => window.innerWidth)
   useEffect(() => {
-    const onResize = () => setNarrow(window.innerWidth < 1024)
+    const onResize = () => setVw(window.innerWidth)
     window.addEventListener("resize", onResize)
     return () => window.removeEventListener("resize", onResize)
   }, [])
+  const popRight = queueOpen ? Math.min(336, Math.max(16, vw - 340)) : 16
 
   useEffect(() => {
     if (!open) return
@@ -73,9 +75,8 @@ export function EqPopover() {
             exit={{ opacity: 0, y: 10, scale: 0.96 }}
             transition={{ type: "spring", stiffness: 460, damping: 34 }}
             // fixed (not absolute): anchored to the window so it can dodge
-            // the fixed-position queue overlay — absolute inside the bar
-            // would always clip under it at 940–1023px widths
-            style={{ transformOrigin: "bottom right", right: queueOpen && narrow ? 336 : 16 }}
+            // the queue panel — absolute inside the bar would clip under it
+            style={{ transformOrigin: "bottom right", right: popRight }}
             className="fixed bottom-[96px] w-[324px] rounded-2xl border border-line bg-panel p-5 shadow-2xl shadow-black/70 transition-[right] duration-200"
           >
             {/* header: preset chips + reset */}
