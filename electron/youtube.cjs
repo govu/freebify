@@ -1457,7 +1457,14 @@ function captionLines(body, ext) {
           .split(/\r?\n/)
           .map((r) => r.trim())
           .filter(Boolean)
-        if (rows.length) push(ev.tStartMs / 1000, rows.at(-1))
+        if (!rows.length) continue
+        // append events carry continuation words for the PREVIOUS cue —
+        // as standalone lines they'd fragment the pool into false matches
+        if (ev.aAppend && out.length) {
+          out.at(-1).text = `${out.at(-1).text} ${rows.at(-1)}`
+          continue
+        }
+        push(ev.tStartMs / 1000, rows.at(-1))
       }
     } catch {}
     return out
@@ -1507,7 +1514,7 @@ function pickCaptionFmt(dict) {
   for (const k of keys) {
     const fmts = dict[k]
     const fmt = fmts.find((f) => f.ext === "json3") ?? fmts.find((f) => f.ext === "srv3") ?? fmts.find((f) => f.ext === "vtt")
-    if (fmt) return fmt
+    if (fmt) return { ...fmt, lang: k }
   }
   return null
 }
@@ -1538,12 +1545,24 @@ async function captions(videoId) {
         30000
       )
       const info = JSON.parse(out)
-      const fmt = pickCaptionFmt(info.subtitles) ?? pickCaptionFmt(info.automatic_captions)
+      const sub = pickCaptionFmt(info.subtitles)
+      const asr = pickCaptionFmt(info.automatic_captions)
+      // manual subs in a DIFFERENT language than the audio are translated
+      // subtitles — they'd fail every lyric-content check anyway; the
+      // original-language ASR is the truthful transcript
+      const origLang = Object.keys(info.automatic_captions ?? {})
+        .find((k) => k.endsWith("-orig"))
+        ?.replace(/-orig$/, "")
+      const fmt =
+        sub && asr && origLang && !sub.lang.startsWith(origLang) ? asr : sub ?? asr
       if (!fmt?.url) return done(null)
       const res = await fetch(fmt.url, { headers: { "User-Agent": "Freebify/1.0" }, signal: AbortSignal.timeout(9000) })
-      if (!res.ok) return done(null)
+      // transient fetch/parse failures must NOT cache — a 403'd signed url
+      // or an odd format would otherwise poison the video all session
+      if (!res.ok) return null
       const lines = captionLines(await res.text(), fmt.ext)
-      return done(lines.length >= 4 ? { lines } : null)
+      if (lines.length < 4) return null
+      return done({ lines })
     } catch (e) {
       log("captions", `${videoId}: ${e?.message ?? e}`)
       return null

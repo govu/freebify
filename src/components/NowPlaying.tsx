@@ -187,25 +187,34 @@ const alignOffset = (lrc: LrcLine[], caps: LrcLine[]): number | null => {
         bestT = c.t
       }
     }
-    // unmatched lines don't move the cursor — later lines can still anchor
-    if (best >= 0.55) {
-      cands.push(bestT - l.t)
-      lastT = bestT
+    if (best < 0.55) continue
+    // argmax picks the CLEANEST occurrence — for a repeated hook that's a
+    // later chorus, which poisons the monotonic cursor for every line
+    // after it. Any cue within 85% of the top score is an equivalent match;
+    // take the EARLIEST of those instead
+    let earlyT = bestT
+    for (const c of pool) {
+      const dt = c.t - l.t
+      if (dt < -45 || dt > 120 || c.t >= earlyT) continue
+      if (lineSim(w, bi, c.w, c.bi) >= best * 0.85) earlyT = c.t
     }
+    cands.push(earlyT - l.t)
+    lastT = earlyT
   }
   if (cands.length < 3) return null
   cands.sort((a, b) => a - b)
-  // the true offset clusters within a couple seconds; wrong matches scatter
+  // the true offset clusters within a few seconds (ASR cue jitter splits
+  // tighter windows); wrong matches scatter
   let bi = 0
   let bn = 0
   for (let i = 0, j = 0; i < cands.length; i++) {
-    while (j < cands.length && cands[j] - cands[i] <= 3) j++
+    while (j < cands.length && cands[j] - cands[i] <= 4) j++
     if (j - i > bn) {
       bi = i
       bn = j - i
     }
   }
-  if (bn < Math.max(3, Math.ceil(cands.length * 0.45))) return null
+  if (bn < Math.max(3, Math.ceil(cands.length * 0.4))) return null
   const off = Math.round(cands[bi + Math.floor(bn / 2)] * 10) / 10
   // >90s means the captions belong to a different structure, not an intro
   return Math.abs(off) <= 90 ? off : null
@@ -246,26 +255,33 @@ const lrcContentOk = (lrc: LrcLine[], caps: LrcLine[]): boolean => {
 // and this is the check that rejects it
 const timingOk = (lrc: LrcLine[], caps: LrcLine[], off: number): boolean => {
   if (caps.length < 8) return true // too sparse to verify — trust the quorum
+  const pool = caps.map((c) => ({ t: c.t, w: new Set(simTokens(c.text)), bi: simBigrams(c.text) }))
   const step = Math.max(1, Math.floor(lrc.length / 14))
   let hit = 0
   let n = 0
   for (let i = 0; i < lrc.length; i += step) {
     const w = new Set(simTokens(lrc[i].text))
     const bi = simBigrams(lrc[i].text)
-    let best = 0
-    let bestDt = Infinity
-    for (const c of caps) {
-      const s = lineSim(w, bi, new Set(simTokens(c.text)), simBigrams(c.text))
-      if (s > best) {
-        best = s
-        bestDt = Math.abs(c.t - (lrc[i].t + off))
+    // a line counts if ANY matching cue lands near the shifted position —
+    // scoring the argmax occurrence only would false-reject repeated hooks
+    let ok = false
+    for (const c of pool) {
+      if (Math.abs(c.t - (lrc[i].t + off)) > 7) continue
+      if (lineSim(w, bi, c.w, c.bi) >= 0.45) {
+        ok = true
+        break
       }
     }
     n++
-    if (best >= 0.45 && bestDt <= 7) hit++
+    if (ok) hit++
   }
   return n === 0 || hit / n >= 0.5
 }
+
+// sheet fingerprint — an offset persisted for one sheet must never slide
+// a different one (content-veto swaps, a different fetch source later)
+const sheetFpOf = (lines: LrcLine[]) =>
+  simTokens(`${lines[0]?.text ?? ""} ${lines[1]?.text ?? ""}`).join(" ").slice(0, 48)
 
 const lrcGet = async (path: string, p: Record<string, string>): Promise<LrcRec[]> => {
   try {
@@ -308,17 +324,28 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
   const trackId = usePlayer((s) => s.current?.id)
   const [offset, setOffset] = useState(0)
   const [note, setNote] = useState<string | null>(null)
-  // saved manual correction beats the auto guess — the user knows best
+  // saved manual correction beats the auto guess — the user knows best.
+  // Both keys now carry a sheet fingerprint: an offset pinned to one sheet
+  // must never slide a different one (content-veto swaps, later sources)
+  const fp = sheetFpOf(lines)
   useEffect(() => {
     if (!trackId) return
-    let saved: string | null = null
+    let saved: number | null = null
     try {
       // lrcoff2- = manual (Shift+click) — always wins; lrcoffa- = auto-
-      // measured, re-verified each open so a stale one can't wedge;
-      // lrcoff- = v1 keys measured by the pre-monotonic aligner → purge
-      saved =
-        localStorage.getItem(`lrcoff2-${trackId}`) ??
-        localStorage.getItem(`lrcoffa-${trackId}`)
+      // measured, fingerprinted to its sheet; lrcoff- = v1 keys → purge
+      const read = (k: string): number | null => {
+        const raw = localStorage.getItem(k)
+        if (raw === null) return null
+        try {
+          const p = JSON.parse(raw) as { o?: number; f?: string }
+          if (typeof p === "object" && p !== null && typeof p.o === "number") {
+            return p.f === undefined || p.f === fp ? p.o : null
+          }
+        } catch { /* bare number — legacy manual pin, trust it */ }
+        return Number(raw) || 0
+      }
+      saved = read(`lrcoff2-${trackId}`) ?? read(`lrcoffa-${trackId}`)
       const keys = Object.keys(localStorage).filter((k) => k.startsWith("lrcoff"))
       for (const k of keys) {
         if (k.startsWith("lrcoff-")) localStorage.removeItem(k)
@@ -328,7 +355,7 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
       for (const k of kept.slice(0, Math.max(0, kept.length - 140))) localStorage.removeItem(k)
     } catch { /* storage unavailable — offsets just won't persist */ }
     if (saved !== null) {
-      setOffset(Number(saved) || 0)
+      setOffset(saved)
       setNote(null)
     } else {
       setOffset(autoOff)
@@ -339,13 +366,13 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
       }
       setNote(null)
     }
-  }, [trackId, autoOff])
+  }, [trackId, autoOff, fp])
   const applyOffset = (v: number) => {
-    const next = Math.max(-30, Math.min(30, Math.round(v * 10) / 10))
+    const next = Math.max(-90, Math.min(90, Math.round(v * 10) / 10))
     setOffset(next)
     if (trackId) {
       try {
-        localStorage.setItem(`lrcoff2-${trackId}`, String(next))
+        localStorage.setItem(`lrcoff2-${trackId}`, JSON.stringify({ o: next, f: fp }))
         localStorage.removeItem(`lrcoffa-${trackId}`)
       } catch { /* quota/security — correction stays session-only */ }
     }
@@ -620,6 +647,9 @@ export function NowPlaying() {
         const lines = j
           .filter((x): x is { seconds: number; lyrics: string } => typeof x.seconds === "number" && !!x.lyrics?.trim())
           .map((x) => ({ t: x.seconds, text: x.lyrics.trim() }))
+          // API order isn't guaranteed chronological — sane()'s last-line
+          // check and the active-line early-exit both assume sorted input
+          .sort((a, b) => a.t - b.t)
         return sane(lines)
       } catch {
         return null
@@ -645,19 +675,33 @@ export function NowPlaying() {
     const fits = (x: { streamId?: string; title: string; duration?: number; user?: { name?: string } }) =>
       !!x.streamId &&
       titleLike(x.title, title) &&
+      // karaoke/cover/instrumental uploads pass title+artist but their
+      // captions are a different recording's timing — never useful
+      !/karaoke|cover|tribute|instrumental|in the style of/i.test(x.title) &&
       artistOkTwin(x) &&
       (!dur || !x.duration || Math.abs(x.duration - dur) <= 10)
     const byDur = <T extends { duration?: number }>(a: T, b: T) =>
       Math.abs((a.duration ?? 0) - dur) - Math.abs((b.duration ?? 0) - dur)
-    const forEachVideo = async (fn: (vid: string) => Promise<boolean>) => {
+    // walk uploads lazily — ownVid first, then same-recording twins (music
+    // catalog, then general YouTube for fan lyric videos). `alternates:false`
+    // stops after ownVid — only the PLAYING upload can time this audio.
+    const forEachVideo = async (
+      fn: (vid: string, own: boolean) => Promise<boolean>,
+      { alternates = true, alive = () => true }: { alternates?: boolean; alive?: () => boolean } = {},
+    ) => {
+      const seen = new Set<string>()
       let tried = 0
-      const attempt = async (vid: string | null | undefined) =>
-        vid && ++tried <= 4 ? fn(vid) : Promise.resolve(false)
-      if (await attempt(ownVid)) return
+      const attempt = async (vid: string | null | undefined, own = false) => {
+        if (!vid || seen.has(vid) || !alive()) return false
+        seen.add(vid)
+        return ++tried <= 4 ? fn(vid, own) : true // budget spent → done
+      }
+      if (await attempt(ownVid, true)) return
+      if (!alternates) return
       for (const q of twinQueries) {
+        if (!alive() || tried > 4) return
         const res = await yt.search(q).catch(() => null)
         for (const t of (res?.tracks ?? []).filter(fits).sort(byDur)) {
-          if (t.streamId === ownVid) continue
           if (await attempt(t.streamId)) return
         }
       }
@@ -665,9 +709,9 @@ export function NowPlaying() {
       // general YouTube adds fan lyric videos (they nearly always ship
       // ASR/manual subs for the same recording)
       for (const q of [...new Set([`${artist} ${title} lyrics`, `${title} lyrics`].filter((x) => x.trim() !== "lyrics"))]) {
+        if (!alive() || tried > 4) return
         const vids = await yt.videoSearch(q).catch(() => [])
         for (const t of vids.filter(fits).sort(byDur)) {
-          if (t.streamId === ownVid) continue
           if (await attempt(t.streamId)) return
         }
       }
@@ -678,6 +722,7 @@ export function NowPlaying() {
     // nudge autoOff after the first paint rather than delay the render.
     // Auto offsets persist under lrcoffa- and re-verify every open — a
     // wrong measurement can't stick; a manual Shift+click always wins.
+    const sheetFp = sheetFpOf
     const refineOffset = async (lrc: LrcLine[], fallback: number) => {
       try {
         if (!ytBridge()?.captions) return
@@ -688,35 +733,56 @@ export function NowPlaying() {
         const sameTrack = () => usePlayer.getState().current?.id === current.id
         if (!sameTrack()) return
         try {
-          if (localStorage.getItem(`lrcoff2-${current.id}`) !== null) return
-        } catch { /* storage unavailable — measure anyway */ }
-        await forEachVideo(async (vid) => {
-          const cap = await yt.captions(vid)
-          if (!cap?.lines?.length || !sameTrack()) return false
-          // content veto: a same-title DIFFERENT song's sheet passes the
-          // metadata gates but its words aren't in this audio. When the
-          // video's own captions can't find the lyrics at all, swap the
-          // sheet for the captions — they are the right words by definition
-          const clipped = cap.lines.filter((l) => !dur || l.t <= dur + 15)
-          if (!lrcContentOk(lrc, clipped) && clipped.length >= 4) {
-            setLyrics((cur) => (cur && "synced" in cur && cur.synced === lrc ? { synced: clipped, autoOff: 0 } : cur))
-            return true
+          // a manual Shift+click pin on THIS sheet always wins — a stale
+          // pin (fingerprint mismatch) doesn't block re-measuring
+          const m = localStorage.getItem(`lrcoff2-${current.id}`)
+          if (m !== null) {
+            const p = JSON.parse(m) as { o?: number; f?: string } | number
+            if (typeof p !== "object" || p.f === undefined || p.f === sheetFp(lrc)) return
           }
-          const off = alignOffset(lrc, cap.lines)
-          // a failed quorum on this upload doesn't preclude the next one
-          if (off == null) return false
-          // measured ~0 also matters: it vetoes a wrong duration-delta guess
-          if (Math.abs(off - fallback) < 1.5) return true
-          // sanity before committing: with the shift applied, sampled
-          // lines must land near their own caption match — a twin whose
-          // structure differs can still quorum on hooky lines
-          if (!timingOk(lrc, cap.lines, off)) return false
-          setLyrics((cur) => (cur && "synced" in cur && cur.synced === lrc ? { synced: lrc, autoOff: off } : cur))
-          try {
-            localStorage.setItem(`lrcoffa-${current.id}`, String(off))
-          } catch { /* correction stays session-only */ }
-          return true
-        })
+        } catch { /* unparsable/manual — honor it */ return }
+        // only the PLAYING upload's captions can time this audio; a twin's
+        // offset describes that upload's lead-in. Audius has no ownVid —
+        // its closest twin is the only truth available, so it may measure.
+        await forEachVideo(
+          async (vid) => {
+            const cap = await yt.captions(vid)
+            if (!cap?.lines?.length || !sameTrack()) return false
+            const clipped = cap.lines.filter((l) => !dur || l.t <= dur + 15)
+            // content veto: a same-title DIFFERENT song's sheet passes the
+            // metadata gates but its words aren't in this audio — swap for
+            // the captions, the right words by definition. ownVid only on
+            // yt; on Audius the twin stands in for ground truth
+            if (!lrcContentOk(lrc, clipped) && clipped.length >= 4) {
+              setLyrics((cur) => (cur && "synced" in cur && cur.synced === lrc ? { synced: clipped, autoOff: 0 } : cur))
+              return true
+            }
+            const off = alignOffset(lrc, clipped)
+            // a failed quorum here doesn't preclude the next upload
+            if (off == null) return false
+            // measured ~0 also matters: it vetoes a wrong duration-delta
+            // guess — but only when measured on OUR upload (or the stand-in
+            // twin for Audius); agreement on a stranger's upload means nothing
+            if (Math.abs(off - fallback) < 1.5) return true
+            // sanity before committing: with the shift applied, sampled
+            // lines must land near their own caption match — a twin whose
+            // structure differs can still quorum on hooky lines
+            if (!timingOk(lrc, clipped, off)) return false
+            setLyrics((cur) => (cur && "synced" in cur && cur.synced === lrc ? { synced: lrc, autoOff: off } : cur))
+            // persist AFTER the note can surface (the render effect reads
+            // keys when autoOff changes — writing first would suppress it);
+            // a Shift+click meanwhile wins the key
+            setTimeout(() => {
+              try {
+                if (localStorage.getItem(`lrcoff2-${current.id}`) === null) {
+                  localStorage.setItem(`lrcoffa-${current.id}`, JSON.stringify({ o: off, f: sheetFp(lrc) }))
+                }
+              } catch { /* correction stays session-only */ }
+            }, 4000)
+            return true
+          },
+          { alternates: !ownVid, alive: sameTrack },
+        )
       } catch { /* best-effort — the unaligned lyrics still display */ }
     }
     // YouTube's own captions as the synced catch-all — ASR tracks exist for
@@ -725,14 +791,17 @@ export function NowPlaying() {
       try {
         if (!ytBridge()?.captions) return null
         let out: LrcLine[] | null = null
-        await forEachVideo(async (vid) => {
-          const cap = await yt.captions(vid)
-          if (!cap?.lines?.length) return false
-          // captions run to the video's end — clip to the track's runtime
-          // so a longer upload's outro chatter can't tail the lyric sheet
-          out = sane(cap.lines.filter((l) => !dur || l.t <= dur + 15))
-          return out != null
-        })
+        await forEachVideo(
+          async (vid) => {
+            const cap = await yt.captions(vid)
+            if (!cap?.lines?.length) return false
+            // captions run to the video's end — clip to the track's runtime
+            // so a longer upload's outro chatter can't tail the lyric sheet
+            out = sane(cap.lines.filter((l) => !dur || l.t <= dur + 15))
+            return out != null
+          },
+          { alive: () => live },
+        )
         return out
       } catch {
         return null
