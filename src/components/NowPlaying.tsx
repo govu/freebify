@@ -171,8 +171,13 @@ const alignOffset = (lrc: LrcLine[], caps: LrcLine[]): number | null => {
   }
   const uniq = head.filter((l) => freq.get(simTokens(l.text).join(" ")) === 1)
   const sample = uniq.length >= 3 ? uniq : head
+  // hooks can't vote — "Oh-eh, oh-eh"-type lines (≤3 distinct tokens) latch
+  // onto chanted intro cues and measure the intro's own chant, not where the
+  // real lyric line lands. Content-rich lines only when enough exist.
+  const rich = sample.filter((l) => new Set(simTokens(l.text)).size >= 4)
+  const voters = rich.length >= 3 ? rich : sample
   let lastT = -Infinity
-  for (const l of sample) {
+  for (const l of voters) {
     const w = new Set(simTokens(l.text))
     const bi = simBigrams(l.text)
     let best = 0
@@ -698,7 +703,10 @@ export function NowPlaying() {
     const fitsLoose = (x: { streamId?: string; title: string; duration?: number; user?: { name?: string } }) =>
       !!x.streamId &&
       titleLike(x.title, title) &&
-      !/karaoke|cover|tribute|instrumental|in the style of|live|en vivo/i.test(x.title) &&
+      // live shows & performances measure the SHOW's timeline (crowd
+      // intro, stage banter), not the studio lead-in — "perform … at",
+      // festival and award uploads all slip past a bare /live/ test
+      !/karaoke|cover|tribute|instrumental|in the style of|live\b|en vivo|perform|concert|festival|award|ceremon|grammy|fifa|world cup|super bowl|halftime|fan ?cam|encore/i.test(x.title) &&
       artistOkTwin(x) &&
       (!dur || !x.duration || Math.abs(x.duration - dur) <= 30)
     // walk uploads lazily — ownVid first, then same-recording twins (music
@@ -743,7 +751,7 @@ export function NowPlaying() {
       // first: they surface official-video reuploads (which KEEP the spoken
       // intro) while "… lyrics" queries only surface lyric videos (stripped
       // intro — useless as offset references).
-      for (const q of [...new Set([`${artist} ${title}`, title, `${artist} ${title} lyrics`, `${title} lyrics`].filter((x) => x.trim() && x.trim() !== "lyrics"))]) {
+      for (const q of [...new Set([`${artist} ${title}`, title, `${artist} ${title} official video`, `${artist} ${title} video oficial`, `${artist} ${title} lyrics`, `${title} lyrics`].filter((x) => x.trim() && x.trim() !== "lyrics"))]) {
         if (!alive() || tried > budget) return
         const vids = await yt.videoSearch(q).catch(() => [])
         const gated = vids.filter(gate)
@@ -792,9 +800,29 @@ export function NowPlaying() {
         // offset describes ITS lead-in, so several are collected and only a
         // quorum-backed value commits; lyric/letra uploads are deprioritized
         // since they often strip the video's spoken intro.
-        const measured: { off: number; lyric: boolean }[] = []
+        const measured: { off: number; caps: LrcLine[] }[] = []
         const lyricMeasured: number[] = []
-        const applyOff = (off: number, strong: boolean) => {
+        // spoken intros live in the upload's caption track but in NO lyric
+        // DB — cues sitting before where the sheet's first line lands ARE
+        // that intro; show them as lyric lines so the sheet covers what
+        // the audio actually says. t<0 keeps display+seek math intact.
+        const introLines = (caps: LrcLine[], off: number): LrcLine[] => {
+          const edge = (lrc[0]?.t ?? 0) + off - 0.8
+          if (edge < 4) return []
+          const out: LrcLine[] = []
+          let lastK = ""
+          for (const c of caps) {
+            if (c.t >= edge) break
+            const text = c.text.replace(/>+/g, "").replace(/\s+/g, " ").trim()
+            const k = norm(text)
+            if (k.length < 3 || k === lastK) continue
+            lastK = k
+            out.push({ t: c.t - off, text })
+            if (out.length >= 10) break
+          }
+          return out.length >= 2 ? out : []
+        }
+        const applyOff = (off: number, strong: boolean, caps?: LrcLine[]) => {
           if (Math.abs(off) > 90 || Math.abs(off - fallback) < 1.5) {
             dbg(`offset ${off.toFixed(1)} rejected (fallback ${fallback.toFixed(1)})`)
             return
@@ -806,8 +834,9 @@ export function NowPlaying() {
             try { localStorage.removeItem(`lrcoff2-${current.id}`) } catch { /* ok */ }
             pin = null
           }
-          dbg(`offset applied +${off.toFixed(1)}s`)
-          setLyrics((cur) => (cur && "synced" in cur && cur.synced === lrc ? { synced: lrc, autoOff: off } : cur))
+          const intro = caps ? introLines(caps, off) : []
+          dbg(`offset applied +${off.toFixed(1)}s intro=${intro.length}`)
+          setLyrics((cur) => (cur && "synced" in cur && cur.synced === lrc ? { synced: intro.length ? [...intro, ...lrc] : lrc, autoOff: off } : cur))
           // persist AFTER the note can surface (the render effect reads
           // keys when autoOff changes — writing first would suppress it);
           // a Shift+click meanwhile wins the key
@@ -845,7 +874,7 @@ export function NowPlaying() {
             // structure differs can still quorum on hooky lines
             if (!timingOk(lrc, clipped, off)) return false
             if (own) {
-              applyOff(off, true)
+              applyOff(off, true, clipped)
               return true
             }
             // lyric videos strip the video's spoken intro — their captions
@@ -853,7 +882,7 @@ export function NowPlaying() {
             // for our upload. They never count toward quorum, never stop the
             // walk, and only serve as last resort when nothing else exists.
             const isLyric = /lyrics?|letra|lyric video/i.test(meta?.title ?? "")
-            if (!isLyric) measured.push({ off, lyric: false })
+            if (!isLyric) measured.push({ off, caps: clipped })
             else lyricMeasured.push(off)
             dbg(`measured ${off.toFixed(1)}s on ${vid} lyric=${isLyric}`)
             return measured.length >= 3
@@ -882,7 +911,7 @@ export function NowPlaying() {
         const off = win.slice().sort((a, b) => a - b)[Math.floor(win.length / 2)]
         // every vote here is non-lyric (lyric votes are quarantined above) —
         // a single real-structure upload is strong enough to override a pin
-        applyOff(off, true)
+        applyOff(off, true, measured.find((m) => win.includes(m.off))?.caps)
       } catch { /* best-effort — the unaligned lyrics still display */ }
     }
     // YouTube's own captions as the synced catch-all — ASR tracks exist for
