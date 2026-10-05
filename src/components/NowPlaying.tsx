@@ -304,7 +304,7 @@ const lrcGet = async (path: string, p: Record<string, string>): Promise<LrcRec[]
 // Click a line to seek to it; Shift+click pins THAT line to right now —
 // a one-tap fix for versions whose LRC timestamps are offset. Persisted
 // per track id so the correction survives restarts
-function SyncedLyrics({ lines, autoOff, onResetPin }: { lines: LrcLine[]; autoOff: number; onResetPin?: () => void }) {
+function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number }) {
   // The store clock ticks at ~4Hz (the element's timeupdate) — between
   // ticks a line can sit ~250ms behind the music, which reads as a laggy
   // highlight. Interpolate locally from the last tick while playing so
@@ -323,8 +323,6 @@ function SyncedLyrics({ lines, autoOff, onResetPin }: { lines: LrcLine[]; autoOf
   const seek = usePlayer((s) => s.seek)
   const trackId = usePlayer((s) => s.current?.id)
   const [offset, setOffset] = useState(0)
-  const [note, setNote] = useState<string | null>(null)
-  const [pinned, setPinned] = useState(false)
   // saved manual correction beats the auto guess — the user knows best.
   // Both keys now carry a sheet fingerprint: an offset pinned to one sheet
   // must never slide a different one (content-veto swaps, later sources)
@@ -333,8 +331,17 @@ function SyncedLyrics({ lines, autoOff, onResetPin }: { lines: LrcLine[]; autoOf
     if (!trackId) return
     let saved: number | null = null
     try {
-      // lrcoff2- = manual (Shift+click) — always wins; lrcoffa- = auto-
-      // measured, fingerprinted to its sheet; lrcoff- = v1 keys → purge
+      // one-time purge — every pin/measured offset written before the
+      // challengeable-pin fix is suspect (they were pinned while the
+      // pipeline was still broken). Wipe once; fresh corrections persist
+      if (!localStorage.getItem("lrcpin-purged-v1")) {
+        for (const k of Object.keys(localStorage)) {
+          if (/^lrcoff(a|2)?-/.test(k)) localStorage.removeItem(k)
+        }
+        localStorage.setItem("lrcpin-purged-v1", "1")
+      }
+      // lrcoff2- = manual (Shift+click); lrcoffa- = auto-measured —
+      // both fingerprinted to their sheet; lrcoff- = v1 keys → purge
       const read = (k: string): number | null => {
         const raw = localStorage.getItem(k)
         if (raw === null) return null
@@ -346,9 +353,7 @@ function SyncedLyrics({ lines, autoOff, onResetPin }: { lines: LrcLine[]; autoOf
         } catch { /* bare number — legacy manual pin, trust it */ }
         return Number(raw) || 0
       }
-      const manual = read(`lrcoff2-${trackId}`)
-      saved = manual ?? read(`lrcoffa-${trackId}`)
-      setPinned(manual !== null)
+      saved = read(`lrcoff2-${trackId}`) ?? read(`lrcoffa-${trackId}`)
       const keys = Object.keys(localStorage).filter((k) => k.startsWith("lrcoff"))
       for (const k of keys) {
         if (k.startsWith("lrcoff-")) localStorage.removeItem(k)
@@ -357,23 +362,11 @@ function SyncedLyrics({ lines, autoOff, onResetPin }: { lines: LrcLine[]; autoOf
       const kept = keys.filter((k) => k.startsWith("lrcoff2-") || k.startsWith("lrcoffa-"))
       for (const k of kept.slice(0, Math.max(0, kept.length - 140))) localStorage.removeItem(k)
     } catch { /* storage unavailable — offsets just won't persist */ }
-    if (saved !== null) {
-      setOffset(saved)
-      setNote(null)
-    } else {
-      setOffset(autoOff)
-      if (autoOff !== 0) {
-        setNote(`Lyrics auto-synced ${autoOff > 0 ? "+" : ""}${autoOff}s`)
-        const h = setTimeout(() => setNote(null), 4500)
-        return () => clearTimeout(h)
-      }
-      setNote(null)
-    }
+    setOffset(saved ?? autoOff)
   }, [trackId, autoOff, fp])
   const applyOffset = (v: number) => {
     const next = Math.max(-90, Math.min(90, Math.round(v * 10) / 10))
     setOffset(next)
-    setPinned(true)
     if (trackId) {
       try {
         localStorage.setItem(`lrcoff2-${trackId}`, JSON.stringify({ o: next, f: fp }))
@@ -425,40 +418,7 @@ function SyncedLyrics({ lines, autoOff, onResetPin }: { lines: LrcLine[]; autoOf
     <div className="relative h-full w-full">
       {/* transient notice when auto-calibration kicked in — tells the user
           the lyrics were nudged without adding permanent chrome */}
-      <AnimatePresence>
-        {(note || pinned) && (
-          <motion.div
-            key={pinned ? "pinned" : "note"}
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="absolute left-1/2 top-3 z-10 -translate-x-1/2"
-          >
-            {pinned ? (
-              <button
-                className="rounded-full bg-panel/80 px-3 py-1.5 text-[11px] font-medium text-ink/70 ring-1 ring-line backdrop-blur transition hover:text-ink"
-                onClick={() => {
-                  try {
-                    if (trackId) {
-                      localStorage.removeItem(`lrcoff2-${trackId}`)
-                      localStorage.removeItem(`lrcoffa-${trackId}`)
-                    }
-                  } catch { /* ok */ }
-                  setPinned(false)
-                  setOffset(autoOff)
-                  onResetPin?.()
-                }}
-              >
-                Synced manually — click to reset
-              </button>
-            ) : (
-              <div className="rounded-full bg-panel/80 px-3 py-1.5 text-[11px] font-medium text-ink/70 ring-1 ring-line backdrop-blur">
-                {note} · Shift+click a line if it's off
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <AnimatePresence />
       <div ref={listRef} className="scroller h-full w-full overflow-y-auto px-8 text-center">
         <div className="py-[38vh]">
           {lines.map((l, i) => (
@@ -1117,7 +1077,7 @@ export function NowPlaying() {
                   <Loader2 size={28} className="animate-spin text-ink/50" />
                 ) : lyrics && "synced" in lyrics ? (
                   <div className="h-full w-[min(92vw,840px)] [mask-image:linear-gradient(180deg,transparent,black_10%,black_90%,transparent)]">
-                    <SyncedLyrics lines={lyrics.synced} autoOff={lyrics.autoOff} onResetPin={() => setLyricsTried(false)} />
+                    <SyncedLyrics lines={lyrics.synced} autoOff={lyrics.autoOff} />
                   </div>
                 ) : lyrics ? (
                   <div className="scroller h-full w-[min(92vw,840px)] overflow-y-auto overscroll-contain px-2 [mask-image:linear-gradient(180deg,transparent,black_8%,black_92%,transparent)]">
