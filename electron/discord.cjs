@@ -10,6 +10,24 @@ let client = null
 let connecting = false
 let retryTimer = null
 let lastJson = null // last activity we pushed — resend after a reconnect
+let lastJsonAt = 0 // when — timestamps must be rebased before a re-push
+
+// Re-sendable copy of lastJson: shift its absolute timestamps by the elapsed
+// time so a re-push doesn't rewind the progress bar (or resurrect a song
+// that's already over — in that case return null and let it clear).
+function rebased() {
+  if (!lastJson) return null
+  const dt = Date.now() - lastJsonAt
+  const a = { ...lastJson }
+  if (typeof a.startTimestamp === "number") a.startTimestamp += dt
+  if (typeof a.endTimestamp === "number") {
+    a.endTimestamp += dt
+    if (a.endTimestamp <= Date.now()) return null
+  }
+  lastJson = a
+  lastJsonAt = Date.now()
+  return a
+}
 let enabled = true
 
 function log(msg) {
@@ -52,7 +70,8 @@ async function connect() {
     client = c
     c = null // ownership transferred — failure path won't destroy it
     log("connected")
-    if (lastJson) await push(lastJson).catch(() => {})
+    const resend = rebased()
+    if (resend) await push(resend).catch(() => {})
   } catch (e) {
     log(`connect failed: ${e?.message ?? e}`)
     try {
@@ -75,12 +94,24 @@ function scheduleRetry() {
   retryTimer.unref?.()
 }
 
+// Heartbeat — Discord can drop the IPC socket without firing "disconnected"
+// (client restart, sleep, network blip). Pushes only happen on track
+// transitions, so a quietly-dead socket left the presence stuck off until
+// the next song. Re-pushing every 60s both revives the presence and forces
+// half-dead sockets to fail → detect → reconnect.
+setInterval(() => {
+  if (!enabled || !client) return
+  const a = rebased()
+  if (a) void push(a).catch(() => {})
+}, 60000).unref?.()
+
 async function push(activity) {
   const c = await connect()
   if (!c) return
   try {
     // user.setActivity sends the SET_ACTIVITY command over the IPC socket
     await withTimeout(c.user.setActivity(activity), 8000, "setActivity")
+    log(`push ok: ${activity.details ?? "?"} — ${activity.state ?? "?"}`)
   } catch (e) {
     log(`setActivity failed: ${e?.message ?? e}`)
     client = null
@@ -140,6 +171,7 @@ async function setPresence(payload) {
     activity.endTimestamp = Date.now() + Math.max(0, Math.round(dur - pos))
   }
   lastJson = activity
+  lastJsonAt = Date.now()
   await push(activity)
 }
 
