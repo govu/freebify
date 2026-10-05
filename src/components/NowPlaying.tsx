@@ -137,6 +137,11 @@ const dice = (a: Set<string>, b: Set<string>) => {
 const lineSim = (a: Set<string>, aBi: Set<string>, b: Set<string>, bBi: Set<string>) =>
   Math.max(dice(a, b), dice(aBi, bBi))
 
+// ASR noise isn't a lyric — "[música]", "[Applause]", ">>" speaker markers —
+// strip every bracketed marker from caption-derived text; marker-only cues
+// become "" and get dropped
+const capText = (t: string) => t.replace(/\[[^\]]*\]/g, " ").replace(/>+/g, "").replace(/\s+/g, " ").trim()
+
 // A lyric DB's timestamps describe the studio recording; playback is THIS
 // upload, whose video intro the record never saw. The video's own caption
 // track is timed to our exact audio, so matching the first lyric lines
@@ -339,11 +344,11 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
       // one-time purge — every pin/measured offset written before the
       // challengeable-pin fix is suspect (they were pinned while the
       // pipeline was still broken). Wipe once; fresh corrections persist
-      if (!localStorage.getItem("lrcpin-purged-v1")) {
+      if (!localStorage.getItem("lrcpin-purged-v2")) {
         for (const k of Object.keys(localStorage)) {
           if (/^lrcoff(a|2)?-/.test(k)) localStorage.removeItem(k)
         }
-        localStorage.setItem("lrcpin-purged-v1", "1")
+        localStorage.setItem("lrcpin-purged-v2", "1")
       }
       // lrcoff2- = manual (Shift+click); lrcoffa- = auto-measured —
       // both fingerprinted to their sheet; lrcoff- = v1 keys → purge
@@ -358,7 +363,17 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
         } catch { /* bare number — legacy manual pin, trust it */ }
         return Number(raw) || 0
       }
-      saved = read(`lrcoff2-${trackId}`) ?? read(`lrcoffa-${trackId}`)
+      const manual = read(`lrcoff2-${trackId}`)
+      let auto = read(`lrcoffa-${trackId}`)
+      // an auto-persist ≈0 fighting a strong intro guess is the lyric-twin
+      // lie's signature — it was measured on an upload that strips the
+      // spoken intro. The modal-backed duration guess paints first; the
+      // walk re-measures right after anyway.
+      if (manual === null && auto !== null && Math.abs(auto) < 2 && Math.abs(autoOff) >= 5) {
+        try { localStorage.removeItem(`lrcoffa-${trackId}`) } catch { /* ok */ }
+        auto = null
+      }
+      saved = manual ?? auto
       const keys = Object.keys(localStorage).filter((k) => k.startsWith("lrcoff"))
       for (const k of keys) {
         if (k.startsWith("lrcoff-")) localStorage.removeItem(k)
@@ -736,6 +751,17 @@ export function NowPlaying() {
       }
       if (await attempt(ownVid, true)) return
       if (!alternates) return
+      // the playing upload's own related list — official-video reuploads
+      // and lyric versions cluster there (same video family), which makes
+      // it the cheapest source of same-structure captioned twins
+      if (ownVid) {
+        const rel = await yt.upNext(ownVid).catch(() => [] as { streamId?: string; title: string; duration?: number; user?: { name?: string } }[])
+        const gated = rel.filter(gate)
+        dbgL(`upnext: ${rel.length} hits, ${gated.length} pass gate`)
+        for (const t of gated.sort(rank)) {
+          if (await attempt(t.streamId, false, t)) return
+        }
+      }
       for (const q of twinQueries) {
         if (!alive() || tried > budget) return
         const res = await yt.search(q).catch(() => null)
@@ -813,7 +839,7 @@ export function NowPlaying() {
           let lastK = ""
           for (const c of caps) {
             if (c.t >= edge) break
-            const text = c.text.replace(/>+/g, "").replace(/\s+/g, " ").trim()
+            const text = capText(c.text)
             const k = norm(text)
             if (k.length < 3 || k === lastK) continue
             lastK = k
@@ -856,7 +882,9 @@ export function NowPlaying() {
               return false
             }
             dbg(`captions: ${vid} n=${cap.lines.length} "${(meta?.title ?? "").slice(0, 40)}"`)
-            const clipped = cap.lines.filter((l) => !dur || l.t <= dur + 15)
+            const clipped = cap.lines
+              .map((l) => ({ t: l.t, text: capText(l.text) }))
+              .filter((l) => l.text && (!dur || l.t <= dur + 15))
             // content veto: a same-title DIFFERENT song's sheet passes the
             // metadata gates but its words aren't in this audio — swap for
             // the captions, the right words by definition. Only ground truth
@@ -930,7 +958,7 @@ export function NowPlaying() {
             dbgL(`capsheet: ${cap.lines.length} lines on ${vid}`)
             // captions run to the video's end — clip to the track's runtime
             // so a longer upload's outro chatter can't tail the lyric sheet
-            out = sane(cap.lines.filter((l) => !dur || l.t <= dur + 15))
+            out = sane(cap.lines.map((l) => ({ t: l.t, text: capText(l.text) })).filter((l) => l.text && (!dur || l.t <= dur + 15)))
             return out != null
           },
           { alive: () => live },
