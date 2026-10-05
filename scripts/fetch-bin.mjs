@@ -6,7 +6,7 @@ import { get } from "node:https"
 
 const isWin = process.platform === "win32"
 const NAME = isWin ? "yt-dlp.exe" : process.platform === "darwin" ? "yt-dlp_macos" : "yt-dlp"
-const URL = `https://github.com/yt-dlp/yt-dlp/releases/latest/download/${NAME}`
+const BIN_URL = `https://github.com/yt-dlp/yt-dlp/releases/latest/download/${NAME}`
 const DEST = new URL(`../bin/${isWin ? "yt-dlp.exe" : "yt-dlp"}`, import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1")
 
 if (existsSync(DEST)) {
@@ -30,6 +30,6 @@ const download = (url, redirects = 5) =>
   })
 
 console.log(`[fetch-bin] downloading ${NAME} …`)
-await download(URL)
+await download(BIN_URL)
 if (!isWin) chmodSync(DEST, 0o755)
 console.log(`[fetch-bin] saved to ${DEST}`)
