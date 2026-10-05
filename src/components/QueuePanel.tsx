@@ -146,15 +146,15 @@ export function QueuePanel() {
         <div className="scroller min-h-0 flex-1 overflow-y-auto px-2 pb-4">
           {queue[index] && (
             <>
-              <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-faint">Now playing</p>
+              <p className="px-3 pb-1 text-xs font-semibold text-faint">Now playing</p>
               {/* tapping the live row toggles instead of restarting */}
               <QueueRow track={queue[index]} active playing={isPlaying} onClick={toggle} />
             </>
           )}
           {upNext.length > 0 && (
             <>
-              <p className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-faint">
-                Next up <span className="normal-case tracking-normal text-faint/60">· drag to reorder</span>
+              <p className="px-3 pb-1 pt-4 text-xs font-semibold text-faint">
+                Next up
               </p>
               <AnimatePresence initial={false}>
                 {upNext.map((t, k) => {

@@ -73,7 +73,7 @@ export function GenrePage() {
         }}
       >
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-          <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-ink/70">
+          <p className="text-xs font-semibold text-ink/70">
             Genre {source === "audius" ? "· trending" : ""}
           </p>
           <h1 className="mt-2 text-4xl font-black tracking-tight drop-shadow-lg sm:text-6xl">

@@ -10,7 +10,10 @@ interface YtBridge {
   stream: (videoId: string) => Promise<string | null>
   prefetch?: (videoId: string) => Promise<string | null>
   invalidate: (videoId: string) => Promise<boolean>
-  artist: (id: string, nameHint?: string) => Promise<{ user: User; tracks: Track[] } | null>
+  artist: (
+    id: string,
+    nameHint?: string,
+  ) => Promise<{ user: User; tracks: Track[]; albums?: Playlist[]; singles?: Playlist[] } | null>
   album: (id: string) => Promise<{ playlist: Playlist; tracks: Track[] } | null>
   playlist: (id: string) => Promise<{ playlist: Playlist; tracks: Track[] } | null>
   playlists: () => Promise<Playlist[]>

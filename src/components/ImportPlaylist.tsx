@@ -175,7 +175,7 @@ export function ImportPlaylist() {
               </div>
 
               <div className="mt-5">
-                <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-dim">
+                <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-dim">
                   <Link2 size={12} /> YouTube Music link
                 </p>
                 <input
@@ -195,7 +195,7 @@ export function ImportPlaylist() {
               </div>
 
               <div className="mt-6 border-t border-line pt-5">
-                <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-dim">
+                <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-dim">
                   <FileSpreadsheet size={12} /> Spotify CSV export
                 </p>
                 <p className="mb-3 text-xs text-faint">

@@ -770,7 +770,7 @@ export function NowPlaying() {
           >
             <ChevronDown size={22} />
           </button>
-          <p className="flex-1 text-center text-[11px] font-semibold uppercase tracking-[0.35em] text-ink/60">
+          <p className="flex-1 text-center text-xs font-semibold text-ink/50">
             Now playing
           </p>
           <button

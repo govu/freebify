@@ -16,7 +16,9 @@ function log(tag, msg) {
 }
 
 // ---------- yt-dlp ----------
+let execBin = null // set by ensureExecutable when the bundled path can't run
 function binPath() {
+  if (execBin) return execBin
   // unix builds ship the bare binary as "yt-dlp" — no .exe outside win32
   const name = process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp"
   const rel = app?.isPackaged
@@ -33,12 +35,63 @@ function ytdlpAvailable() {
   }
 }
 
+// On macOS a downloaded .app carries com.apple.quarantine on EVERY bundled
+// file — Gatekeeper intercepts spawn() of the unsigned yt-dlp binary and
+// kills it (EACCES/dialog), which reads as "no song ever plays". Strip the
+// attribute from the whole bundle once, re-assert the exec bit, and PROBE
+// the binary: if it still can't run (App Translocation mounts a read-only
+// path when launched straight from the dmg), copy it into the writable
+// userData dir — files we write and de-quarantine ourselves are ours.
+let dequarantineP = null
+function ensureExecutable() {
+  if (process.platform === "win32" || !app?.isPackaged) return Promise.resolve()
+  if (!dequarantineP) {
+    dequarantineP = (async () => {
+      const probe = (p) =>
+        new Promise((res) => execFile(p, ["--version"], { timeout: 8000 }, (e) => res(!e)))
+      const bundled = binPath()
+      try {
+        fs.chmodSync(bundled, 0o755)
+      } catch { /* read-only bundle — probe may still pass */ }
+      if (process.platform === "darwin") {
+        const bundle = path.join(process.resourcesPath, "..", "..")
+        await new Promise((r) =>
+          execFile("/usr/bin/xattr", ["-dr", "com.apple.quarantine", bundle], () => r()),
+        )
+      }
+      if (await probe(bundled)) return
+      // bundled binary untrusted/dead → writable copy under our control
+      const alt = path.join(app.getPath("userData"), "bin", "yt-dlp")
+      try {
+        fs.mkdirSync(path.dirname(alt), { recursive: true })
+        fs.copyFileSync(bundled, alt)
+        fs.chmodSync(alt, 0o755)
+        if (process.platform === "darwin") {
+          await new Promise((r) =>
+            execFile("/usr/bin/xattr", ["-d", "com.apple.quarantine", alt], () => r()),
+          )
+        }
+        if (await probe(alt)) execBin = alt
+        else log("ytdlp", "bundled binary could not be executed (quarantine?)")
+      } catch (e) {
+        log("ytdlp", `exec fallback failed: ${e?.message ?? e}`)
+      }
+    })()
+  }
+  return dequarantineP
+}
+
 function runYtdlp(args, timeout = 18000) {
   return new Promise((resolve, reject) => {
-    execFile(binPath(), args, { timeout, maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => {
-      if (err) reject(err)
-      else resolve(stdout)
-    })
+    ensureExecutable().then(
+      () => {
+        execFile(binPath(), args, { timeout, maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => {
+          if (err) reject(err)
+          else resolve(stdout)
+        })
+      },
+      reject,
+    )
   })
 }
 
@@ -567,6 +620,42 @@ function mapArtist(item) {
   }
 }
 
+// Raw musicTwoRowItemRenderer → same Playlist shape as mapAlbum. The
+// artist discography browse (MPAD…) returns unparsed JSON — the Parser
+// leaves it inside Memo nodes — so the raw renderer is mapped directly.
+// kind comes from the subtitle ("Single • 2023" / "EP • 2021" vs "Album").
+function mapRawAlbumRow(r, artistName) {
+  const browseId = r?.navigationEndpoint?.browseEndpoint?.browseId
+  const name = (r?.title?.runs ?? []).map((x) => x.text).join("").trim()
+  if (!browseId || !name) return null
+  const sub = (r?.subtitle?.runs ?? []).map((x) => x.text).join(" ")
+  const thumbs = r?.thumbnailRenderer?.musicThumbnailRenderer?.thumbnail?.thumbnails ?? []
+  const big = thumbs[thumbs.length - 1]?.url ?? null
+  return {
+    kind: /single|sencillo|\bep\b/i.test(sub) ? "single" : "album",
+    pl: {
+      id: `ytalb-${browseId}`,
+      streamId: browseId,
+      playlist_name: name,
+      is_album: true,
+      artwork: big ? { "150x150": thumbs[0]?.url ?? big, "480x480": big, "1000x1000": big } : null,
+      track_count: 0,
+      permalink: `https://music.youtube.com/browse/${browseId}`,
+      user: {
+        id: `yt-${artistName}`,
+        streamId: null,
+        name: artistName,
+        handle: artistName,
+        is_verified: false,
+        follower_count: 0,
+        track_count: 0,
+        profile_picture: null,
+        cover_photo: null,
+      },
+    },
+  }
+}
+
 function mapAlbum(item) {
   const browseId = item.id ?? item.endpoint?.payload?.browseId
   if (!browseId) return null
@@ -893,12 +982,66 @@ async function artist(channelIdOrName, nameHint) {
     songsShelf?.endpoint?.payload?.browseId ??
     songsShelf?.endpoint?.payload?.playlistId ??
     songsShelf?.bottom_endpoint?.payload?.browseId
-  if (songsPl) {
+  // getAllSongs resolves the complete ranked list (~100 vs the shelf's 30);
+  // the playlist endpoint and the page's inline rows stay as fallbacks
+  try {
+    const all = await page.getAllSongs?.()
+    if (all) tracks = songsOf(all)
+  } catch { /* fall through to the shelf endpoint */ }
+  if (!tracks.length && songsPl) {
     const pl = await yt.music.getPlaylist(songsPl).catch(() => null)
     if (pl) tracks = songsOf(pl)
   }
   if (!tracks.length) tracks = songsOf(page)
-  tracks = tracks.slice(0, 30)
+  tracks = tracks.slice(0, 150)
+
+  // Full discography: the Albums/Singles carousels ship only ~10 rows, but
+  // their more_content button carries an MPAD browseId. Calling the RAW
+  // browseId returns the complete release grid — the endpoint's own params
+  // answer "No results". One browse covers both sections; subtitle text
+  // splits singles from albums. Carousel rows merge after as a safety net.
+  const discog = { albums: [], singles: [] }
+  const relShelves = collect(page, ["MusicCarouselShelf"]).filter((s) =>
+    /album|álbum|single|sencillo|\bep\b/i.test(text(s.header?.title)),
+  )
+  let rawRows = []
+  const seenBid = new Set()
+  for (const shelf of relShelves) {
+    const bid = shelf.header?.more_content?.endpoint?.payload?.browseId
+    if (!bid || seenBid.has(bid)) continue
+    seenBid.add(bid)
+    try {
+      const res = await yt.actions.execute("/browse", { browseId: bid, client: "YTMUSIC" })
+      const rows = []
+      const walk = (n) => {
+        if (!n || typeof n !== "object") return
+        if (Array.isArray(n)) { n.forEach(walk); return }
+        if (n.musicTwoRowItemRenderer) rows.push(n.musicTwoRowItemRenderer)
+        for (const v of Object.values(n)) if (v && typeof v === "object") walk(v)
+      }
+      walk(res?.data ?? res)
+      if (rows.length > rawRows.length) rawRows = rows
+    } catch { /* keep the carousel rows */ }
+  }
+  const seenRel = new Set()
+  const pushRel = (bucket, pl) => {
+    if (!pl?.streamId || seenRel.has(pl.streamId)) return
+    seenRel.add(pl.streamId)
+    discog[bucket].push(pl)
+  }
+  for (const r of rawRows) {
+    const m = mapRawAlbumRow(r, name)
+    if (m) pushRel(m.kind === "single" ? "singles" : "albums", m.pl)
+  }
+  for (const shelf of relShelves) {
+    const bucket = /album|álbum/i.test(text(shelf.header?.title)) ? "albums" : "singles"
+    collect(shelf, ["MusicTwoRowItem"])
+      .map(mapAlbum)
+      .filter(Boolean)
+      // discography subtitles are "Album • year" — mapAlbum degrades to
+      // "Various Artists" there; these are THIS artist's own releases
+      .forEach((pl) => pushRel(bucket, { ...pl, user: { ...pl.user, name } }))
+  }
 
   const self = await metaP
   // square-crop any googleusercontent url — artist avatars are circles, and
@@ -924,6 +1067,8 @@ async function artist(channelIdOrName, nameHint) {
         : (pic ? { "640x": pic["480x480"], "2000x": pic["1000x1000"] } : null) ?? artToCover(trackArtwork(tracks)),
     },
     tracks,
+    albums: discog.albums,
+    singles: discog.singles,
   }
   } catch (e) {
     // a malformed shelf/header shouldn't nuke a whole artist page — degrade
@@ -1430,9 +1575,8 @@ function register(ipcMain) {
   // AV-scan cost (~300-800ms). A throwaway --version at startup moves that
   // off the critical path of the user's first click.
   if (ytdlpAvailable()) {
-    try {
-      execFile(binPath(), ["--version"], { timeout: 8000 }, () => {})
-    } catch {}
+    // via runYtdlp so the mac de-quarantine lands before this first spawn too
+    runYtdlp(["--version"], 8000).catch(() => {})
   }
 
   // no raw available() here — Innertube.create() has no timeout of its own
@@ -1540,4 +1684,4 @@ function register(ipcMain) {
   }
 }
 
-module.exports = { register, binPath, ytdlpAvailable }
+module.exports = { register, binPath, ytdlpAvailable, ensureExecutable }

@@ -4,7 +4,8 @@ import { useEffect, useState } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
 import { apiClient } from "../api/audius"
 import { prefetchStream, yt } from "../api/youtube"
-import type { Track, User } from "../api/types"
+import type { Playlist, Track, User } from "../api/types"
+import { PlaylistCard, Section } from "../components/Cards"
 import { HeroSkeleton, RowsSkeleton } from "../components/Skeletons"
 import { TrackTable } from "../components/TrackTable"
 import { usePlayer } from "../store/player"
@@ -17,6 +18,9 @@ export function ArtistPage() {
   const nameHint = useSearchParams()[0].get("n") ?? undefined
   const [artist, setArtist] = useState<User | null>(null)
   const [tracks, setTracks] = useState<Track[]>([])
+  const [albums, setAlbums] = useState<Playlist[]>([])
+  const [singles, setSingles] = useState<Playlist[]>([])
+  const [allTracks, setAllTracks] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   // track fetch fails independently — "hasn't uploaded tracks" is a lie
@@ -42,6 +46,9 @@ export function ArtistPage() {
     setAvatarFailed(false)
     setCoverIdx(0)
     setAvatarIdx(0)
+    setAlbums([])
+    setSingles([])
+    setAllTracks(false)
     void (async () => {
       if (id.startsWith("yt-")) {
         try {
@@ -50,6 +57,8 @@ export function ArtistPage() {
           if (res) {
             setArtist(res.user)
             setTracks(res.tracks)
+            setAlbums(res.albums ?? [])
+            setSingles(res.singles ?? [])
             res.tracks.slice(0, 6).forEach((t) => prefetchStream(t))
           } else setError(true)
         } catch {
@@ -58,12 +67,18 @@ export function ArtistPage() {
         if (live) setLoading(false)
         return
       }
-      const [u, t] = await Promise.allSettled([apiClient.user(id), apiClient.userTracks(id, 50)])
+      const [u, t, a] = await Promise.allSettled([
+        apiClient.user(id),
+        apiClient.userTracks(id, 50),
+        // Audius albums/singles ship as playlist objects — same card surface
+        apiClient.userAlbums(id),
+      ])
       if (!live) return
       if (u.status === "fulfilled") setArtist(u.value)
       else setError(true)
       if (t.status === "fulfilled") setTracks(t.value)
       else setTracksError(true)
+      if (a.status === "fulfilled") setAlbums(a.value)
       setLoading(false)
     })()
     return () => {
@@ -203,18 +218,42 @@ export function ArtistPage() {
             </button>
           </div>
         ) : tracks.length > 0 ? (
-          <TrackTable tracks={tracks} />
+          <>
+            {/* the table caps at 15 rows — a 100-song list would bury the
+                discography; context= keeps the play queue on the FULL list
+                so row clicks queue everything, not just the slice */}
+            <TrackTable tracks={allTracks ? tracks : tracks.slice(0, 15)} context={tracks} />
+            {tracks.length > 15 && (
+              <button
+                onClick={() => setAllTracks((v) => !v)}
+                className="mt-2 rounded-full px-3 py-1.5 text-xs font-semibold text-dim transition hover:bg-hover hover:text-ink"
+              >
+                {allTracks ? "Show less" : `Show all ${tracks.length}`}
+              </button>
+            )}
+          </>
         ) : (
           <p className="py-10 text-sm text-dim">This artist hasn't uploaded tracks yet.</p>
         )}
-
-        {artist.bio && (
-          <div className="mt-10 max-w-2xl">
-            <h2 className="mb-2 text-xl font-bold">About</h2>
-            <p className="whitespace-pre-line text-sm leading-6 text-dim">{artist.bio}</p>
-          </div>
-        )}
       </div>
+
+      {albums.length > 0 && (
+        <div className="mt-4">
+          <Section title="Albums">{albums.map((p) => <PlaylistCard key={p.id} p={p} />)}</Section>
+        </div>
+      )}
+      {singles.length > 0 && (
+        <div className={albums.length > 0 ? "" : "mt-4"}>
+          <Section title="Singles & EPs">{singles.map((p) => <PlaylistCard key={p.id} p={p} />)}</Section>
+        </div>
+      )}
+
+      {artist.bio && (
+        <div className="mt-10 max-w-2xl px-6">
+          <h2 className="mb-2 text-xl font-bold">About</h2>
+          <p className="whitespace-pre-line text-sm leading-6 text-dim">{artist.bio}</p>
+        </div>
+      )}
     </div>
   )
 }

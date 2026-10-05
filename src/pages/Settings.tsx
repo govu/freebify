@@ -80,7 +80,7 @@ export function SettingsPage() {
       <div className="max-w-xl space-y-3">
         {/* playback */}
         <section className="rounded-xl border border-line bg-card p-5">
-          <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-dim">Playback</h2>
+          <h2 className="mb-3 text-sm font-semibold text-dim">Playback</h2>
           <button
             onClick={() => setAutoplay(!autoplay)}
             aria-pressed={autoplay}
@@ -121,7 +121,7 @@ export function SettingsPage() {
 
         {/* library */}
         <section className="rounded-xl border border-line bg-card p-5">
-          <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-dim">Library</h2>
+          <h2 className="mb-3 text-sm font-semibold text-dim">Library</h2>
           <p className="text-sm text-dim">
             {Object.keys(liked).length} liked songs · {playlists.length} playlists — stored locally on this device.
           </p>
@@ -135,7 +135,7 @@ export function SettingsPage() {
 
         {/* shortcuts */}
         <section className="rounded-xl border border-line bg-card p-5">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-dim">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-dim">
             <Keyboard size={15} /> Keyboard shortcuts
           </h2>
           <div className="grid grid-cols-2 gap-x-8 gap-y-2 sm:grid-cols-3">
@@ -152,7 +152,7 @@ export function SettingsPage() {
 
         {/* about + diagnostics */}
         <section className="rounded-xl border border-line bg-card p-5">
-          <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-dim">About</h2>
+          <h2 className="mb-3 text-sm font-semibold text-dim">About</h2>
           <p className="text-sm font-semibold">Freebify {info ? `v${info.version}` : ""}</p>
           <p className="mt-1 text-xs leading-relaxed text-dim">
             Free, ad-free music. Freebify is a player, not a host — all audio & metadata are fetched

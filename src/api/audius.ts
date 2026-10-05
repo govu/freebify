@@ -201,6 +201,8 @@ export const apiClient = {
   userTracks: (id: string, limit = 50) =>
     api<Track[]>(`/users/${id}/tracks`, { limit, sort_method: "plays", sort_direction: "desc" }).then(cleanTracks),
 
+  userAlbums: (id: string) => api<Playlist[]>(`/users/${id}/albums`, { limit: 100 }).then(cleanPlaylists),
+
   track: (id: string) => api<Track>(`/tracks/${id}`),
 }
 

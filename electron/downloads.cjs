@@ -8,7 +8,7 @@ const path = require("path")
 const fs = require("fs")
 const { pathToFileURL } = require("url")
 const { app, shell, BrowserWindow, protocol, net } = require("electron")
-const { binPath, ytdlpAvailable } = require("./youtube.cjs")
+const { binPath, ytdlpAvailable, ensureExecutable } = require("./youtube.cjs")
 
 // mirror of main.cjs logLine — same file so a grep reads the whole story
 function log(tag, msg) {
@@ -140,7 +140,11 @@ function drain() {
 
 // YouTube track → yt-dlp writes the file itself; progress parsed from the
 // "[download]  42.3%" lines it prints on stderr
-function downloadYt(id, streamId, track) {
+async function downloadYt(id, streamId, track) {
+  // mac de-quarantine / exec bit must land before the binary can spawn —
+  // a queued download during the first seconds of a session would
+  // otherwise EPERM against Gatekeeper
+  await ensureExecutable()
   const base = uniqueBase(id, track)
   const args = [
     "-f", "bestaudio[ext=m4a]/bestaudio",

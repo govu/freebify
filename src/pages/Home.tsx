@@ -232,7 +232,7 @@ export function Home() {
           <section className="mb-10">
             <div className="mb-4 flex items-baseline justify-between px-6">
               <h2 className="text-xl font-bold tracking-tight">Top songs this week</h2>
-              <span className="text-xs font-semibold uppercase tracking-wider text-faint">Chart</span>
+              <span className="text-xs font-semibold text-faint">Chart</span>
             </div>
             {loading && chartTracks.length === 0 ? (
               <div className="px-6">

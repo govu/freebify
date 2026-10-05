@@ -139,7 +139,7 @@ export function TrackTable({ tracks, context, showHeader = true, showPlays: want
   return (
     <div className="relative">
       {showHeader && (
-        <div className={`grid h-9 grid-cols-[1.75rem_minmax(0,1fr)_6rem] items-center gap-x-4 border-b border-line px-3 text-[11px] font-medium uppercase tracking-widest text-faint ${lgCols}`}>
+        <div className={`grid h-9 grid-cols-[1.75rem_minmax(0,1fr)_6rem] items-center gap-x-4 border-b border-line px-3 text-xs font-medium text-faint ${lgCols}`}>
           <span>#</span>
           <span>Title</span>
           <span className="hidden lg:block">Artist</span>
@@ -328,7 +328,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
           <span title={t.title} className={`block truncate text-sm font-medium ${isCurrent ? "text-white underline decoration-white/30 underline-offset-4" : "text-ink"}`}>
             {t.title}
             {(isNonOriginal(t) || isLongForm(t)) && (
-              <span className="ml-1.5 rounded border border-line px-1 align-middle text-[9px] font-semibold uppercase tracking-wide text-faint">
+              <span className="ml-1.5 rounded border border-line px-1 align-middle text-[9px] font-semibold text-faint">
                 {isLongForm(t) ? "Set" : "Edit"}
               </span>
             )}

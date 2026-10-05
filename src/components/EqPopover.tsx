@@ -84,7 +84,7 @@ export function EqPopover() {
                 used to overflow the panel's right edge) */}
             <div className="mb-4">
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-dim">Equalizer</span>
+                <span className="text-xs font-semibold text-dim">Equalizer</span>
                 {custom && (
                   <button
                     onClick={() => setEq(PRESETS.Flat)}

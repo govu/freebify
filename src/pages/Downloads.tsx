@@ -38,7 +38,7 @@ export function DownloadsPage() {
       {/* compact section header — a storage view, not a playlist cover */}
       <div className="flex items-center justify-between gap-4 px-6 pb-6 pt-20">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
-          <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-faint">Offline</p>
+          <p className="text-xs font-semibold text-faint">Offline</p>
           <h1 className="mt-1.5 text-3xl font-black tracking-tight">Downloads</h1>
           <p className="mt-2 text-sm text-dim">
             {tracks.length} tracks — stored on this device, playable offline
@@ -76,7 +76,7 @@ export function DownloadsPage() {
                 {/* thin progress line under the row content is overkill —
                     a pill + percent reads cleaner and matches the table */}
                 {isQueued ? (
-                  <span className="rounded-full border border-line px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-faint">
+                  <span className="rounded-full border border-line px-2.5 py-0.5 text-[10px] font-semibold text-faint">
                     Queued
                   </span>
                 ) : (

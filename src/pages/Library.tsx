@@ -39,7 +39,7 @@ export function LibraryPage() {
           <Heart size={72} className="fill-black text-black" />
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.08 }}>
-          <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-ink/70">Playlist</p>
+          <p className="text-xs font-semibold text-ink/70">Playlist</p>
           <h1 className="mt-2 text-4xl font-black tracking-tight sm:text-6xl">Liked Songs</h1>
           <p className="mt-3 text-sm text-dim">{likedTracks.length} tracks</p>
         </motion.div>

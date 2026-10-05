@@ -154,11 +154,32 @@ export function getEq(): number[] {
 }
 
 /** Per-element loudness gain (linear) — each element carries its own
- *  normalization so a crossfade blends two already-leveled signals. */
+ *  normalization so a crossfade blends two already-leveled signals.
+ *
+ *  The first-play correction lands ~8s into the song, so the way it MOVES
+ *  matters: a setTargetAtTime approach in linear domain covers 63% of the
+ *  jump in its first τ — a +8dB fix reads as an audible snap. Instead we
+ *  ramp geometrically (constant dB/sec — the perceptually even trajectory)
+ *  and rate-limit to ≤3dB/s so big corrections glide instead of step. */
 export function setNormGain(el: HTMLAudioElement, linear: number) {
   const p = ports.get(el)
   if (!p || !ctx) return
-  p.gain.gain.setTargetAtTime(Math.max(0, Math.min(5, linear)), ctx.currentTime, 0.25)
+  const t = ctx.currentTime
+  const from = Math.max(0.0001, p.gain.gain.value)
+  const to = Math.max(0.0001, Math.min(5, linear))
+  p.gain.gain.cancelScheduledValues(t)
+  if (Math.abs(to - from) < 0.02) {
+    p.gain.gain.setValueAtTime(to, t)
+    return
+  }
+  const db = Math.abs(20 * Math.log10(to / from))
+  const secs = Math.min(4, Math.max(0.4, db / 3))
+  const N = 48
+  const curve = new Float32Array(N)
+  const ratio = to / from
+  for (let i = 0; i < N; i++) curve[i] = from * Math.pow(ratio, i / (N - 1))
+  p.gain.gain.setValueAtTime(from, t)
+  p.gain.gain.setValueCurveAtTime(curve, t, secs)
 }
 
 /** Integrated RMS (linear) of an element's signal — used by the loudness

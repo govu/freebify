@@ -201,9 +201,10 @@ function CollageCover({ p, alt }: { p: Playlist; alt: string }) {
 }
 
 export function PlaylistCard({ p }: { p: Playlist }) {
-  // only yt editorial playlists get the collage treatment — Audius covers
-  // are already clean real artwork
-  const isYt = p.id.startsWith("ytpl-") || p.id.startsWith("ytalb-")
+  // yt editorial playlists carry NO artwork — the collage fetches track
+  // thumbs for them. Items that already ship a real cover (album rows,
+  // new releases, Audius) go straight to ArtworkImg: no extra browse call.
+  const isYt = (p.id.startsWith("ytpl-") || p.id.startsWith("ytalb-")) && !p.artwork?.["480x480"]
   return (
     <motion.div whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 400, damping: 26 }}>
       <Link to={`/playlist/${encodeURIComponent(p.id)}`} className={`block ${cardCls}`}>

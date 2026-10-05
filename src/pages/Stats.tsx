@@ -64,7 +64,7 @@ export function StatsPage() {
           {/* 7-day strip */}
           <div className="mt-6 rounded-2xl border border-line bg-panel p-5">
             <div className="mb-4 flex items-baseline justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-dim">Listening time</span>
+              <span className="text-xs font-semibold text-dim">Listening time</span>
               <span className="text-xs tabular-nums text-faint">{hm(weekMs)} this week</span>
             </div>
             <div className="flex h-24 items-end gap-2 border-b border-line/60 pb-px">
@@ -97,7 +97,7 @@ export function StatsPage() {
 
           <div className="mt-8 grid gap-8 lg:grid-cols-2">
             <div>
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-dim">Top tracks</h2>
+              <h2 className="mb-3 text-sm font-semibold text-dim">Top tracks</h2>
               <div className="space-y-1">
                 {topTracks.map((t, i) => (
                   <button
@@ -121,7 +121,7 @@ export function StatsPage() {
             </div>
 
             <div>
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-dim">Top artists</h2>
+              <h2 className="mb-3 text-sm font-semibold text-dim">Top artists</h2>
               <div className="space-y-1">
                 {topArtists.map((a, i) => (
                   <div key={a.name} className="flex items-center gap-3 rounded-lg px-2 py-1.5">
@@ -154,7 +154,7 @@ export function StatsPage() {
 function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-line bg-panel p-4">
-      <div className="flex items-center gap-2 text-faint">{icon}<span className="text-[11px] uppercase tracking-wider">{label}</span></div>
+      <div className="flex items-center gap-2 text-faint">{icon}<span className="text-[11px]">{label}</span></div>
       <p className="mt-2 text-2xl font-black tabular-nums tracking-tight">{value}</p>
     </div>
   )

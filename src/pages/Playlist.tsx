@@ -157,7 +157,7 @@ function RemotePlaylistView({ id }: { id: string }) {
           // hero wider than the viewport instead of wrapping
           className="min-w-0 sm:flex-1"
         >
-          <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-ink/70">
+          <p className="text-xs font-semibold text-ink/70">
             {playlist.is_album ? "Album" : "Playlist"}
           </p>
           <h1 title={playlist.playlist_name} className="mt-2 line-clamp-3 break-words text-3xl font-black tracking-tight sm:text-5xl">{playlist.playlist_name}</h1>
@@ -319,7 +319,7 @@ function LocalPlaylistView({ id }: { id: string }) {
           transition={{ duration: 0.4, delay: 0.08 }}
           className="min-w-0 flex-1"
         >
-          <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-ink/70">Playlist</p>
+          <p className="text-xs font-semibold text-ink/70">Playlist</p>
           {editing ? (
             <input
               autoFocus

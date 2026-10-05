@@ -301,7 +301,7 @@
   <div class="hero-sub">
     <p>Freebify is a desktop music player that streams <b>original studio recordings</b>: no ads between songs, no subscriptions, no account. Just the music.</p>
     <div class="cta-row">
-      <a class="btn solid" href="#get" data-scroll>Download for Windows</a>
+      <a class="btn solid" id="heroDl" href="#get" data-scroll>Download Freebify</a>
       <a class="btn line" href="https://github.com/govu/freebify" target="_blank" rel="noopener">GitHub ↗</a>
     </div>
   </div>
@@ -351,12 +351,12 @@
   <div class="inner">
     <h2 class="rv">Get Freebify.<br><span>Keep the money.</span></h2>
     <div class="row rv d1">
-      <a class="btn solid" id="dlBtn" href="https://github.com/govu/freebify/releases/latest/download/Freebify-setup.exe" target="_blank" rel="noopener">Download Freebify 1.0.17</a>
+      <a class="btn solid" id="dlBtn" href="https://github.com/govu/freebify/releases/latest/download/Freebify-setup.exe" target="_blank" rel="noopener">Download Freebify 1.0.19</a>
       <a class="btn line" id="altBtn" href="https://github.com/govu/freebify/releases/latest/download/Freebify-portable.exe" target="_blank" rel="noopener">Portable .exe</a>
       <a class="btn line" id="osBtn" href="https://github.com/govu/freebify/releases/latest/download/Freebify-arm64.dmg" target="_blank" rel="noopener">macOS .dmg</a>
     </div>
     <div class="note rv d2">
-      <span id="platNote">Free forever · Windows 10/11 · ~120 MB</span><b id="verMeta"> · v1.0.17</b><span id="updNote"> · updates itself</span>
+      <span id="platNote">Free forever · Windows 10/11 · ~120 MB</span><b id="verMeta"> · v1.0.19</b><span id="updNote"> · updates itself</span>
       <span id="dlCount" style="display:none"> · <b id="dlCountN"></b> downloads</span>
       <span id="macNote" style="display:none"><br>macOS: unsigned app: right-click → Open on first launch. Updates don't auto-install on Mac (sorry for the extra step). New versions get downloaded manually from right here.</span>
     </div>
@@ -375,7 +375,7 @@
     <h2>FREEBIFY</h2>
   </div>
   <div class="foot">
-    <span class="l">© 2026 Freebify · free software, free music.<span id="footVer"> · v1.0.17</span></span>
+    <span class="l">© 2026 Freebify · free software, free music.<span id="footVer"> · v1.0.19</span></span>
     <div class="r">
       <a href="https://github.com/govu/freebify" target="_blank" rel="noopener">GitHub</a>
       <a href="https://github.com/govu/freebify/releases" target="_blank" rel="noopener">Releases</a>
@@ -563,9 +563,36 @@
   if (new URLSearchParams(location.search).has("vw")) document.title = `W${innerWidth}x${innerHeight} DPR${devicePixelRatio}`;
 
   /* ---------- release wiring ---------- */
-  const isMac = /mac/i.test(navigator.platform || "") || /mac os/i.test(navigator.userAgent);
-  const isLinux = !isMac && /linux/i.test(navigator.platform || "") && !/android/i.test(navigator.userAgent);
+  // OS detect: userAgentData.platform (modern, no deprecation) first,
+  // UA/platform regex as fallback. Order matters: Android UA contains
+  // "Linux", iPads masquerade as Mac (check touch), Windows is default.
+  const _uap = (navigator.userAgentData?.platform || "").toLowerCase();
+  const _ua = navigator.userAgent || "";
+  // iPadOS 13+ sends a "Macintosh" UA — only maxTouchPoints unmasks it
+  const _ipadOS = /mac/i.test(_ua) && navigator.maxTouchPoints > 1;
+  const OS =
+    /android/.test(_uap) || /android/i.test(_ua) ? "android" :
+    /ios|iphone|ipad/.test(_uap) || /iphone|ipad|ipod/i.test(_ua) || _ipadOS ? "ios" :
+    /mac/.test(_uap) || /mac os/i.test(_ua) || /mac/i.test(navigator.platform || "") ? "mac" :
+    /linux/.test(_uap) || /linux/i.test(navigator.platform || "") ? "linux" :
+    "windows";
+  const isMac = OS === "mac", isLinux = OS === "linux";
+  const OS_LABEL = { windows: "Windows", mac: "macOS", linux: "Linux", android: "Android", ios: "iOS" }[OS];
   const REL = "https://github.com/govu/freebify/releases/latest/download/";
+  // hero CTA mirrors the detected platform — on a phone it stays a
+  // scroll-to-picker since the app is desktop-only
+  const heroDl = document.getElementById("heroDl");
+  const dlBtn0 = document.getElementById("dlBtn");
+  if (OS === "windows" || OS === "mac" || OS === "linux") {
+    const asset = OS === "mac" ? "Freebify-arm64.dmg" : OS === "linux" ? "Freebify.AppImage" : "Freebify-setup.exe";
+    heroDl.textContent = `Download for ${OS_LABEL}`;
+    heroDl.href = REL + asset;
+    delete heroDl.dataset.scroll;
+    dlBtn0.textContent = `Download for ${OS_LABEL}`;
+  } else {
+    heroDl.textContent = "Download for desktop";
+    document.getElementById("platNote").textContent = "Desktop app · pick yours below";
+  }
   if (isLinux) {
     document.getElementById("dlBtn").href = REL + "Freebify.AppImage";
     const alt = document.getElementById("altBtn");
@@ -605,7 +632,8 @@
       const deb = rel.assets?.find(a => /\.deb$/i.test(a.name));
       if (v) {
         document.getElementById("verMeta").textContent = " · v" + v;
-        document.getElementById("dlBtn").textContent = `Download Freebify ${v}`;
+        document.getElementById("dlBtn").textContent =
+          OS === "windows" || OS === "mac" || OS === "linux" ? `Download for ${OS_LABEL} ${v}` : `Download Freebify ${v}`;
         const fv = document.getElementById("footVer"); if (fv) fv.textContent = ` · v${v}`;
       }
       const dlBtn = document.getElementById("dlBtn"), altBtn = document.getElementById("altBtn"), osBtn = document.getElementById("osBtn");
