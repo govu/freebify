@@ -587,7 +587,26 @@ export function NowPlaying() {
         Boolean(dur && r.duration && Math.abs(r.duration - dur) <= 5)
       const cand = lrcPool.filter((r) => titleLike(r.trackName ?? "", ref) && artistOk(r))
       const by = (a: LrcRec, b: LrcRec) => artistSim(b.artistName) - artistSim(a.artistName) || close(a) - close(b)
-      for (const rec of cand.filter((r) => r.syncedLyrics?.trim()).sort(by)) {
+      // outlier-duration trap: submitters sometimes tag a record with the
+      // VIDEO's runtime while pasting the canonical (intro-less) sheet —
+      // e.g. Dai Dai's 240s record carries timestamps that start singing at
+      // 0.09s while the real upload has a ~19s spoken intro. Closest-duration
+      // alone would pick that lying record and zero the autoOff guess.
+      // When a tight plurality of records shares another duration, trust the
+      // modal bucket instead — plurality means independently-timed agreement.
+      const durBuckets = new Map<number, LrcRec[]>()
+      for (const r of cand.filter((x) => x.syncedLyrics?.trim() && x.duration)) {
+        const b = Math.round(r.duration!)
+        durBuckets.set(b, [...(durBuckets.get(b) ?? []), r])
+      }
+      const modal = [...durBuckets.entries()].sort((a, b) => b[1].length - a[1].length)[0]
+      const closestRec = cand.filter((r) => r.syncedLyrics?.trim()).sort(by)[0]
+      const useModal =
+        modal && modal[1].length >= 3 && closestRec
+          ? Math.abs(Math.round(closestRec.duration ?? 0) - modal[0]) > 3 && dur > modal[0]
+          : false
+      const ordered = (useModal ? cand.filter((r) => r.syncedLyrics?.trim() && Math.round(r.duration ?? -1) === modal[0]) : cand.filter((r) => r.syncedLyrics?.trim())).sort(by)
+      for (const rec of ordered) {
         const synced = sane(parseLrc(rec.syncedLyrics!))
         if (!synced) continue
         // auto-calibration: our version longer than the record usually
@@ -726,7 +745,9 @@ export function NowPlaying() {
       for (const q of twinQueries) {
         if (!alive() || tried > budget) return
         const res = await yt.search(q).catch(() => null)
-        for (const t of (res?.tracks ?? []).filter(gate).sort(rank)) {
+        const gated = (res?.tracks ?? []).filter(gate)
+        dbgL(`search "${q}": ${res?.tracks?.length ?? 0} hits, ${gated.length} pass gate`)
+        for (const t of gated.sort(rank)) {
           if (await attempt(t.streamId, false, t)) return
         }
       }
@@ -736,7 +757,9 @@ export function NowPlaying() {
       for (const q of [...new Set([`${artist} ${title} lyrics`, `${title} lyrics`].filter((x) => x.trim() !== "lyrics"))]) {
         if (!alive() || tried > budget) return
         const vids = await yt.videoSearch(q).catch(() => [])
-        for (const t of vids.filter(gate).sort(rank)) {
+        const gated = vids.filter(gate)
+        dbgL(`vsearch "${q}": ${vids.length} hits, ${gated.length} pass gate`)
+        for (const t of gated.sort(rank)) {
           if (await attempt(t.streamId, false, t)) return
         }
       }
@@ -748,30 +771,32 @@ export function NowPlaying() {
     // Auto offsets persist under lrcoffa- and re-verify every open — a
     // wrong measurement can't stick; a manual Shift+click always wins.
     const sheetFp = sheetFpOf
+    const dbgL = (m: string) => window.freebify?.app?.log?.(`lyrics: ${m}`)
     const refineOffset = async (lrc: LrcLine[], fallback: number) => {
+      const dbg = dbgL
       try {
-        if (!ytBridge()?.captions) return
+        dbg(`enter src=${current.source} vid=${current.streamId ?? "?"} dur=${dur} lines=${lrc.length} fb=${fallback}`)
+        if (!ytBridge()?.captions) return dbg("exit: no captions bridge")
         // can't use `live` — finish()'s setLyricsTried re-runs the effect
         // and its cleanup trips the flag while this measurement is still
         // in flight. The store + the synced-lines identity check below are
         // the real "is this still on screen" guard.
         const sameTrack = () => usePlayer.getState().current?.id === current.id
-        if (!sameTrack()) return
+        if (!sameTrack()) return dbg("exit: not same track")
         try {
           // a manual Shift+click pin on THIS sheet always wins — a stale
           // pin (fingerprint mismatch) doesn't block re-measuring
           const m = localStorage.getItem(`lrcoff2-${current.id}`)
           if (m !== null) {
             const p = JSON.parse(m) as { o?: number; f?: string } | number
-            if (typeof p !== "object" || p.f === undefined || p.f === sheetFp(lrc)) return
+            if (typeof p !== "object" || p.f === undefined || p.f === sheetFp(lrc)) return dbg("exit: manual pin")
           }
-        } catch { /* unparsable/manual — honor it */ return }
+        } catch { /* unparsable/manual — honor it */ return dbg("exit: pin parse") }
         // ownVid's captions are ground truth when they exist — but many
         // official uploads ship none, so twins may measure too. A twin's
         // offset describes ITS lead-in, so several are collected and only a
         // quorum-backed value commits; lyric/letra uploads are deprioritized
         // since they often strip the video's spoken intro.
-        const dbg = (m: string) => window.freebify?.app?.log?.(`lyrics: ${m}`)
         const measured: { off: number; lyric: boolean }[] = []
         const applyOff = (off: number) => {
           if (Math.abs(off) > 90 || Math.abs(off - fallback) < 1.5) {
@@ -826,6 +851,7 @@ export function NowPlaying() {
           },
           { alternates: true, alive: sameTrack, loose: true, budget: 11 },
         )
+        dbg(`walk done measured=${measured.length} alive=${sameTrack()}`)
         if (!sameTrack() || measured.length === 0) return
         // prefer non-lyric-titled uploads (they carry the real intro); when
         // none measured, the lyric pool is still better than nothing
@@ -851,7 +877,11 @@ export function NowPlaying() {
         await forEachVideo(
           async (vid) => {
             const cap = await yt.captions(vid)
-            if (!cap?.lines?.length) return false
+            if (!cap?.lines?.length) {
+              dbgL(`capsheet: none on ${vid}`)
+              return false
+            }
+            dbgL(`capsheet: ${cap.lines.length} lines on ${vid}`)
             // captions run to the video's end — clip to the track's runtime
             // so a longer upload's outro chatter can't tail the lyric sheet
             out = sane(cap.lines.filter((l) => !dur || l.t <= dur + 15))
@@ -887,6 +917,7 @@ export function NowPlaying() {
     void (async () => {
       const finish = (body: typeof lyrics) => {
         if (!live) return
+        dbgL(`sheet: ${body === null ? "none" : "plain" in body ? "plain" : `synced n=${body.synced.length} first=${body.synced[0]?.t.toFixed(1)} last=${body.synced[body.synced.length - 1]?.t.toFixed(1)} off=${"autoOff" in body ? body.autoOff : "?"}`} src=${current.source} vid=${current.streamId ?? "?"} dur=${dur}`)
         setLyrics(body)
         setLyricsTried(true)
         setLyricsLoading(false)
