@@ -389,6 +389,10 @@ const smallThumb = (item) => {
 const bigThumb = (url) =>
   url ? url.replace(/=w\d+-h\d+[^,]*/, "=w544-h544-l90-rj") : null
 
+// same transform for an arbitrary size — used where only a URL is in scope
+const urlThumb = (url, size) =>
+  url ? url.replace(/=w\d+-h\d+[^,]*/, `=w${size}-h${size}-l90-rj`) : null
+
 const text = (v) => {
   if (v == null) return ""
   if (typeof v === "string") return v
@@ -939,7 +943,7 @@ async function album(browseId) {
       is_album: true,
       description: null,
       artwork: thumb
-        ? { "150x150": smallThumb(item) ?? thumb, "480x480": bigThumb(thumb) ?? thumb, "1000x1000": bigThumb(thumb) ?? thumb }
+        ? { "150x150": urlThumb(thumb, 150) ?? thumb, "480x480": bigThumb(thumb) ?? thumb, "1000x1000": bigThumb(thumb) ?? thumb }
         : null,
       track_count: tracks.length,
       user: {
@@ -1043,7 +1047,7 @@ async function playlist(browseId) {
       is_album: false,
       description: text(header.description) || null,
       artwork: thumb
-        ? { "150x150": smallThumb(item) ?? thumb, "480x480": bigThumb(thumb) ?? thumb, "1000x1000": bigThumb(thumb) ?? thumb }
+        ? { "150x150": urlThumb(thumb, 150) ?? thumb, "480x480": bigThumb(thumb) ?? thumb, "1000x1000": bigThumb(thumb) ?? thumb }
         : null,
       track_count: tracks.length,
       total_play_count: 0,
