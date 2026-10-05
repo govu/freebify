@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams } from "react-router-dom"
 import { apiClient } from "../api/audius"
 import { prefetchStream, yt } from "../api/youtube"
 import type { Playlist, Track } from "../api/types"
+import { hasArtistPage } from "../api/types"
 import { ArtworkImg } from "../components/ArtworkImg"
 import { PlaylistCover } from "../components/Cards"
 import { HeroSkeleton, RowsSkeleton } from "../components/Skeletons"
@@ -115,9 +116,9 @@ function RemotePlaylistView({ id }: { id: string }) {
         (t) => t.title.toLowerCase().includes(q) || t.user.name.toLowerCase().includes(q)
       )
     : tracks
-  // editorial playlists credit "YouTube Music" — yt-va is a fake id that
-  // would route to a random artist search result
-  const ownerLinkable = Boolean(playlist.user.id) && playlist.user.id !== "yt-va"
+  // editorial playlists credit "YouTube Music" — yt-va/yt-/null owners are
+  // fake ids that would route to a random artist search result
+  const ownerLinkable = hasArtistPage(playlist.user)
 
   return (
     <div className="-mt-12 pb-10">
@@ -129,19 +130,37 @@ function RemotePlaylistView({ id }: { id: string }) {
         }}
       >
         <motion.div initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4 }}>
-          <ArtworkImg
-            art={playlist.artwork}
-            size="1000x1000"
-            alt={playlist.playlist_name}
-            className="size-44 rounded-xl shadow-2xl shadow-black/50 sm:size-52"
-            iconSize={48}
-          />
+          {playlist.id.startsWith("ytpl-") ? (
+            // editorial playlist covers ship with the YouTube Music logo
+            // baked into the artwork — collage the loaded tracks instead
+            // (the same treatment the cards get); albums keep real art
+            <PlaylistCover
+              tracks={tracks}
+              className="size-44 rounded-xl shadow-2xl shadow-black/50 sm:size-52"
+              iconSize={48}
+            />
+          ) : (
+            <ArtworkImg
+              art={playlist.artwork}
+              size="1000x1000"
+              alt={playlist.playlist_name}
+              className="size-44 rounded-xl shadow-2xl shadow-black/50 sm:size-52"
+              iconSize={48}
+            />
+          )}
         </motion.div>
-        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.08 }}>
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.08 }}
+          // min-w-0 + break: a 60-char editorial title used to push the
+          // hero wider than the viewport instead of wrapping
+          className="min-w-0 sm:flex-1"
+        >
           <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-ink/70">
             {playlist.is_album ? "Album" : "Playlist"}
           </p>
-          <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-5xl">{playlist.playlist_name}</h1>
+          <h1 title={playlist.playlist_name} className="mt-2 line-clamp-3 break-words text-3xl font-black tracking-tight sm:text-5xl">{playlist.playlist_name}</h1>
           {playlist.description && (
             <p className="mt-3 line-clamp-2 max-w-xl text-sm text-dim">{playlist.description}</p>
           )}
@@ -154,7 +173,7 @@ function RemotePlaylistView({ id }: { id: string }) {
                 {playlist.user.name}
               </Link>
             ) : (
-              <span className="font-semibold text-ink">{playlist.user.name}</span>
+              <span className="font-semibold text-ink">{playlist.user?.name ?? "Unknown"}</span>
             )}
             {" · "}
             {playlist.track_count || tracks.length} tracks
@@ -323,7 +342,7 @@ function LocalPlaylistView({ id }: { id: string }) {
               title="Rename"
               aria-label="Rename playlist"
             >
-              <h1 className="truncate text-3xl font-black tracking-tight sm:text-5xl">{playlist.name}</h1>
+              <h1 title={playlist.name} className="line-clamp-3 break-words text-3xl font-black tracking-tight sm:text-5xl">{playlist.name}</h1>
               <Pencil size={20} className="shrink-0 text-faint opacity-0 transition group-hover:opacity-100" />
             </button>
           )}

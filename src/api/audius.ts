@@ -35,8 +35,12 @@ async function api<T>(path: string, params: Record<string, string | number | und
   for (const [k, v] of Object.entries(params)) if (v !== undefined) qs.set(k, String(v))
 
   let lastError: unknown = new Error("no hosts")
+  // hostIndex mutates inside the catch — capture the base BEFORE the loop
+  // or `idx = (hostIndex + i)` can revisit the host that just died (with
+  // two hosts it retried the dead one twice and never tried the live one)
+  const base = hostIndex
   for (let i = 0; i < Math.min(hosts.length, 4); i++) {
-    const idx = (hostIndex + i) % hosts.length
+    const idx = (base + i) % hosts.length
     try {
       const res = await fetch(`${hosts[idx]}/v1${path}?${qs.toString()}`, {
         signal: AbortSignal.timeout(15000),
@@ -148,6 +152,22 @@ function cleanTracks(data: unknown): Track[] {
   })
 }
 
+// same loose-JSON problem for users and playlists — an entry without a
+// name/id crashes the card render just like a malformed track would
+function cleanUsers(data: unknown): User[] {
+  if (!Array.isArray(data)) return []
+  return data.filter(
+    (u): u is User => !!u && typeof (u as User).id === "string" && typeof (u as User).name === "string",
+  )
+}
+
+function cleanPlaylists(data: unknown): Playlist[] {
+  if (!Array.isArray(data)) return []
+  return data.filter(
+    (p): p is Playlist => !!p && typeof (p as Playlist).id === "string" && typeof (p as Playlist).playlist_name === "string",
+  )
+}
+
 export const apiClient = {
   trendingTracks: (opts: { genre?: string; time?: TrendTime; limit?: number; offset?: number } = {}) =>
     api<Track[]>("/tracks/trending", {
@@ -160,17 +180,17 @@ export const apiClient = {
   searchTracks: (query: string, limit = 40, offset?: number) =>
     api<Track[]>("/tracks/search", { query, limit, offset }).then(cleanTracks).then(rankTracks),
 
-  searchUsers: (query: string, limit = 12) => api<User[]>("/users/search", { query, limit }),
+  searchUsers: (query: string, limit = 12) => api<User[]>("/users/search", { query, limit }).then(cleanUsers),
 
   searchPlaylists: (query: string, limit = 12) =>
-    api<Playlist[]>("/playlists/search", { query, limit }),
+    api<Playlist[]>("/playlists/search", { query, limit }).then(cleanPlaylists),
 
   trendingPlaylists: (opts: { type?: "playlist" | "album"; time?: TrendTime; limit?: number } = {}) =>
     api<Playlist[]>("/playlists/trending", {
       type: opts.type,
       time: opts.time ?? "week",
       limit: opts.limit ?? 12,
-    }),
+    }).then(cleanPlaylists),
 
   playlist: (id: string) => api<Playlist>(`/playlists/${id}`),
 
@@ -191,16 +211,3 @@ export const GENRES = [
   "Lo-Fi", "Ambient", "Jazz", "Funk", "Acoustic", "Alternative",
   "Metal", "Punk", "Reggae", "Dancehall", "Hyperpop", "Vaporwave",
 ] as const
-
-const GENRE_GRADIENTS: [string, string][] = [
-  ["#333333", "#1f1f1f"], ["#3a3a3a", "#242424"], ["#38342f", "#252221"],
-  ["#2f3438", "#212427"], ["#33352f", "#23251f"], ["#352f33", "#251f23"],
-  ["#2b2b2b", "#1a1a1a"], ["#3d3d3d", "#282828"], ["#313131", "#202020"],
-  ["#363534", "#242322"], ["#2e3234", "#1f2224"], ["#393939", "#262626"],
-]
-
-export function genreGradient(genre: string): [string, string] {
-  let h = 0
-  for (let i = 0; i < genre.length; i++) h = (h * 31 + genre.charCodeAt(i)) >>> 0
-  return GENRE_GRADIENTS[h % GENRE_GRADIENTS.length]
-}

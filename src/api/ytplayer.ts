@@ -199,12 +199,27 @@ class YtEngine {
     }
   }
 
+  // post-seek grace — getCurrentTime briefly keeps reporting the PRE-seek
+  // position, which flickers the progress bar backwards. While the real
+  // clock catches up, emit the seek target instead.
+  private lastSeekPos: number | null = null
+  private lastSeekAt = 0
+
   private startPoll() {
     this.stopPoll()
     this.pollTimer = window.setInterval(() => {
       try {
-        const t = this.player?.getCurrentTime?.()
-        if (Number.isFinite(t)) this.events.onTime?.(t)
+        let t = this.player?.getCurrentTime?.()
+        if (Number.isFinite(t)) {
+          if (this.lastSeekPos !== null) {
+            if (t >= this.lastSeekPos - 0.5 || performance.now() - this.lastSeekAt > 1600) {
+              this.lastSeekPos = null // the real clock caught up
+            } else {
+              t = this.lastSeekPos
+            }
+          }
+          this.events.onTime?.(t)
+        }
         // duration arrives after metadata — emit it once it exists instead
         // of trusting the one read at first PLAYING (often still 0)
         if (!this.durEmitted) {
@@ -271,9 +286,15 @@ class YtEngine {
       } catch {
         /* ignore */
       }
-      this.player.loadVideoById(
-        startSeconds > 0 ? { videoId, startSeconds } : videoId
-      )
+      try {
+        this.player.loadVideoById(
+          startSeconds > 0 ? { videoId, startSeconds } : videoId
+        )
+      } catch {
+        // a synchronous load throw would otherwise orphan pendingPlay —
+        // the 8s timer eventually resolves it, but the caller sits waiting
+        this.settlePlay(false)
+      }
       const ok = await started
       // a superseding play() may have re-activated while this one awaited —
       // only a still-current failure may clear the flag
@@ -323,11 +344,16 @@ class YtEngine {
   }
 
   seek(sec: number) {
+    this.lastSeekPos = sec
+    this.lastSeekAt = performance.now()
     try {
       this.player?.seekTo?.(sec, true)
     } catch {
       /* ignore */
     }
+    // tell the store immediately — don't wait for the next 500ms poll to
+    // discover the new position (keeps the bar from snapping back)
+    this.events.onTime?.(sec)
   }
 
   setVolume(v: number) {

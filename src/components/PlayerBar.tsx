@@ -7,6 +7,7 @@ import { useState } from "react"
 import { Link } from "react-router-dom"
 import { useLibrary } from "../store/library"
 import { usePlayer, applyVolume } from "../store/player"
+import { hasArtistPage } from "../api/types"
 import { fmtDuration } from "../utils/format"
 import { ArtworkImg } from "./ArtworkImg"
 import { EqPopover } from "./EqPopover"
@@ -80,12 +81,18 @@ export function PlayerBar() {
                   transition={{ duration: 0.16 }}
                 >
                   <Marquee text={current.title} className="text-sm font-semibold" />
-                  <Link
-                    to={`/artist/${encodeURIComponent(current.user.id)}?n=${encodeURIComponent(current.user.name)}`}
-                    className="block truncate text-xs text-dim transition hover:text-ink hover:underline"
-                  >
-                    {current.user.name}
-                  </Link>
+                  {hasArtistPage(current.user) ? (
+                    <Link
+                      to={`/artist/${encodeURIComponent(current.user.id)}?n=${encodeURIComponent(current.user.name)}`}
+                      className="block truncate text-xs text-dim transition hover:text-ink hover:underline"
+                    >
+                      {current.user.name}
+                    </Link>
+                  ) : (
+                    // fake owner ids (yt-va / yt-) have no artist page —
+                    // a link would navigate to a broken view
+                    <span className="block truncate text-xs text-dim">{current.user.name}</span>
+                  )}
                 </motion.div>
               </AnimatePresence>
             </div>

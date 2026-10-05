@@ -26,11 +26,18 @@ const manifestFile = () => path.join(dlDir(), "downloads.json")
 // object, stored whole so the Downloads page needs zero network to render
 let manifest = null // lazy — userData path isn't valid before app ready
 let dirty = false
-const inFlight = new Map() // id -> { kill: () => void }
+const inFlight = new Map() // id -> { kill: () => void, base?: string }
 // batch downloads (album/playlist "download all") queue here — spawning a
 // yt-dlp per track unthrottled would torch CPU + rate limits
 const MAX_PARALLEL = 3
 const pending = [] // [{id, start}] FIFO
+// ids the user removed while a job was still running — a killed job's
+// completion path must not re-commit it into the manifest
+const abortedIds = new Set()
+// basenames claimed by jobs whose output file doesn't exist yet — without
+// this two same-title tracks starting in the same tick both get `base`
+// and share one .part file (uniqueBase's readdir can't see either)
+const reservedBases = new Set()
 
 function loadManifest() {
   if (manifest) return
@@ -60,7 +67,14 @@ function saveManifest() {
   } catch { /* manifest is best-effort */ }
 }
 setInterval(saveManifest, 30 * 1000).unref?.()
-app?.once?.("before-quit", saveManifest)
+app?.once?.("before-quit", () => {
+  saveManifest()
+  // Node does not reap child processes on exit — a running yt-dlp would
+  // keep writing .part files long after the app died. Kill every job.
+  for (const { kill } of inFlight.values()) {
+    try { kill() } catch {}
+  }
+})
 
 const emit = (ev) => {
   for (const w of BrowserWindow.getAllWindows()) {
@@ -92,7 +106,8 @@ function uniqueBase(id, track) {
   if (own) taken.delete(own)
   let cand = base
   let n = 2
-  while (taken.has(cand)) cand = `${base} (${n++})`
+  while (taken.has(cand) || reservedBases.has(cand)) cand = `${base} (${n++})`
+  reservedBases.add(cand)
   return cand
 }
 
@@ -138,8 +153,18 @@ function downloadYt(id, streamId, track) {
     "-o", path.join(dlDir(), `${base}.%(ext)s`),
     `https://music.youtube.com/watch?v=${streamId}`,
   ]
-  const child = spawn(binPath(), args, { windowsHide: true })
-  inFlight.set(id, { kill: () => { try { child.kill() } catch {} } })
+  let child
+  try {
+    child = spawn(binPath(), args, { windowsHide: true })
+  } catch (e) {
+    // a synchronous spawn failure (missing exe, EPERM) would otherwise
+    // escape to the invoke handler and leak the reserved basename
+    reservedBases.delete(base)
+    fail(id, e?.message ?? "yt-dlp failed to start")
+    drain()
+    return
+  }
+  inFlight.set(id, { kill: () => { try { child.kill() } catch {} }, base })
   let buf = ""
   const onData = (d) => {
     buf += d
@@ -152,8 +177,18 @@ function downloadYt(id, streamId, track) {
   }
   child.stdout.on("data", onData)
   child.stderr.on("data", onData)
+  let done = false // spawn failure fires both 'error' and 'close'
   const finish = (ok) => {
+    if (done) return
+    done = true
     inFlight.delete(id)
+    reservedBases.delete(base)
+    if (abortedIds.delete(id)) {
+      // user removed it mid-flight — sweep the orphan .part and drain
+      sweepPart(base)
+      drain()
+      return
+    }
     drain()
     const file = ok ? findOutput(base) : null
     if (file) commit(id, file, track)
@@ -163,14 +198,26 @@ function downloadYt(id, streamId, track) {
   child.on("close", (code) => finish(code === 0))
 }
 
+// leftover .part from a killed/removed job — matches every ext variant
+function sweepPart(base) {
+  try {
+    for (const f of fs.readdirSync(dlDir())) {
+      if (f.startsWith(`${base}.`) && f.endsWith(".part")) {
+        try { fs.unlinkSync(path.join(dlDir(), f)) } catch {}
+      }
+    }
+  } catch {}
+}
+
 // Audius (or any direct https stream) → stream the response to disk with
 // content-length progress; .part suffix until complete so a killed download
 // never masquerades as a finished file
 async function downloadHttp(id, url, track) {
   const ctl = new AbortController()
-  inFlight.set(id, { kill: () => ctl.abort() })
   const base = uniqueBase(id, track)
+  inFlight.set(id, { kill: () => ctl.abort(), base })
   let part = null
+  let out = null
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Freebify/1.0" },
@@ -183,7 +230,7 @@ async function downloadHttp(id, url, track) {
       : "mp3"
     part = path.join(dlDir(), `${base}.${ext}.part`)
     const total = Number(res.headers.get("content-length")) || 0
-    const out = fs.createWriteStream(part)
+    out = fs.createWriteStream(part)
     let got = 0
     const reader = res.body.getReader()
     for (;;) {
@@ -196,15 +243,27 @@ async function downloadHttp(id, url, track) {
       if (total) emit({ type: "progress", id, pct: Math.min(99, Math.round((got / total) * 100)) })
     }
     await new Promise((r, j) => out.end((e) => (e ? j(e) : r())))
+    out = null
+    if (abortedIds.delete(id)) {
+      // removed while the file was committing — undo the rename target
+      try { fs.unlinkSync(part) } catch {}
+      return
+    }
     const file = `${base}.${ext}`
     fs.renameSync(part, path.join(dlDir(), file))
     part = null
     commit(id, file, track)
   } catch (e) {
+    // destroy the stream BEFORE unlink — Windows EPERMs on an open handle
+    try { out?.destroy() } catch {}
     if (part) { try { fs.unlinkSync(part) } catch {} }
-    fail(id, e?.name === "AbortError" ? "cancelled" : e?.message)
-    log("dl", `${id}: ${e?.message ?? e}`)
+    const aborted = abortedIds.delete(id)
+    if (!aborted) {
+      fail(id, e?.name === "AbortError" ? "cancelled" : e?.message)
+      log("dl", `${id}: ${e?.message ?? e}`)
+    }
   } finally {
+    reservedBases.delete(base)
     inFlight.delete(id)
     drain()
   }
@@ -235,8 +294,43 @@ function register(ipcMain) {
     }
   })
 
-  ipcMain.handle("dl:list", () => {
+  // Files can vanish mid-session (the user cleans the folder in Explorer
+  // while the app runs) — re-verify on every list call and push removals
+  // so a ghost row never renders.
+  function pruneMissing() {
     loadManifest()
+    const removed = []
+    for (const [id, it] of Object.entries(manifest)) {
+      if (!it?.file || !fs.existsSync(path.join(dlDir(), it.file))) {
+        delete manifest[id]
+        removed.push(id)
+        dirty = true
+      }
+    }
+    if (removed.length) {
+      saveManifest()
+      for (const id of removed) emit({ type: "removed", id })
+    }
+    return removed
+  }
+
+  // watch the downloads dir — Explorer deletes reach the UI without a
+  // page reload (Windows reports them as 'rename' events; debounce the
+  // burst a folder-wipe produces)
+  try {
+    fs.mkdirSync(dlDir(), { recursive: true })
+    let pruneTimer = null
+    fs.watch(dlDir(), { persistent: false }, () => {
+      if (pruneTimer) return
+      pruneTimer = setTimeout(() => {
+        pruneTimer = null
+        pruneMissing()
+      }, 400)
+    })
+  } catch { /* watcher is best-effort — dl:list still prunes on read */ }
+
+  ipcMain.handle("dl:list", () => {
+    pruneMissing()
     return Object.entries(manifest)
       .map(([id, v]) => ({ id, ...v }))
       .sort((a, b) => (b.addedAt ?? 0) - (a.addedAt ?? 0))
@@ -261,7 +355,14 @@ function register(ipcMain) {
     const { id, source, streamId, url, track } = p
     if (typeof id !== "string" || !id || id.length > 120) return false
     if (!track || typeof track !== "object") return false
-    if (manifest[id] || inFlight.has(id) || pending.some((j) => j.id === id)) return true
+    // dedup — but TELL the renderer: its items map can be stale (refresh
+    // hasn't landed yet) and it just set a "queued" state that waits on an
+    // event. Emitting done reconciles it instead of leaving a stuck row.
+    if (manifest[id]) {
+      emit({ type: "done", id, item: manifest[id] })
+      return true
+    }
+    if (inFlight.has(id) || pending.some((j) => j.id === id)) return true
     try {
       fs.mkdirSync(dlDir(), { recursive: true })
     } catch {
@@ -294,7 +395,19 @@ function register(ipcMain) {
     if (typeof id !== "string") return false
     const qi = pending.findIndex((j) => j.id === id)
     if (qi >= 0) pending.splice(qi, 1)
-    inFlight.get(id)?.kill()
+    const job = inFlight.get(id)
+    if (job) {
+      // mark BEFORE kill — the job's own completion path checks this flag;
+      // without it a close-event racing the remove re-commits the file
+      abortedIds.add(id)
+      try { job.kill() } catch {}
+      // the .part has no manifest entry — without this sweep every removed
+      // in-flight download leaks its partial file (and its basename)
+      if (job.base) {
+        sweepPart(job.base)
+        reservedBases.delete(job.base)
+      }
+    }
     inFlight.delete(id)
     drain()
     const it = manifest[id]

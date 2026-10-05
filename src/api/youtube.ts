@@ -71,6 +71,8 @@ declare global {
         onDeepLink: (cb: (path: string) => void) => () => void
         onUpdateReady: (cb: (version: string) => void) => () => void
         installUpdate: () => Promise<void>
+        updateStatus: () => Promise<{ pending: string | null }>
+        checkUpdate: () => Promise<{ pending?: string | null; latest?: string; update?: boolean; checking?: boolean }>
       }
     }
   }

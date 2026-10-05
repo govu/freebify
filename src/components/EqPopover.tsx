@@ -26,7 +26,16 @@ export function EqPopover() {
   const setEq = usePlayer((s) => s.setEq)
   const setNormOn = usePlayer((s) => s.setNormOn)
   const setFadeSecs = usePlayer((s) => s.setFadeSecs)
+  const queueOpen = usePlayer((s) => s.queueOpen)
   const [readout, setReadout] = useState<number | null>(null)
+  // below lg the queue is a fixed 320px overlay over the right edge — the
+  // popover (anchored off a button near that edge) would slide under it
+  const [narrow, setNarrow] = useState(() => window.innerWidth < 1024)
+  useEffect(() => {
+    const onResize = () => setNarrow(window.innerWidth < 1024)
+    window.addEventListener("resize", onResize)
+    return () => window.removeEventListener("resize", onResize)
+  }, [])
 
   useEffect(() => {
     if (!open) return
@@ -42,7 +51,10 @@ export function EqPopover() {
   const activePreset = Object.entries(PRESETS).find(([, p]) => p.every((v, i) => v === eq[i]))?.[0]
 
   return (
-    <div ref={ref} className="relative">
+    // flex kills the inline-baseline gap — a bare div wrapper would sit the
+    // button on the text baseline and the icon rides visibly high next to
+    // its sibling buttons
+    <div ref={ref} className="relative flex items-center">
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label="Equalizer"
@@ -60,8 +72,11 @@ export function EqPopover() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.96 }}
             transition={{ type: "spring", stiffness: 460, damping: 34 }}
-            style={{ transformOrigin: "bottom right" }}
-            className="absolute bottom-12 right-0 w-[324px] rounded-2xl border border-line bg-panel p-5 shadow-2xl shadow-black/70"
+            // fixed (not absolute): anchored to the window so it can dodge
+            // the fixed-position queue overlay — absolute inside the bar
+            // would always clip under it at 940–1023px widths
+            style={{ transformOrigin: "bottom right", right: queueOpen && narrow ? 336 : 16 }}
+            className="fixed bottom-[96px] w-[324px] rounded-2xl border border-line bg-panel p-5 shadow-2xl shadow-black/70 transition-[right] duration-200"
           >
             {/* header: preset chips + reset */}
             <div className="mb-4 flex items-center justify-between">
@@ -184,7 +199,26 @@ function VBand({
         aria-valuemin={-RANGE}
         aria-valuemax={RANGE}
         aria-valuenow={value}
-        className="group relative h-24 w-6 cursor-pointer touch-none"
+        className="group relative h-24 w-6 cursor-pointer touch-none outline-none focus-visible:ring-1 focus-visible:ring-white/60"
+        // role=slider needs tab focus + arrow keys to be a real slider —
+        // without them the faders are mouse-only (a11y dead zone)
+        tabIndex={0}
+        onKeyDown={(e) => {
+          const step = e.shiftKey ? 2 : 0.5
+          if (e.key === "ArrowUp" || e.key === "ArrowRight") {
+            e.preventDefault()
+            onActive()
+            onChange(Math.min(RANGE, value + step))
+          } else if (e.key === "ArrowDown" || e.key === "ArrowLeft") {
+            e.preventDefault()
+            onActive()
+            onChange(Math.max(-RANGE, value - step))
+          } else if (e.key === "Home" || e.key === "0") {
+            e.preventDefault()
+            onActive()
+            onChange(0)
+          }
+        }}
         onPointerDown={(e) => {
           if (e.button !== 0 || !e.isPrimary) return
           e.currentTarget.setPointerCapture(e.pointerId)

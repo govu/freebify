@@ -3,11 +3,12 @@ import {
   Repeat, Repeat1, Shuffle, SkipBack, SkipForward,
 } from "lucide-react"
 import { AnimatePresence, motion, useDragControls } from "motion/react"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useReducer, useRef, useState } from "react"
 import { Link } from "react-router-dom"
 import { useLibrary } from "../store/library"
 import { usePlayer } from "../store/player"
 import { yt, ytBridge } from "../api/youtube"
+import { hasArtistPage } from "../api/types"
 import { dominantColor, rgb } from "../utils/color"
 import { fmtDuration } from "../utils/format"
 import { ArtworkImg } from "./ArtworkImg"
@@ -126,7 +127,21 @@ const lrcGet = async (path: string, p: Record<string, string>): Promise<LrcRec[]
 // a one-tap fix for versions whose LRC timestamps are offset. Persisted
 // per track id so the correction survives restarts
 function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number }) {
-  const t = usePlayer((s) => s.currentTime)
+  // The store clock ticks at ~4Hz (the element's timeupdate) — between
+  // ticks a line can sit ~250ms behind the music, which reads as a laggy
+  // highlight. Interpolate locally from the last tick while playing so
+  // the active line lands on the syllable.
+  const storeT = usePlayer((s) => s.currentTime)
+  const isPlaying = usePlayer((s) => s.isPlaying)
+  const tick = useRef({ t: storeT, at: performance.now() })
+  if (tick.current.t !== storeT) tick.current = { t: storeT, at: performance.now() }
+  const [, bump] = useReducer((x: number) => x + 1, 0)
+  useEffect(() => {
+    if (!isPlaying) return
+    const h = setInterval(bump, 100)
+    return () => clearInterval(h)
+  }, [isPlaying])
+  const t = tick.current.t + (isPlaying ? (performance.now() - tick.current.at) / 1000 : 0)
   const seek = usePlayer((s) => s.seek)
   const trackId = usePlayer((s) => s.current?.id)
   const [offset, setOffset] = useState(0)
@@ -165,11 +180,11 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
     }
   }
   const adj = t - offset
-  // slight lookahead lands the highlight *on* the line being sung;
+  // small lookahead lands the highlight *on* the line being sung;
   // -1 while the intro still plays — nothing gets wrongly lit early
   let active = -1
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].t <= adj + 0.3) active = i
+    if (lines[i].t <= adj + 0.15) active = i
     else break
   }
   const listRef = useRef<HTMLDivElement>(null)
@@ -269,6 +284,14 @@ export function NowPlaying() {
   // drag-to-close from the header only — attaching the gesture to the whole
   // sheet would fight the seek slider's pointer drags
   const dragControls = useDragControls()
+  // dialog semantics need real focus handling: grab focus on open so SRs
+  // announce it, hand it back on close so Tab doesn't land in a void
+  const dlgRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null
+    dlgRef.current?.focus()
+    return () => prev?.focus?.()
+  }, [])
   const [color, setColor] = useState<[number, number, number] | null>(null)
   useEffect(() => {
     let live = true
@@ -348,7 +371,18 @@ export function NowPlaying() {
       // different structure, so a wrong-duration pick puts every line
       // off by the intro's length
       const close = (x: LrcRec) => (dur && x.duration ? Math.abs(x.duration - dur) : 999)
-      const cand = lrcPool.filter((r) => titleLike(r.trackName ?? "", ref))
+      // wrong-song guard — generic titles ("Como Estás") pool dozens of
+      // unrelated songs on LRCLIB, and title match alone used to let a
+      // completely different track's lyrics through (a German rap record
+      // surfaced on a Latin song this way). A zero-artist-overlap record
+      // is only plausible when the runtime is nearly identical — same
+      // recording under another crediting (a "Topic" channel vs the real
+      // artist); anything looser is a different song and lyrics lose.
+      const artistOk = (r: LrcRec) =>
+        !artist ||
+        artistSim(r.artistName) > 0 ||
+        Boolean(dur && r.duration && Math.abs(r.duration - dur) <= 5)
+      const cand = lrcPool.filter((r) => titleLike(r.trackName ?? "", ref) && artistOk(r))
       const by = (a: LrcRec, b: LrcRec) => artistSim(b.artistName) - artistSim(a.artistName) || close(a) - close(b)
       for (const rec of cand.filter((r) => r.syncedLyrics?.trim()).sort(by)) {
         const synced = sane(parseLrc(rec.syncedLyrics!))
@@ -435,7 +469,11 @@ export function NowPlaying() {
                 (t) =>
                   t.streamId &&
                   titleLike(t.title, title) &&
-                  (!dur || !t.duration || Math.abs(t.duration - dur) <= 45)
+                  // ±45 used to let fan mixes/compilation uploads in —
+                  // "X MIX" passes a word-boundary title match and their
+                  // captions are another song's words. 25s still covers
+                  // lyric-video intros/endscreens on the same recording.
+                  (!dur || !t.duration || Math.abs(t.duration - dur) <= 25)
               )
               .sort((a, b) => Math.abs((a.duration ?? 0) - dur) - Math.abs((b.duration ?? 0) - dur))[0]
             if (twin?.streamId) {
@@ -516,9 +554,11 @@ export function NowPlaying() {
 
   return (
     <motion.div
+      ref={dlgRef}
       role="dialog"
       aria-modal="true"
       aria-label="Now playing"
+      tabIndex={-1}
       initial={{ y: "100%" }}
       animate={{ y: 0 }}
       exit={{ y: "100%" }}
@@ -531,7 +571,7 @@ export function NowPlaying() {
       onDragEnd={(_, info) => {
         if (info.offset.y > 160 || info.velocity.y > 700) setNpOpen(false)
       }}
-      className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-bg"
+      className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-bg outline-none"
     >
       {/* adaptive gradient background */}
       <AnimatePresence>
@@ -649,13 +689,17 @@ export function NowPlaying() {
           <div className="flex items-end justify-between gap-4">
             <div className="min-w-0">
               <Marquee text={current.title} className="text-2xl font-bold" />
-              <Link
-                to={`/artist/${encodeURIComponent(current.user.id)}?n=${encodeURIComponent(current.user.name)}`}
-                onClick={() => setNpOpen(false)}
-                className="mt-1 block truncate text-base text-ink/60 transition hover:text-ink"
-              >
-                {current.user.name}
-              </Link>
+              {hasArtistPage(current.user) ? (
+                <Link
+                  to={`/artist/${encodeURIComponent(current.user.id)}?n=${encodeURIComponent(current.user.name)}`}
+                  onClick={() => setNpOpen(false)}
+                  className="mt-1 block truncate text-base text-ink/60 transition hover:text-ink"
+                >
+                  {current.user.name}
+                </Link>
+              ) : (
+                <span className="mt-1 block truncate text-base text-ink/60">{current.user.name}</span>
+              )}
             </div>
             <div className="mb-1 flex shrink-0 items-center gap-3">
               {hasLyrics && (

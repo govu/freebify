@@ -21,6 +21,7 @@ function dropPrebuffer() {
   if (!prebuffer) return
   prebuffer.el.removeAttribute("src")
   prebuffer.el.load() // releases the decoded buffer
+  detach(prebuffer.el) // free the bus port — a startCrossfade-attached element would otherwise pin its MediaElementSource forever
   prebuffer = null
 }
 
@@ -30,6 +31,12 @@ function dropPrebuffer() {
 // scheduled AudioParam curve die naturally, then tears the element down.
 const retiring = new Set<HTMLAudioElement>()
 let fadeEndsAt = 0 // wall-clock when the longest scheduled fade-out lands
+
+// perceptual volume — loudness is roughly logarithmic, so a linear slider
+// spends its bottom half barely audible and its top half in huge jumps.
+// v² spreads usable loudness across the whole travel (0.5 ≈ −12 dB) while
+// 1.0 still means unity; the bus limiter keeps norm/EQ peaks clean at max.
+const volCurve = (v: number) => v * v
 
 function retireAudio(el: HTMLAudioElement, midFade = false, tailSecs = 0.3) {
   if (!el || retiring.has(el)) return
@@ -67,14 +74,22 @@ function adoptAudio(el: HTMLAudioElement, keepRamp = false) {
   retireAudio(old, keepRamp)
   bindAudio(el)
   audio = el
-  audio.volume = Math.min(1, Math.max(0, s.volume))
+  audio.volume = volCurve(Math.min(1, Math.max(0, s.volume)))
   audio.muted = s.muted
   if (busAvailable && !keepRamp) fadeTo(el, 1, 0.1)
   // the adopted element was already playing through its fade-in, so its
   // "playing"/"canplay" events fired while still gated (a !== audio) —
   // without this, a `waiting` blip on the outgoing element would leave
   // the transport spinner stuck on forever
-  if (!el.paused) usePlayer.setState({ buffering: false, isPlaying: true })
+  if (!el.paused) {
+    usePlayer.setState({ buffering: false, isPlaying: true })
+    if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing"
+  } else {
+    // the plain adopt path (manual next onto a buffered element) hands us
+    // an element that only ever buffered — without play() it's dead air
+    // until the watchdog skips the track for no reason
+    void el.play().catch(() => {})
+  }
 }
 
 interface PlayerState {
@@ -182,6 +197,10 @@ let loadCancelledSeq = 0
 // first 'playing'. Distinguishes "user paused a load-in-flight" (cancel)
 // from "user paused during a mid-playback buffer stall" (just resume).
 let loadPendingSeq = 0
+// set to the load seq that issued the pause — the queued 'pause' event it
+// produces is housekeeping (element reset), not user intent; it must not
+// clear the new load's buffering flag or write a resume point for it
+let loadPauseSeq = 0
 function armWatchdog(seq: number) {
   if (watchdogTimer) clearTimeout(watchdogTimer)
   watchdogTimer = window.setTimeout(() => {
@@ -272,12 +291,24 @@ function prefetchNextTrack() {
     // deeper warm-up for the immediate next track: a real media element
     // holding an already-buffered stream — next() then starts in <100ms.
     // runs on every 'playing' event (each resume!) — reuse the existing
-    // buffer for the same track instead of refetching the stream
+    // buffer for the same track instead of refetching the stream.
+    // Audius needs no resolve — its stream endpoint redirects straight to
+    // the file, so the same instant-start/crossfade path covers it free.
     const first = queue[index + 1]
-    if (first?.source === "yt" && first.streamId && !dls[first.id] && engine === "audio" && prebuffer?.id !== first.id) {
-      void yt
-        .prefetch(first.streamId)
-        .then((url) => {
+    if (
+      first &&
+      isPlayable(first) &&
+      !dls[first.id] &&
+      engine === "audio" &&
+      prebuffer?.id !== first.id
+    ) {
+      const urlP: Promise<string | null> =
+        first.source === "yt"
+          ? first.streamId
+            ? yt.prefetch(first.streamId).catch(() => null)
+            : Promise.resolve(null)
+          : Promise.resolve(streamUrl(first.id))
+      void urlP.then((url) => {
           if (!url) return
           const s = usePlayer.getState()
           if (s.queue[s.index + 1]?.id !== first.id || engine !== "audio") return
@@ -288,9 +319,12 @@ function prefetchNextTrack() {
           // the stream cache and rebuild once, so the boundary gets either
           // a healthy buffer or a fresh resolve instead of the corpse
           el.addEventListener("error", () => {
-            if (prebuffer?.el !== el) return
+            // an element mid-crossfade (adopted as incomingEl or audio)
+            // must not be gutted here — the fade/error paths own it
+            if (prebuffer?.el !== el || el === incomingEl || el === audio) return
             dropPrebuffer()
             if (first.streamId) void yt.invalidate?.(first.streamId).catch(() => null)
+            else rotateHost() // audius — the node itself may be down
             if (prebufferFailedFor !== first.id) {
               prebufferFailedFor = first.id
               setTimeout(() => prefetchNextTrack(), 4000)
@@ -299,7 +333,6 @@ function prefetchNextTrack() {
           el.load()
           prebuffer = { id: first.id, el }
         })
-        .catch(() => null)
     }
   }
   maybeFillRadio()
@@ -384,6 +417,17 @@ function maybeFillRadio() {
       // transient failure — clear the flag so the next play retries
       // instead of dead-ending the queue for this track
       radioFilledFor = null
+    } finally {
+      // the queue may have hit "end" while this fetch was in flight —
+      // re-kick the advance so playback picks up the freshly appended tracks
+      const s = usePlayer.getState()
+      if (!s.isPlaying && !s.buffering && s.index + 1 >= s.queue.length - 1 && s.queue.length) {
+        // only if the player actually stalled at the boundary (a manual
+        // pause ALSO has isPlaying false — don't resurrect over it)
+        if (!s.current || s.currentTime >= (s.duration || Infinity) - 1) {
+          void s.next(true)
+        }
+      }
     }
   })()
 }
@@ -398,6 +442,7 @@ export const usePlayer = create<PlayerState>()(
         const seq = ++loadSeq
         racingSeq = 0
         loadPendingSeq = seq
+        pauseRequested = false // a new load always clears a stale pause marker
         // an in-flight crossfade is resolved by this load — if we're
         // adopting the element that's mid fade-in, BOTH scheduled curves
         // must keep running (outgoing dies to zero, incoming climbs to 1)
@@ -410,6 +455,10 @@ export const usePlayer = create<PlayerState>()(
         // the fading element; retireAudio lets its tail die on schedule.
         ytEngine.stop()
         if (!adopting) {
+          // mark the pause we're about to issue as housekeeping: its queued
+          // 'pause' event would otherwise fire AFTER set({buffering:true})
+          // and clobber it — killing the load watchdog's gate
+          loadPauseSeq = seq
           audio.pause()
           if (busAvailable) fadeTo(audio, 1, 0) // reset out-fade before reuse
           audio.removeAttribute("src")
@@ -458,8 +507,11 @@ export const usePlayer = create<PlayerState>()(
             if (seq !== loadSeq || !ok || audioWon) return
             racingSeq = 0
             engine = "yt"
-            ytEngine.setVolume(get().volume)
+            ytEngine.setVolume(volCurve(get().volume))
             ytEngine.setMuted(get().muted)
+            // the decoded prebuffer is useless while the iframe owns
+            // playback — release it instead of pinning a whole buffer
+            dropPrebuffer()
           }
           void ifrP.then(finalizeYt)
           const url = await urlP
@@ -635,7 +687,9 @@ export const usePlayer = create<PlayerState>()(
           if (engine === "yt") {
             if (isPlaying) ytEngine.pause()
             else if (ytEngine.isActive) ytEngine.resume()
-            else void loadAt(index) // dead/stopped player — reload, don't ghost-play
+            // dead/stopped player — reload at the position the UI shows,
+            // don't ghost-play and don't restart the song from zero
+            else void loadAt(index, get().currentTime)
           } else if (isPlaying) {
             cancelCrossfade() // a paused fade must not keep playing the next track
             // dip, don't cut: 220ms fade-out then pause. UI flips to
@@ -644,13 +698,24 @@ export const usePlayer = create<PlayerState>()(
             set({ isPlaying: false })
             if (busAvailable && audio.src) {
               const el = audio
+              const seqAtDip = loadSeq
               fadeCurve(el, 0, 0.22)
               setTimeout(() => {
                 pauseRequested = false
-                // a resume during the dip must win — el stays put
-                if (el === audio && !usePlayer.getState().isPlaying) el.pause()
+                // a resume during the dip must win — el stays put; a newer
+                // load (next/prev) already owns the element — pausing it
+                // would abort its in-flight play()
+                if (seqAtDip === loadSeq && el === audio && !usePlayer.getState().isPlaying) el.pause()
               }, 260)
-            } else audio.pause()
+            } else {
+              audio.pause()
+              // no dip timer on this path — the flag still covers the
+              // pause→ended window Chrome produces, then self-clears so it
+              // can't swallow a later genuine 'ended' advance
+              setTimeout(() => {
+                pauseRequested = false
+              }, 400)
+            }
           } else {
             pauseRequested = false
             void audio.play().catch(() => {})
@@ -664,6 +729,10 @@ export const usePlayer = create<PlayerState>()(
           const { queue, index, history, shuffle, repeat } = get()
           if (queue.length === 0) return
           if (auto && repeat === "one") {
+            // a mid-flight crossfade means `audio` is the fading element
+            // and the incoming is already playing the "next" track — kill
+            // the overlap first or both would play untracked
+            cancelCrossfade()
             if (engine === "yt") {
               ytEngine.seek(0)
               ytEngine.resume()
@@ -683,9 +752,14 @@ export const usePlayer = create<PlayerState>()(
             if (repeat === "all") nextIndex = 0
             else if (!auto) return // manual next on the last track — nothing after
             else {
-              // queue ran out mid-fade — tear down the overlap cleanly
-              // instead of leaving a playing orphan element
-              cancelCrossfade()
+              // queue ran out mid-fade — kill the incoming overlap, but let
+              // the outgoing element play its last seconds out naturally;
+              // its 'ended' lands back here on the clean stop path
+              if (incomingEl || fadingEl) {
+                cancelCrossfade()
+                return
+              }
+              audio.pause()
               set({ isPlaying: false, buffering: false })
               if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused"
               return
@@ -740,8 +814,8 @@ export const usePlayer = create<PlayerState>()(
             audio.muted = false
             ytEngine.setMuted(false)
           }
-          audio.volume = vol
-          ytEngine.setVolume(vol)
+          audio.volume = volCurve(vol)
+          ytEngine.setVolume(volCurve(vol))
           set({ volume: vol, muted: vol === 0 ? get().muted : false })
         },
 
@@ -917,10 +991,16 @@ function mergePersisted(persisted: unknown, current: PlayerState): PlayerState {
             : null
         // corrupt blob: a current track with index -1 (or an index pointing
         // elsewhere) makes toggle()/next() load the wrong slot — realign
-        // onto the track's own position
+        // onto the track's own position. If the track isn't in the queue at
+        // all (queue truncated to 300 while playing index >299), re-insert
+        // it rather than letting index point at an unrelated song.
         if (cur) {
           const found = queue.findIndex((t) => t.id === cur.id)
-          index = found >= 0 ? found : Math.max(0, index)
+          if (found >= 0) index = found
+          else {
+            queue.unshift(cur)
+            index = 0
+          }
         }
         // resume position is kept in a side key (see below) — keyed by
         // track identity so we never restore a position onto a different
@@ -1082,15 +1162,27 @@ function startCrossfade(secs: number) {
   if (ndb !== undefined && s.normOn) setNormGain(nxt, 10 ** (ndb / 20))
   fadeTo(nxt, 0, 0)
   void nxt.play().catch(() => cancelCrossfade(nxt))
-  // equal-power arcs: power sums to ~1 through the midpoint — no dip,
-  // no sudden jump at either end (d(sin)/dx → 0 as x → 1)
+  // Asymmetric equal-power: the incoming sine-swells over the whole window
+  // while the outgoing HOLDS ~full level for the first 45%, then cosines
+  // out. A symmetric fade eats the song's ending — last-N-seconds dying
+  // under the incoming reads as "the song cut early". Holding it preserves
+  // the outro and the overlap stays fuller, never quieter.
+  const HOLD = 0.45
   fadeCurve(nxt, 1, secs)
-  fadeCurve(audio, 0, secs)
+  fadeCurve(audio, 0, secs, HOLD)
   fadeEndsAt = Date.now() + secs * 1000
-  // hand over at ~55% — the incoming dominates the mix from there on, so
-  // the UI flips (title, progress, controls) while the outgoing tail is
-  // still audibly dying underneath. Waiting for 100% made the bar show a
-  // dead track while a different song was already the one you hear.
+  // flip the UI exactly when the incoming becomes the louder source — not
+  // a fixed 55% (the hold shifts the crossover later, ~65%). Scan the two
+  // curves once so the title always matches what dominates the ears.
+  let flipFrac = 0.7
+  for (let x = 0.5; x <= 1; x += 0.01) {
+    const inc = Math.sin((x * Math.PI) / 2)
+    const out = x <= HOLD ? 1 : Math.cos(((x - HOLD) / (1 - HOLD)) * Math.PI / 2)
+    if (inc >= out) {
+      flipFrac = x
+      break
+    }
+  }
   fadeTimer = setTimeout(() => {
     fadeTimer = null
     // keep incomingEl/fadingEl set — next(true) → loadAt reads incomingEl
@@ -1101,7 +1193,7 @@ function startCrossfade(secs: number) {
     setTimeout(() => {
       if (incomingEl || fadingEl) cancelCrossfade()
     }, Math.max(0, fadeEndsAt - Date.now()) + 400)
-  }, secs * 550)
+  }, secs * 1000 * flipFrac)
 }
 
 // ---- per-track loudness -------------------------------------------------
@@ -1202,6 +1294,11 @@ function bindAudio(a: HTMLAudioElement): HTMLAudioElement {
   on("pause", () => {
     if (engine !== "audio") return
     disarmStall()
+    // loadAt's own reset pause, or the cancel-load pause from toggle() —
+    // both are housekeeping issued while a load is pending; letting them
+    // through would clobber the new load's buffering flag (and the
+    // watchdog gate with it)
+    if (loadPauseSeq === loadSeq || loadPendingSeq === loadSeq) return
     saveResume()
     // a waiting→pause sequence would otherwise leave the spinner stuck on
     // a paused control
@@ -1214,7 +1311,9 @@ function bindAudio(a: HTMLAudioElement): HTMLAudioElement {
     // incoming track is already covering it; don't flash the spinner
     if (a === fadingEl) return
     usePlayer.setState({ buffering: true })
-    armStall()
+    // stall guard only covers mid-PLAYBACK starvation — during a pending
+    // load (isPlaying false) the 30s watchdog owns the clock instead
+    if (usePlayer.getState().isPlaying) armStall()
   })
   on("playing", () => {
     if (engine !== "audio") return
@@ -1300,7 +1399,7 @@ function bindAudio(a: HTMLAudioElement): HTMLAudioElement {
           // a newer load or a mid-load cancel must not resurrect this retry
           if (seqAtErr !== loadSeq || usePlayer.getState().current?.id !== t.id) return
           if (ok) {
-            ytEngine.setVolume(usePlayer.getState().volume)
+            ytEngine.setVolume(volCurve(usePlayer.getState().volume))
             ytEngine.setMuted(usePlayer.getState().muted)
             return
           }
@@ -1380,9 +1479,12 @@ export function applyVolume(v: number) {
   if (vol > 0 && usePlayer.getState().muted) {
     audio.muted = false
     ytEngine.setMuted(false)
+    // engines unmuted but store still muted → the icon would show mute
+    // while sound plays; keep the store honest even mid-scrub
+    usePlayer.setState({ muted: false })
   }
-  audio.volume = vol
-  ytEngine.setVolume(vol)
+  audio.volume = volCurve(vol)
+  ytEngine.setVolume(volCurve(vol))
 }
 
 // expose store for debugging / e2e verification
@@ -1401,21 +1503,30 @@ if (typeof window !== "undefined") {
       timer: fadeTimer !== null,
       retiring: retiring.size,
       engine,
+      vol: audio.volume,
     })
 }
 
-// restore persisted audio settings on boot
+// restore persisted audio settings on boot — BOTH engines: the iframe
+// player defaults to 100%/unmuted, so a first-track iframe win used to
+// blast at full volume until the store's values landed post-play
 {
   const { volume, muted } = usePlayer.getState()
-  audio.volume = volume
+  audio.volume = volCurve(volume)
   audio.muted = muted
+  ytEngine.setVolume(volCurve(volume))
+  ytEngine.setMuted(muted)
 }
 
 // ---- resume-position side key (cheap writes, never on the tick path) ----
 function saveResume() {
-  const { currentTime, current } = usePlayer.getState()
+  const { currentTime, current, duration } = usePlayer.getState()
   try {
-    if (current && currentTime > 0)
+    // near the end = not a resume point: the natural-end 'pause' event
+    // fires with currentTime ≈ duration, and restoring at 99% would
+    // instantly end the track on next play — treat it as "finished"
+    const nearEnd = duration > 0 && duration - currentTime < 5
+    if (current && currentTime > 0 && !nearEnd)
       localStorage.setItem(
         "freebify-resume",
         JSON.stringify({ vid: current.streamId ?? current.id, t: currentTime })

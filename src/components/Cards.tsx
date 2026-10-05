@@ -180,10 +180,22 @@ function CollageCover({ p, alt }: { p: Playlist; alt: string }) {
       </div>
     )
   }
-  // still loading or no arts — show the playlist's own cover as fallback
+  // ytpl covers carry a baked-in YouTube Music logo — never render them:
+  // a shimmer while the collage loads, a neutral icon tile if it fails.
+  // Albums (ytalb-) and Audius covers are real artwork — fine to fall back.
+  if (!p.id.startsWith("ytpl-")) {
+    return (
+      <div ref={ref}>
+        <ArtworkImg art={p.artwork} alt={alt} className="aspect-square w-full rounded-lg" />
+      </div>
+    )
+  }
+  if (arts === null) {
+    return <div ref={ref} className="aspect-square w-full animate-pulse rounded-lg bg-hover" />
+  }
   return (
-    <div ref={ref}>
-      <ArtworkImg art={p.artwork} alt={alt} className="aspect-square w-full rounded-lg" />
+    <div ref={ref} className="grid aspect-square w-full place-items-center rounded-lg bg-hover">
+      <ListMusic size={30} className="text-faint" />
     </div>
   )
 }

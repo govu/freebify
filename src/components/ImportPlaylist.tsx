@@ -37,12 +37,17 @@ function csvRows(text: string): string[][] {
 }
 
 // Spotify export headers look like: "Track Name","Artist Name(s)",...
-// (or TuneMyMusic/other tools with title,artist — map loosely)
+// (or TuneMyMusic/other tools with title,artist — map loosely).
+// Two passes: exact-ish headers first, then loose — otherwise a
+// "Songwriters"/"Album Name" column can steal the title slot
 function findCols(header: string[]): [number, number] {
   const h = header.map((s) => s.trim().toLowerCase())
-  const title = h.findIndex((s) => /track name|^title|^name|song/.test(s))
+  const title =
+    h.findIndex((s) => /^(track name|track title|title|name|song|song name)$/.test(s)) ??
+    -1
+  const titleLoose = title >= 0 ? title : h.findIndex((s) => /track name|song name/.test(s))
   const artist = h.findIndex((s) => /artist/.test(s))
-  return [title >= 0 ? title : 0, artist >= 0 ? artist : 1]
+  return [titleLoose >= 0 ? titleLoose : 0, artist >= 0 ? artist : 1]
 }
 
 export function ImportPlaylist() {
@@ -52,6 +57,7 @@ export function ImportPlaylist() {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const createPlaylist = useLibrary((s) => s.createPlaylist)
   const addTracksToPlaylist = useLibrary((s) => s.addTracksToPlaylist)
+  const deletePlaylist = useLibrary((s) => s.deletePlaylist)
   const fileRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
 
@@ -114,6 +120,14 @@ export function ImportPlaylist() {
         addTracksToPlaylist(pid, hits.filter((t): t is NonNullable<typeof t> => Boolean(t)))
         found += hits.filter(Boolean).length
         setProgress({ done: Math.min(i + BATCH, entries.length), total: entries.length })
+      }
+      if (found === 0) {
+        // every row failed to match — an empty playlist is worse than none
+        deletePlaylist(pid)
+        notify("No tracks matched — check the CSV columns")
+        setBusy(false)
+        setProgress(null)
+        return
       }
       finish(pid, found)
     } catch {

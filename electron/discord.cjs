@@ -10,23 +10,17 @@ let client = null
 let connecting = false
 let retryTimer = null
 let lastJson = null // last activity we pushed — resend after a reconnect
-let lastJsonAt = 0 // when — timestamps must be rebased before a re-push
 
-// Re-sendable copy of lastJson: shift its absolute timestamps by the elapsed
-// time so a re-push doesn't rewind the progress bar (or resurrect a song
-// that's already over — in that case return null and let it clear).
+// Re-push lastJson unchanged: the timestamps are ABSOLUTE (Discord computes
+// progress itself from startTimestamp), so the stored copy still renders the
+// correct position. The old version shifted them forward by the elapsed
+// delta — every heartbeat visibly REWOUND the bar by a minute.
+// Only guard: don't resurrect an activity whose end already passed.
 function rebased() {
   if (!lastJson) return null
-  const dt = Date.now() - lastJsonAt
-  const a = { ...lastJson }
-  if (typeof a.startTimestamp === "number") a.startTimestamp += dt
-  if (typeof a.endTimestamp === "number") {
-    a.endTimestamp += dt
-    if (a.endTimestamp <= Date.now()) return null
-  }
-  lastJson = a
-  lastJsonAt = Date.now()
-  return a
+  if (typeof lastJson.endTimestamp === "number" && lastJson.endTimestamp <= Date.now())
+    return null
+  return lastJson
 }
 let enabled = true
 
@@ -139,7 +133,9 @@ async function bestArt(url) {
 
 // payload from the renderer: {playing, title, artist, artwork, durationMs,
 // positionMs, url} — null clears the presence
+let presenceSeq = 0
 async function setPresence(payload) {
+  const seq = ++presenceSeq
   if (!enabled) return
   if (!payload || payload.playing !== true) {
     lastJson = null
@@ -158,7 +154,12 @@ async function setPresence(payload) {
     instance: false,
   }
   let art = typeof payload.artwork === "string" && /^https:/.test(payload.artwork) ? payload.artwork : null
-  if (art) art = await bestArt(art)
+  if (art) {
+    art = await bestArt(art)
+    // bestArt can take up to 3s — if a newer track's presence arrived
+    // meanwhile, pushing now would resurrect the OLD song on the profile
+    if (seq !== presenceSeq) return
+  }
   // Discord's IPC rewrites external https in large_image to mp:external/*
   // automatically — no dev-portal assets or OAuth needed. large_url makes
   // the artwork clickable (opens the source video).
@@ -171,7 +172,6 @@ async function setPresence(payload) {
     activity.endTimestamp = Date.now() + Math.max(0, Math.round(dur - pos))
   }
   lastJson = activity
-  lastJsonAt = Date.now()
   await push(activity)
 }
 

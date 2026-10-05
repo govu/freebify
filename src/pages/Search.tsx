@@ -22,6 +22,8 @@ export function SearchPage() {
   const [artists, setArtists] = useState<User[]>([])
   const [playlists, setPlaylists] = useState<Playlist[]>([])
   const [loading, setLoading] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const [retryTick, setRetryTick] = useState(0)
   const [suggs, setSuggs] = useState<string[]>([])
   const [moods, setMoods] = useState<{ name: string; params: string }[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
@@ -74,10 +76,12 @@ export function SearchPage() {
   useEffect(() => {
     if (!debounced) {
       setTracks([]); setArtists([]); setPlaylists([])
+      setFailed(false)
       return
     }
     let live = true
     setLoading(true)
+    setFailed(false)
     void (async () => {
       // YouTube Music first (original studio versions); Audius as fallback
       try {
@@ -111,12 +115,17 @@ export function SearchPage() {
       if (t.status === "fulfilled") setTracks(filter(t.value))
       if (u.status === "fulfilled") setArtists(u.value)
       if (p.status === "fulfilled") setPlaylists(p.value)
+      // every source rejected → this is a failure, not an empty result set.
+      // Rendering "No results" here would lie to the user
+      if (t.status === "rejected" && u.status === "rejected" && p.status === "rejected") {
+        setFailed(true)
+      }
       setLoading(false)
     })()
     return () => {
       live = false
     }
-  }, [debounced])
+  }, [debounced, retryTick])
 
   const top = tracks[0]
 
@@ -136,6 +145,7 @@ export function SearchPage() {
               ref={inputRef}
               id="search-input"
               type="text"
+              aria-label="Search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -235,7 +245,20 @@ export function SearchPage() {
 
       {debounced && loading && <RowsSkeleton count={8} />}
 
-      {debounced && !loading && (
+      {debounced && !loading && failed && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="py-24 text-center">
+          <p className="text-lg font-semibold">Search failed</p>
+          <p className="mt-2 text-sm text-dim">Both catalogs are unreachable right now — check your connection.</p>
+          <button
+            onClick={() => setRetryTick((n) => n + 1)}
+            className="mt-5 rounded-full bg-white px-5 py-2 text-sm font-bold text-black transition hover:scale-[1.04]"
+          >
+            Retry
+          </button>
+        </motion.div>
+      )}
+
+      {debounced && !loading && !failed && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.35 }}>
           {(top || artists.length > 0 || playlists.length > 0) ? (
             <>

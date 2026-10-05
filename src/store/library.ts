@@ -31,6 +31,33 @@ interface LibraryState {
 const newId = () =>
   `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
 
+// smallest unused "My Playlist #N" — avoids duplicate names after deletions
+function nextPlaylistName(playlists: LocalPlaylist[]): string {
+  const taken = new Set(
+    playlists
+      .map((p) => /^My Playlist #(\d+)$/.exec(p.name)?.[1])
+      .filter((n): n is string => Boolean(n)),
+  )
+  let n = 1
+  while (taken.has(String(n))) n++
+  return `My Playlist #${n}`
+}
+
+// shared by migrate + merge — corrupted blobs could carry duplicate ids,
+// and likedTracks() maps this straight into React keys
+function cleanOrder(v: unknown, liked: Record<string, Track>): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  if (!Array.isArray(v)) return Object.keys(liked)
+  for (const id of v) {
+    if (typeof id === "string" && Boolean(liked[id]) && !seen.has(id)) {
+      seen.add(id)
+      out.push(id)
+    }
+  }
+  return out
+}
+
 export const useLibrary = create<LibraryState>()(
   persist(
     (set, get) => ({
@@ -67,7 +94,9 @@ export const useLibrary = create<LibraryState>()(
           playlists: [
             {
               id,
-              name: name?.trim() || `My Playlist #${s.playlists.length + 1}`,
+              // lowest free N — `length+1` reuses a number after deleting
+              // an earlier playlist (two "My Playlist #3" would coexist)
+              name: name?.trim() || nextPlaylistName(s.playlists),
               tracks: [],
               createdAt: Date.now(),
             },
@@ -151,9 +180,7 @@ export const useLibrary = create<LibraryState>()(
           : {}
         return {
           liked,
-          likedOrder: (Array.isArray(s.likedOrder) ? s.likedOrder : Object.keys(liked)).filter(
-            (id) => typeof id === "string" && Boolean(liked[id]),
-          ),
+          likedOrder: cleanOrder(s.likedOrder, liked),
           recents: sanitizeTrackList(s.recents, 40),
           playlists: (Array.isArray(s.playlists) ? s.playlists : [])
             .filter((p) => isObj(p) && typeof p.id === "string")
@@ -180,9 +207,7 @@ export const useLibrary = create<LibraryState>()(
         return {
           ...current,
           liked,
-          likedOrder: (Array.isArray(persisted.likedOrder) ? persisted.likedOrder : Object.keys(liked)).filter(
-            (id) => typeof id === "string" && Boolean(liked[id]),
-          ),
+          likedOrder: cleanOrder(persisted.likedOrder, liked),
           recents: sanitizeTrackList(persisted.recents, 40),
           playlists: (Array.isArray(persisted.playlists) ? persisted.playlists : [])
             .filter((p) => isObj(p) && typeof p.id === "string")

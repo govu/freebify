@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from "motion/react"
+import { ArrowDownToLine, X } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom"
 import { ErrorBoundary } from "./components/ErrorBoundary"
@@ -20,7 +21,7 @@ import { SearchPage } from "./pages/Search"
 import { SettingsPage } from "./pages/Settings"
 import { StatsPage } from "./pages/Stats"
 import { useLibrary } from "./store/library"
-import { applyVolume, notify, usePlayer } from "./store/player"
+import { applyVolume, usePlayer } from "./store/player"
 
 function ScrollReset() {
   const { pathname } = useLocation()
@@ -157,13 +158,16 @@ export default function App() {
     return () => off?.()
   }, [navigate])
 
-  // "update downloaded" → tell them how: X only hides to the tray, so a
-  // plain "installs on quit" leaves users never installing
+  // (update banner mounts itself — it listens for the ready event AND
+  // re-asks on mount for updates that landed while the window was hidden)
+
+  // below lg the queue is a fixed overlay — reserve space so its panel
+  // doesn't sit on top of content (row actions, card menus, text)
+  const [narrow, setNarrow] = useState(() => window.innerWidth < 1024)
   useEffect(() => {
-    const off = window.freebify?.app?.onUpdateReady?.((v) =>
-      notify(`Update ready — v${v}. Quit from the tray to install, or "Restart to update" there.`),
-    )
-    return () => off?.()
+    const onResize = () => setNarrow(window.innerWidth < 1024)
+    window.addEventListener("resize", onResize)
+    return () => window.removeEventListener("resize", onResize)
   }, [])
 
   return (
@@ -174,7 +178,11 @@ export default function App() {
       <div className="flex min-h-0 flex-1">
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
-          <div id="main-scroll" className="scroller relative min-h-0 flex-1 overflow-y-auto">
+          <div
+            id="main-scroll"
+            className="scroller relative min-h-0 flex-1 overflow-y-auto transition-[padding] duration-200"
+            style={queueOpen && narrow ? { paddingRight: 320 } : undefined}
+          >
             <TopBar />
             <ScrollReset />
             <AnimatePresence mode="wait" initial={false}>
@@ -212,7 +220,60 @@ export default function App() {
       <PlayerBar />
       <Toast />
       <OfflineBanner />
+      <UpdateBanner />
       <AnimatePresence>{npOpen && <NowPlaying />}</AnimatePresence>
     </div>
+  )
+}
+
+// persistent "update ready" card — one click installs. The download itself
+// already happened in the background (autoDownload); a transient toast was
+// too easy to miss and the tray item is one menu too deep.
+function UpdateBanner() {
+  const [version, setVersion] = useState<string | null>(null)
+  const [dismissed, setDismissed] = useState(false)
+  useEffect(() => {
+    const off = window.freebify?.app?.onUpdateReady?.((v) => {
+      setVersion(v)
+      setDismissed(false)
+    })
+    window.freebify?.app?.updateStatus?.()
+      .then((s) => {
+        if (s?.pending) setVersion(s.pending)
+      })
+      .catch(() => {})
+    return () => off?.()
+  }, [])
+  return (
+    <AnimatePresence>
+      {version && !dismissed && (
+        <motion.div
+          initial={{ opacity: 0, y: 14, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 10, scale: 0.98 }}
+          transition={{ type: "spring", stiffness: 420, damping: 32 }}
+          className="fixed bottom-24 right-5 z-[70] flex items-center gap-3 rounded-xl border border-line bg-card/95 py-2.5 pl-4 pr-2.5 shadow-2xl shadow-black/60 backdrop-blur"
+        >
+          <ArrowDownToLine size={15} className="shrink-0 text-ink" />
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold leading-tight text-ink">v{version} ready</p>
+            <p className="text-[11px] leading-tight text-dim">Restart to update</p>
+          </div>
+          <button
+            onClick={() => void window.freebify?.app?.installUpdate?.()}
+            className="ml-1 shrink-0 rounded-full bg-white px-3.5 py-1.5 text-xs font-bold text-black transition hover:scale-[1.04]"
+          >
+            Restart
+          </button>
+          <button
+            onClick={() => setDismissed(true)}
+            aria-label="Dismiss update"
+            className="grid size-6 shrink-0 place-items-center rounded-full text-faint transition hover:bg-white/10 hover:text-ink"
+          >
+            <X size={12} />
+          </button>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

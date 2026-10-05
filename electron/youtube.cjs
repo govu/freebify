@@ -295,7 +295,7 @@ async function resolveStreamUrl(videoId, prefetch = false) {
       streamCache.set(videoId, { url, expiresAt })
       cacheDirty = true
       return url
-    } catch (e) {
+    } catch {
       return null
     } finally {
       inflight.delete(key)
@@ -328,8 +328,12 @@ function ytOk() {
 }
 function getYt() {
   if (!ytPromise) {
-    ytPromise = import("youtubei.js")
-      .then(({ Innertube, Parser }) => {
+    // Innertube.create has no internal timeout — a dead-but-silent network
+    // would leave it pending forever and every getYt() would return that
+    // same never-settling promise (metadata dead for the whole session).
+    // The race frees ytPromise so the next call retries cleanly.
+    ytPromise = Promise.race([
+      import("youtubei.js").then(({ Innertube, Parser }) => {
         ParserRef = Parser
         return Innertube.create({
           generate_session_locally: true,
@@ -337,13 +341,16 @@ function getYt() {
           // remote player fetch makes init faster and removes a failure mode
           retrieve_player: false,
         })
-      })
-      .catch(() => {
-        // don't cache the failure — a launch-while-offline should recover
-        // on the next call instead of disabling YouTube for the session
-        ytPromise = null
-        return null
-      })
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("innertube init timeout")), 15000)
+      ),
+    ]).catch(() => {
+      // don't cache the failure — a launch-while-offline should recover
+      // on the next call instead of disabling YouTube for the session
+      ytPromise = null
+      return null
+    })
   }
   return ytPromise
 }
@@ -425,7 +432,6 @@ function artistFromSubtitle(sub) {
 // ALWAYS exactly 11 chars; browse ids are longer — length is the reliable
 // discriminator (a prefix regex would reject the ~0.2% of songs whose
 // videoId legitimately starts RD/PL/UC…)
-const BROWSE_ID = /^(UC|MPLA|VL|PL|RD|OLAK|MPRE|FE|LL|UU|SP)/
 
 function mapSong(item) {
   const videoId = item.id ?? item.endpoint?.payload?.videoId
@@ -1210,21 +1216,33 @@ async function playlistArts(browseId) {
   if (plArtCache.has(browseId)) return plArtCache.get(browseId)
   const p = new Promise((resolve) => {
     plArtQueue.push(async () => {
-      const yt = await getYt()
-      if (!yt) return resolve([])
-      // MPRE ids are albums — getPlaylist would 404 them; getAlbum returns
-      // the same node tree with a track list under .items
-      const res = browseId.startsWith("MPR")
-        ? await yt.music.getAlbum(browseId).catch((e) => (ytFail(e), null))
-        : await yt.music.getPlaylist(browseId).catch((e) => (ytFail(e), null))
-      resolve(
-        res
-          ? songsOf(res)
-              .slice(0, 4)
-              .map((t) => t.artwork?.["150x150"])
-              .filter(Boolean)
-          : [],
-      )
+      try {
+        const yt = await getYt()
+        if (!yt) return resolve([])
+        // MPRE ids are albums — getPlaylist would 404 them; getAlbum returns
+        // the same node tree with a track list under .items
+        const req = browseId.startsWith("MPR")
+          ? yt.music.getAlbum(browseId)
+          : yt.music.getPlaylist(browseId)
+        // no timeout in youtubei.js — a silent network would pin a queue
+        // slot forever; two such jobs would starve the whole collage queue
+        const res = await Promise.race([
+          req.catch((e) => (ytFail(e), null)),
+          new Promise((r) => setTimeout(() => r(null), 12000)),
+        ])
+        resolve(
+          res
+            ? songsOf(res)
+                .slice(0, 4)
+                .map((t) => t.artwork?.["150x150"])
+                .filter(Boolean)
+            : [],
+        )
+      } catch {
+        // a throwing getter inside songsOf must never reject the job —
+        // the cached promise would never settle and the queue would stall
+        resolve([])
+      }
     })
     pumpPlArt()
   })

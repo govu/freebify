@@ -9,6 +9,7 @@ interface AppInfo {
   electron: string
   chromium: string
   platform: string
+  canUpdate?: boolean
 }
 
 const SHORTCUTS: [string, string][] = [
@@ -30,6 +31,22 @@ export function SettingsPage() {
   const playlists = useLibrary((s) => s.playlists)
   const liked = useLibrary((s) => s.liked)
   const [discord, setDiscord] = useState(() => localStorage.getItem("freebify-discord") !== "off")
+  const [checking, setChecking] = useState(false)
+
+  const checkUpdates = async () => {
+    const fn = window.freebify?.app?.checkUpdate
+    if (!fn || checking) return
+    setChecking(true)
+    try {
+      const r = await fn()
+      if (r?.pending) notify(`v${r.pending} is ready — restart from the banner`)
+      else if (r?.update) notify(`v${r.latest} available — downloading in the background`)
+      else notify("You're up to date")
+    } catch {
+      notify("Update check failed")
+    }
+    setChecking(false)
+  }
 
   const toggleDiscord = () => {
     const next = !discord
@@ -149,6 +166,15 @@ export function SettingsPage() {
             )}
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
+            {info?.canUpdate && (
+              <button
+                onClick={() => void checkUpdates()}
+                disabled={checking}
+                className="flex items-center gap-2 rounded-full border border-line px-4 py-2 text-xs font-semibold text-dim transition hover:border-dim hover:text-ink disabled:opacity-50"
+              >
+                {checking ? "Checking…" : "Check for updates"}
+              </button>
+            )}
             {window.freebify?.app?.openLogs && (
               <button
                 onClick={() => window.freebify!.app!.openLogs()}

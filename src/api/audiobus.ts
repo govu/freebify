@@ -40,9 +40,19 @@ function ensure(): AudioContext {
       b.gain.value = eqGains[i] ?? 0
       return b
     })
-    // chain: ports → eqNodes[0..n] → destination
+    // chain: ports → eqNodes[0..n] → limiter → destination
     for (let i = 0; i < eqNodes.length - 1; i++) eqNodes[i].connect(eqNodes[i + 1])
-    eqNodes[eqNodes.length - 1].connect(ctx.destination)
+    // safety limiter — normalization boosts and EQ gain can push a signal
+    // past full scale at high user volume; compressing at -2 dB catches
+    // the peaks transparently instead of hard-clipping the output
+    const lim = ctx.createDynamicsCompressor()
+    lim.threshold.value = -2
+    lim.knee.value = 0
+    lim.ratio.value = 20
+    lim.attack.value = 0.003
+    lim.release.value = 0.12
+    eqNodes[eqNodes.length - 1].connect(lim)
+    lim.connect(ctx.destination)
   }
   if (ctx.state === "suspended") void ctx.resume()
   return ctx
@@ -77,6 +87,10 @@ export function detach(el: HTMLAudioElement) {
   if (!p) return
   try { p.src.disconnect() } catch { /* noop */ }
   try { p.fade.disconnect() } catch { /* noop */ }
+  // gain stays plugged into the EQ chain otherwise — a detached port would
+  // pin the whole node chain in the graph
+  try { p.gain.disconnect() } catch { /* noop */ }
+  try { p.meter.disconnect() } catch { /* noop */ }
   ports.delete(el)
 }
 
@@ -95,17 +109,28 @@ export function fadeTo(el: HTMLAudioElement, to: number, secs: number) {
  *  elements dips the summed loudness ~3dB at the midpoint (that's the
  *  "volume drops during the transition" effect); cosine out + sine in
  *  keeps the power constant so the mix stays level through the whole
- *  crossfade. From any current value toward `to`, along the circle arc. */
-export function fadeCurve(el: HTMLAudioElement, to: number, secs: number) {
+ *  crossfade. From any current value toward `to`, along the circle arc.
+ *
+ *  `holdFrac` (fade-outs only): the element holds `from` for that share of
+ *  the window, then cosine-decays. The outgoing track keeps its ending —
+ *  a fade-out over the whole window eats a hard outro, which reads as the
+ *  song being "cut early". The incoming still sine-swells the full window,
+ *  so the overlap never dips; it just crests slightly fuller mid-fade. */
+export function fadeCurve(el: HTMLAudioElement, to: number, secs: number, holdFrac = 0) {
   const p = ports.get(el)
   if (!p || !ctx) return
   const t = ctx.currentTime
   const from = Math.min(1, Math.max(0, p.fade.gain.value))
+  const hold = to < from ? Math.min(0.8, Math.max(0, holdFrac)) : 0
   const N = 64
   const curve = new Float32Array(N)
   for (let i = 0; i < N; i++) {
     const x = i / (N - 1)
-    curve[i] = from * Math.cos((x * Math.PI) / 2) + to * Math.sin((x * Math.PI) / 2)
+    curve[i] =
+      hold > 0 && x <= hold
+        ? from
+        : from * Math.cos((Math.min(1, (x - hold) / (1 - hold)) * Math.PI) / 2) +
+          to * Math.sin((Math.min(1, (x - hold) / (1 - hold)) * Math.PI) / 2)
   }
   p.fade.gain.cancelScheduledValues(t)
   p.fade.gain.setValueAtTime(from, t)
@@ -133,7 +158,7 @@ export function getEq(): number[] {
 export function setNormGain(el: HTMLAudioElement, linear: number) {
   const p = ports.get(el)
   if (!p || !ctx) return
-  p.gain.gain.setTargetAtTime(Math.max(0, Math.min(8, linear)), ctx.currentTime, 0.25)
+  p.gain.gain.setTargetAtTime(Math.max(0, Math.min(5, linear)), ctx.currentTime, 0.25)
 }
 
 /** Integrated RMS (linear) of an element's signal — used by the loudness

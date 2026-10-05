@@ -148,6 +148,14 @@ function cleanup(id: string) {
         cleanup(ev.id)
       } else if (ev.type === "error") {
         cleanup(ev.id)
+      } else if (ev.type === "removed") {
+        // main pruned it — the file is gone from disk (Explorer cleanup)
+        useDownloads.setState((s) => {
+          if (!s.items[ev.id]) return s
+          const items = { ...s.items }
+          delete items[ev.id]
+          return { items }
+        })
       }
     })
   }

@@ -40,7 +40,11 @@ contextBridge.exposeInMainWorld("freebify", {
     // renderer → main: player state for the taskbar thumbnail toolbar
     thumbar: (s) => ipcRenderer.send("player:thumbar", s),
     // main → renderer: thumbnail toolbar button clicks
-    onCommand: (cb) => ipcRenderer.on("player:cmd", (_e, c) => cb(c)),
+    onCommand: (cb) => {
+      const h = (_e, c) => cb(c)
+      ipcRenderer.on("player:cmd", h)
+      return () => ipcRenderer.removeListener("player:cmd", h)
+    },
     // Discord Rich Presence — now-playing card on the user's profile
     presence: (s) => ipcRenderer.send("player:presence", s),
     presenceEnabled: (v) => ipcRenderer.send("player:presence-enabled", v),
@@ -69,5 +73,7 @@ contextBridge.exposeInMainWorld("freebify", {
       return () => ipcRenderer.removeListener("app:update-ready", h)
     },
     installUpdate: () => ipcRenderer.invoke("app:install-update"),
+    updateStatus: () => ipcRenderer.invoke("app:update-status"),
+    checkUpdate: () => ipcRenderer.invoke("app:check-update"),
   },
 })

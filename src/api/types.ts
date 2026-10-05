@@ -13,6 +13,8 @@ export interface CoverPhoto {
 
 export interface User {
   id: string
+  // yt artists: channelId without the "yt-" prefix — mirrors Track.streamId
+  streamId?: string
   handle: string
   name: string
   bio?: string | null
@@ -69,3 +71,11 @@ export interface Playlist {
 export type RepeatMode = "off" | "all" | "one"
 
 export type TrendTime = "week" | "month" | "allTime"
+
+// "yt-va" (playlist Various Artists), "yt-" (missing channel) and empty
+// ids are fake owners — there is no artist page behind them, so links to
+// /artist/<id> would land on a broken view. Render them as plain text.
+export function hasArtistPage(u: Pick<User, "id"> | null | undefined): boolean {
+  const id = u?.id ?? ""
+  return Boolean(id) && id !== "yt-va" && id !== "yt-"
+}

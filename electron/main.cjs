@@ -45,6 +45,27 @@ let tray = null
 // update" affordance, since X hides to the tray and users never see a quit
 let pendingUpdate = null
 let updaterRef = null
+let autoUpdaterRef = null
+let lastUpdateCheck = 0
+let updateCheckInflight = false
+
+// debounced: focus/show/interval/manual all funnel here — never more than
+// one check per 2 min unless a manual button forces it
+function checkForUpdatesNow(force = false) {
+  if (!autoUpdaterRef || updateCheckInflight) return null
+  if (!force && Date.now() - lastUpdateCheck < 120_000) return null
+  lastUpdateCheck = Date.now()
+  updateCheckInflight = true
+  // checkForUpdates() can throw SYNCHRONOUSLY (bad feed state, early call)
+  // — a direct call would skip .finally and wedge updateCheckInflight
+  // forever, disabling updates for the whole session
+  return Promise.resolve()
+    .then(() => autoUpdaterRef.checkForUpdates())
+    .catch(() => null)
+    .finally(() => {
+      updateCheckInflight = false
+    })
+}
 
 const showWindow = () => {
   const win = BrowserWindow.getAllWindows()[0]
@@ -172,22 +193,31 @@ process.on("unhandledRejection", (e) => logLine("error", `unhandledRejection: ${
 // freebify:// deep links — registered in dev too so protocol testing works;
 // the renderer navigates to the link's path
 app.setAsDefaultProtocolClient?.("freebify")
+// a cold-start link arrives before any window exists — without the stash
+// it's silently dropped (the whole point of the feature is launching via link)
+let pendingDeepLink = null
+function sendDeepLink(link) {
+  const win = BrowserWindow.getAllWindows()[0]
+  if (!win) {
+    pendingDeepLink = link
+    return
+  }
+  if (win.webContents.isLoading()) {
+    // renderer hasn't subscribed yet — flush on did-finish-load
+    pendingDeepLink = link
+    return
+  }
+  win.webContents.send("app:deeplink", link.replace(/^freebify:\/\//, "/"))
+  showWindow()
+}
 function handleDeepLink(argv) {
   const link = argv.find((a) => typeof a === "string" && a.startsWith("freebify://"))
-  if (!link) return
-  const win = BrowserWindow.getAllWindows()[0]
-  if (win) {
-    win.webContents.send("app:deeplink", link.replace(/^freebify:\/\//, "/"))
-    showWindow()
-  }
+  if (link) sendDeepLink(link)
 }
 // macOS delivers via event instead of argv
 app.on("open-url", (e, url) => {
   e.preventDefault()
-  if (url?.startsWith("freebify://")) {
-    const win = BrowserWindow.getAllWindows()[0]
-    win?.webContents.send("app:deeplink", url.replace(/^freebify:\/\//, "/"))
-  }
+  if (url?.startsWith("freebify://")) sendDeepLink(url)
 })
 
 // explicit quit — the X button hides to the tray (music keeps playing,
@@ -226,7 +256,11 @@ if (!gotLock) {
     // no network just means "no update this run". NSIS builds self-update;
     // portable builds can't (no installer) — latest.yml is still published
     // so portable users get a "new version" hint via the releases page.
-    if (app.isPackaged && !process.argv.includes("--portable")) {
+    // portable builds can't self-update (no installer writes the app dir) —
+    // electron-builder signals them via PORTABLE_EXECUTABLE_DIR, NOT an
+    // argv flag; the old check never fired, so portable exes downloaded a
+    // 100MB update they could never install
+    if (app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR) {
       try {
         const { autoUpdater } = require("electron-updater")
         autoUpdater.logger = { info: (m) => logLine("update", m), warn: (m) => logLine("update", m), error: (m) => logLine("update", m), debug: () => {} }
@@ -243,9 +277,21 @@ if (!gotLock) {
         ipcMain.handle("app:install-update", () => {
           if (pendingUpdate && updaterRef) updaterRef.quitAndInstall(true, true)
         })
+        // a renderer that mounted after the toast still learns about the
+        // pending update — the banner isn't a one-shot message
+        ipcMain.handle("app:update-status", () => ({ pending: pendingUpdate }))
+        ipcMain.handle("app:check-update", async () => {
+          const r = await checkForUpdatesNow(true)
+          if (!r) return { checking: true, pending: pendingUpdate } // a check was already in flight
+          const latest = r?.updateInfo?.version
+          return { pending: pendingUpdate, latest, update: Boolean(latest && latest !== app.getVersion()) }
+        })
         autoUpdater.on("error", (e) => logLine("update", `check failed: ${e?.message ?? e}`))
-        void autoUpdater.checkForUpdates().catch(() => {})
-        setInterval(() => void autoUpdater.checkForUpdates().catch(() => {}), 6 * 60 * 60 * 1000).unref()
+        autoUpdaterRef = autoUpdater
+        checkForUpdatesNow(true)
+        // 30 min cadence + focus/show triggers — a release lands within
+        // minutes of a session, not hours later
+        setInterval(() => checkForUpdatesNow(), 30 * 60 * 1000).unref()
       } catch (e) {
         logLine("update", `updater unavailable: ${e?.message ?? e}`)
       }
@@ -318,6 +364,10 @@ if (!gotLock) {
       electron: process.versions.electron,
       chromium: process.versions.chrome,
       platform: process.platform,
+      // updater IPC only exists for packaged NSIS installs — the renderer
+      // gates its "Check for updates" button on this so dev/portable
+      // builds don't show a control that always fails
+      canUpdate: app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR,
     }))
     ipcMain.on("app:openLogs", () => {
       try {
@@ -338,8 +388,14 @@ if (!gotLock) {
     })
     ipcMain.on("player:presence-enabled", (_e, v) => discord.setEnabled(v !== false))
 
-    createTray()
     createWindow()
+    // a missing tray icon throws inside Tray() — if that happened before
+    // createWindow() the app became a windowless zombie process
+    try {
+      createTray()
+    } catch (e) {
+      logLine("error", `tray failed: ${e?.message ?? e}`)
+    }
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -402,18 +458,32 @@ function createWindow() {
     win.show()
     refreshThumbar(win)
   })
-  win.on("show", () => refreshThumbar(win))
+  win.on("show", () => {
+    refreshThumbar(win)
+    checkForUpdatesNow() // bringing the app back up = a good moment to look
+  })
+  win.on("focus", () => checkForUpdatesNow())
   // restore-from-minimize fires 'restore', not 'show' — without this the
   // deferred refresh queued while hidden never lands
-  win.on("restore", () => refreshThumbar(win))
+  win.on("restore", () => {
+    refreshThumbar(win)
+    checkForUpdatesNow()
+  })
   // frameless renderer needs to swap its restore/maximize glyph. A launch-
   // time maximize() fires before the page loads, so push the real state
   // once the document is up (the message above would be dropped silently)
   win.on("maximize", () => win.webContents.send("win:maximized", true))
   win.on("unmaximize", () => win.webContents.send("win:maximized", false))
-  win.webContents.on("did-finish-load", () =>
+  win.webContents.on("did-finish-load", () => {
     win.webContents.send("win:maximized", win.isMaximized())
-  )
+    // a cold-start deep link was stashed before the renderer subscribed —
+    // deliver it now that the app:deeplink listener exists
+    if (pendingDeepLink) {
+      const l = pendingDeepLink
+      pendingDeepLink = null
+      sendDeepLink(l)
+    }
+  })
   win.on("close", (e) => {
     saveBounds(win)
     // X hides to the tray — music apps keep playing in the background;

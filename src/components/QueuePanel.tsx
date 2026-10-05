@@ -23,6 +23,9 @@ export function QueuePanel() {
   const moveInQueue = usePlayer((s) => s.moveInQueue)
   const startRadio = usePlayer((s) => s.startRadio)
   const [saved, setSaved] = useState(false)
+  // two-click arm instead of a modal — one accidental trash click used to
+  // wipe a hand-built queue with no way back
+  const [armClear, setArmClear] = useState(false)
   // drag-to-reorder — indices are absolute queue indices, not upNext-local
   const [dragI, setDragI] = useState<number | null>(null)
   const [overI, setOverI] = useState<number | null>(null)
@@ -64,12 +67,25 @@ export function QueuePanel() {
           <div className="flex items-center gap-1">
             {queue.length > 1 && (
               <button
-                onClick={clearQueue}
-                title="Clear queue"
-                aria-label="Clear queue"
-                className="grid size-7 place-items-center rounded-full text-dim transition hover:bg-hover hover:text-ink"
+                onClick={() => {
+                  if (armClear) {
+                    clearQueue()
+                    setArmClear(false)
+                  } else {
+                    setArmClear(true)
+                    // auto-disarm — a half-remembered armed state clearing
+                    // the queue 10s later would be its own surprise
+                    setTimeout(() => setArmClear(false), 3000)
+                  }
+                }}
+                onMouseLeave={() => setArmClear(false)}
+                title={armClear ? "Click again to clear the queue" : "Clear queue"}
+                aria-label={armClear ? "Confirm: clear queue" : "Clear queue"}
+                className={`grid h-7 place-items-center rounded-full transition hover:bg-hover hover:text-ink ${
+                  armClear ? "w-auto px-2.5 text-[11px] font-semibold text-ink" : "size-7 text-dim"
+                }`}
               >
-                <Trash2 size={14} />
+                {armClear ? "Clear?" : <Trash2 size={14} />}
               </button>
             )}
             {queue.length > 0 && (

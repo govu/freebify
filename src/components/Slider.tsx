@@ -45,7 +45,9 @@ export function Slider({ value, min = 0, max, onScrub, onCommit, className = "",
       aria-disabled={disabled || undefined}
       aria-valuemin={min}
       aria-valuemax={max}
-      aria-valuenow={Math.round(min + (dragRatio ?? (span > 0 ? (value - min) / span : 0)) * span * 10) / 10}
+      // clamp — a stale/out-of-range value must not lie to AT (e.g. seek
+      // reporting position > duration while duration hasn't loaded yet)
+      aria-valuenow={Math.round(Math.min(max, Math.max(min, dragRatio !== null ? min + dragRatio * span : value)) * 10) / 10}
       className={`group relative flex h-4 items-center outline-none select-none ${
         disabled ? "cursor-default opacity-50" : "cursor-pointer"
       } ${className}`}

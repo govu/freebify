@@ -3,6 +3,7 @@ import { motion } from "motion/react"
 import { useEffect, useRef, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import type { Track } from "../api/types"
+import { hasArtistPage } from "../api/types"
 import { isLongForm, isNonOriginal } from "../api/audius"
 import { prefetchStream, yt } from "../api/youtube"
 import { useLibrary } from "../store/library"
@@ -124,6 +125,11 @@ export function TrackTable({ tracks, context, showHeader = true, showPlays: want
   const virtual = tracks.length > VIRTUAL_MIN
   const { wrapRef, start, end } = useWindowed(tracks.length, virtual)
 
+  // entrance animation is a FIRST-PAINT effect only. Rows mounted later —
+  // virtualization scroll, live inserts — must appear instantly; otherwise
+  // every scroll through a long list replays a wave of fade-ins
+  const entranceUntil = useRef(Date.now() + 800)
+
   // the lg grid has an optional Plays column — without it the actions cell
   // lands in the 5rem slot and overflows
   const lgCols = showPlays
@@ -166,6 +172,7 @@ export function TrackTable({ tracks, context, showHeader = true, showPlays: want
               goArtist={() => navigate(`/artist/${encodeURIComponent(t.user.id)}?n=${encodeURIComponent(t.user.name)}`)}
               onRemove={onRemove}
               removeLabel={removeLabel}
+              animateEntrance={Date.now() < entranceUntil.current}
             />
           )
         })}
@@ -209,9 +216,10 @@ interface RowProps {
   goArtist: () => void
   onRemove?: (t: Track) => void
   removeLabel?: string
+  animateEntrance?: boolean
 }
 
-function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuOpen, onMenu, closeMenu, onPlay, goArtist, onRemove, removeLabel }: RowProps) {
+function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuOpen, onMenu, closeMenu, onPlay, goArtist, onRemove, removeLabel, animateEntrance = true }: RowProps) {
   const isCurrent = usePlayer((s) => s.current?.id === t.id)
   // combined selector — plain s.isPlaying would re-render every row in the
   // table on each pause/play; this only flips for the current row
@@ -265,14 +273,14 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
   const artistPath = `/artist/${encodeURIComponent(t.user.id)}?n=${encodeURIComponent(t.user.name)}`
   // yt-va / yt- / empty ids are fake owner ids (playlist "Various Artists",
   // missing channel) — navigating there lands on a broken artist page
-  const artistOk = Boolean(t.user.id) && t.user.id !== "yt-va" && t.user.id !== "yt-"
+  const artistOk = hasArtistPage(t.user)
 
   return (
     <motion.div
       ref={rowRef}
-      initial={{ opacity: 0, y: 8 }}
+      initial={animateEntrance ? { opacity: 0, y: 8 } : false}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, delay: Math.min(index * 0.018, 0.25), ease: "easeOut" }}
+      transition={{ duration: animateEntrance ? 0.25 : 0.12, delay: animateEntrance ? Math.min(index * 0.018, 0.25) : 0, ease: "easeOut" }}
       // the entrance transform creates a stacking context that traps the
       // menu below the z-20 backdrop — strip it once motion is done
       onAnimationComplete={() => {
@@ -433,6 +441,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
             >
               <div className="rounded-xl border border-line bg-cardhover py-1 shadow-2xl">
                 <button
+                  role="menuitem"
                   onClick={(e) => {
                     e.stopPropagation()
                     const pid = createPlaylist()
@@ -451,6 +460,8 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
                     return (
                       <button
                         key={p.id}
+                        role="menuitemcheckbox"
+                        aria-checked={has}
                         onClick={(e) => {
                           e.stopPropagation()
                           // the check mark reads as toggleable — make it true

@@ -35,37 +35,26 @@ export function DownloadsPage() {
 
   return (
     <div className="-mt-12 pb-10">
-      {/* hero */}
-      <div
-        className="relative flex items-end gap-6 px-6 pb-8 pt-20"
-        style={{
-          background:
-            "linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent), radial-gradient(60% 100% at 80% 0%, rgb(255 255 255 / 0.05), transparent)",
-        }}
-      >
-        <motion.div
-          initial={{ opacity: 0, scale: 0.92 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.4 }}
-          className="grid size-40 shrink-0 place-items-center rounded-2xl bg-white shadow-2xl shadow-black/50 sm:size-52"
-        >
-          <Download size={72} className="text-black" />
-        </motion.div>
-        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.08 }}>
-          <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-ink/70">Offline</p>
-          <h1 className="mt-2 text-4xl font-black tracking-tight sm:text-6xl">Downloads</h1>
-          <p className="mt-3 text-sm text-dim">
+      {/* compact section header — a storage view, not a playlist cover */}
+      <div className="flex items-center justify-between gap-4 px-6 pb-6 pt-20">
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
+          <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-faint">Offline</p>
+          <h1 className="mt-1.5 text-3xl font-black tracking-tight">Downloads</h1>
+          <p className="mt-2 text-sm text-dim">
             {tracks.length} tracks — stored on this device, playable offline
           </p>
-          {canDl && (
-            <button
-              onClick={() => window.freebify!.dl!.openDir()}
-              className="mt-4 flex items-center gap-2 rounded-full border border-line px-4 py-2 text-xs font-semibold text-dim transition hover:border-dim hover:text-ink"
-            >
-              <FolderOpen size={13} /> Open downloads folder
-            </button>
-          )}
         </motion.div>
+        {canDl && (
+          <motion.button
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.1 }}
+            onClick={() => window.freebify!.dl!.openDir()}
+            className="flex shrink-0 items-center gap-2 rounded-full border border-line px-4 py-2 text-xs font-semibold text-dim transition hover:border-dim hover:text-ink"
+          >
+            <FolderOpen size={13} /> Open folder
+          </motion.button>
+        )}
       </div>
 
       <div className="px-6">
