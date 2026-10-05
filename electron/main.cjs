@@ -353,8 +353,11 @@ if (!gotLock) {
         // pending update — the banner isn't a one-shot message
         ipcMain.handle("app:update-status", () => ({ pending: pendingUpdate?.version ?? null, manual: pendingUpdate?.manual === true }))
         ipcMain.handle("app:check-update", async () => {
+          if (updateCheckInflight) return { checking: true, pending: pendingUpdate?.version ?? null } // a check was already in flight
           const r = await checkForUpdatesNow(true)
-          if (!r) return { checking: true, pending: pendingUpdate?.version ?? null } // a check was already in flight
+          // null result = the check itself failed (offline, feed error) —
+          // saying "no update" would lie to the user
+          if (!r) return { pending: pendingUpdate?.version ?? null, failed: true }
           const latest = r?.updateInfo?.version
           return { pending: pendingUpdate?.version ?? null, latest, update: Boolean(latest && latest !== app.getVersion()) }
         })
