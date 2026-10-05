@@ -58,18 +58,25 @@ function ensure(): AudioContext {
   // A play() that lands AFTER the click's transient activation expired
   // (stream resolution takes seconds — IPC → extractor) leaves the context
   // suspended forever: element "plays", graph outputs silence. Every real
-  // gesture is a fresh chance to wake it.
-  for (const ev of ["pointerdown", "keydown", "touchstart"]) {
-    window.addEventListener(
-      ev,
-      () => {
-        if (ctx && ctx.state === "suspended") void ctx.resume()
-      },
-      { capture: true, passive: true },
-    )
+  // gesture is a fresh chance to wake it. Registered ONCE — ensure() runs
+  // per attach and anonymous listeners can't be removed.
+  if (!gestureWired) {
+    gestureWired = true
+    const wake = () => {
+      if (ctx && ctx.state === "suspended") void ctx.resume()
+    }
+    for (const ev of ["pointerdown", "keydown", "touchstart"]) {
+      window.addEventListener(ev, wake, { capture: true, passive: true })
+    }
+    // mid-session suspensions (output device/route change, OS audio
+    // policy) self-heal on the next statechange→suspended report
+    ctx.onstatechange = () => {
+      if (ctx && ctx.state === "suspended") void ctx.resume()
+    }
   }
   return ctx
 }
+let gestureWired = false
 
 /** Route an element into the bus. Safe to call once per element — later
  *  calls return the existing port (MediaElementSource is 1:1 per element). */

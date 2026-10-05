@@ -26,6 +26,7 @@ interface YtBridge {
   playlistArts: (id: string) => Promise<string[]>
   lyrics: (videoId: string) => Promise<{ lyrics: string } | null>
   captions?: (videoId: string) => Promise<{ lines: { t: number; text: string }[] } | null>
+  videoSearch?: (q: string) => Promise<Track[]>
   suggest: (q: string) => Promise<string[]>
 }
 
@@ -75,7 +76,7 @@ declare global {
         onUpdateReady: (cb: (upd: { version: string; manual: boolean }) => void) => () => void
         installUpdate: () => Promise<void>
         updateStatus: () => Promise<{ pending: string | null; manual?: boolean }>
-        checkUpdate: () => Promise<{ pending?: string | null; latest?: string; update?: boolean; checking?: boolean }>
+        checkUpdate: () => Promise<{ pending?: string | null; latest?: string; update?: boolean; checking?: boolean; failed?: boolean }>
       }
     }
   }
@@ -128,6 +129,7 @@ export const yt = {
   playlistArts: (id: string) => ytBridge()?.playlistArts(id) ?? Promise.resolve([]),
   lyrics: (videoId: string) => ytBridge()?.lyrics(videoId) ?? Promise.resolve(null),
   captions: (videoId: string) => ytBridge()?.captions?.(videoId) ?? Promise.resolve(null),
+  videoSearch: (q: string) => ytBridge()?.videoSearch?.(q) ?? Promise.resolve([]),
   suggest: (q: string) => ytBridge()?.suggest(q) ?? Promise.resolve([]),
 }
 

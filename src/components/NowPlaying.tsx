@@ -160,9 +160,19 @@ const alignOffset = (lrc: LrcLine[], caps: LrcLine[]): number | null => {
   // two guards against hooky songs: a repeated line ("oh-eh" every 30s)
   // can latch onto a LATER chorus and manufacture a huge false offset.
   // (a) monotonic — caption time can only move forward as lyrics advance;
-  // (b) plausible window — a record↔upload shift lives inside [-45, 120]s
+  // (b) plausible window — a record↔upload shift lives inside [-45, 120]s.
+  // Prefer lines that appear ONCE in the sheet — unique lines can't latch
+  // onto a repeated hook's other occurrences at all
+  const head = lrc.slice(0, 14)
+  const freq = new Map<string, number>()
+  for (const l of head) {
+    const k = simTokens(l.text).join(" ")
+    freq.set(k, (freq.get(k) ?? 0) + 1)
+  }
+  const uniq = head.filter((l) => freq.get(simTokens(l.text).join(" ")) === 1)
+  const sample = uniq.length >= 3 ? uniq : head
   let lastT = -Infinity
-  for (const l of lrc.slice(0, 14)) {
+  for (const l of sample) {
     const w = new Set(simTokens(l.text))
     const bi = simBigrams(l.text)
     let best = 0
@@ -230,6 +240,33 @@ const lrcContentOk = (lrc: LrcLine[], caps: LrcLine[]): boolean => {
   return n === 0 || hit / n >= 0.34
 }
 
+// post-measure sanity: with the shift applied, sampled lines must land
+// near their own caption match — a same-title upload with a different
+// structure (longer intro, extra verse) can still quorum on hooky lines,
+// and this is the check that rejects it
+const timingOk = (lrc: LrcLine[], caps: LrcLine[], off: number): boolean => {
+  if (caps.length < 8) return true // too sparse to verify — trust the quorum
+  const step = Math.max(1, Math.floor(lrc.length / 14))
+  let hit = 0
+  let n = 0
+  for (let i = 0; i < lrc.length; i += step) {
+    const w = new Set(simTokens(lrc[i].text))
+    const bi = simBigrams(lrc[i].text)
+    let best = 0
+    let bestDt = Infinity
+    for (const c of caps) {
+      const s = lineSim(w, bi, new Set(simTokens(c.text)), simBigrams(c.text))
+      if (s > best) {
+        best = s
+        bestDt = Math.abs(c.t - (lrc[i].t + off))
+      }
+    }
+    n++
+    if (best >= 0.45 && bestDt <= 7) hit++
+  }
+  return n === 0 || hit / n >= 0.5
+}
+
 const lrcGet = async (path: string, p: Record<string, string>): Promise<LrcRec[]> => {
   try {
     const u = new URL(path, "https://lrclib.net")
@@ -276,16 +313,19 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
     if (!trackId) return
     let saved: string | null = null
     try {
-      // lrcoff2-* — v1 keys may hold offsets measured by the pre-monotonic
-      // aligner (repeat-hook false matches) → legacy keys are purged, not read
-      saved = localStorage.getItem(`lrcoff2-${trackId}`)
+      // lrcoff2- = manual (Shift+click) — always wins; lrcoffa- = auto-
+      // measured, re-verified each open so a stale one can't wedge;
+      // lrcoff- = v1 keys measured by the pre-monotonic aligner → purge
+      saved =
+        localStorage.getItem(`lrcoff2-${trackId}`) ??
+        localStorage.getItem(`lrcoffa-${trackId}`)
       const keys = Object.keys(localStorage).filter((k) => k.startsWith("lrcoff"))
       for (const k of keys) {
         if (k.startsWith("lrcoff-")) localStorage.removeItem(k)
       }
-      // cap the set so a long-lived profile can't sprawl
-      const v2 = keys.filter((k) => k.startsWith("lrcoff2-"))
-      for (const k of v2.slice(0, Math.max(0, v2.length - 120))) localStorage.removeItem(k)
+      // cap the sets so a long-lived profile can't sprawl
+      const kept = keys.filter((k) => k.startsWith("lrcoff2-") || k.startsWith("lrcoffa-"))
+      for (const k of kept.slice(0, Math.max(0, kept.length - 140))) localStorage.removeItem(k)
     } catch { /* storage unavailable — offsets just won't persist */ }
     if (saved !== null) {
       setOffset(Number(saved) || 0)
@@ -306,6 +346,7 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
     if (trackId) {
       try {
         localStorage.setItem(`lrcoff2-${trackId}`, String(next))
+        localStorage.removeItem(`lrcoffa-${trackId}`)
       } catch { /* quota/security — correction stays session-only */ }
     }
   }
@@ -585,42 +626,58 @@ export function NowPlaying() {
       }
     }
     // the video we're ACTUALLY playing: direct for yt tracks; for Audius
-    // the closest same-recording upload (title overlap + duration ≤25s
-    // keeps mixes/clips out). Resolved once — DB-lyrics alignment and the
-    // caption fallback share it instead of twin-searching twice.
-    let videoId: string | null | undefined
-    const resolveVideoId = async (): Promise<string | null> => {
-      if (videoId !== undefined) return videoId
-      videoId = current.source === "yt" ? current.streamId ?? null : null
-      if (!videoId) {
-        const queries = [...new Set([`${artist} ${title}`.trim(), title, stripped].filter(Boolean))]
-        for (const q of queries) {
-          const res = await yt.search(q).catch(() => null)
-          const twin = (res?.tracks ?? [])
-            .filter(
-              (t) =>
-                t.streamId &&
-                titleLike(t.title, title) &&
-                // ±45 used to let fan mixes/compilation uploads in —
-                // "X MIX" passes a word-boundary title match and their
-                // captions are another song's words. 25s still covers
-                // lyric-video intros/endscreens on the same recording.
-                (!dur || !t.duration || Math.abs(t.duration - dur) <= 25)
-            )
-            .sort((a, b) => Math.abs((a.duration ?? 0) - dur) - Math.abs((b.duration ?? 0) - dur))[0]
-          if (twin?.streamId) {
-            videoId = twin.streamId
-            break
-          }
+    // the closest same-recording uploads. Twins must share title AND
+    // artist AND near-identical duration — ±10 keeps mixes/clips/live
+    // takes out (a wrong twin's captions are another song's words or a
+    // different structure's timing). Uploads are iterated lazily: many
+    // carry no caption track at all (proven on real videos), so alignment
+    // and the caption fallback keep walking until one yields lines.
+    const artistOkTwin = (t: { title?: string; user?: { name?: string } }) => {
+      const a = norm(artist)
+      if (!a) return true
+      const ch = norm(t.user?.name ?? "")
+      const ttl = ` ${norm(t.title ?? "")} `
+      if (ch && (ch === a || starts(ch, a) || starts(a, ch))) return true
+      return a.split(" ").some((w) => w.length > 2 && (ch.split(" ").includes(w) || ttl.includes(` ${w} `)))
+    }
+    const ownVid = current.source === "yt" ? current.streamId ?? null : null
+    const twinQueries = [...new Set([`${artist} ${title}`.trim(), title, stripped].filter(Boolean))]
+    const fits = (x: { streamId?: string; title: string; duration?: number; user?: { name?: string } }) =>
+      !!x.streamId &&
+      titleLike(x.title, title) &&
+      artistOkTwin(x) &&
+      (!dur || !x.duration || Math.abs(x.duration - dur) <= 10)
+    const byDur = <T extends { duration?: number }>(a: T, b: T) =>
+      Math.abs((a.duration ?? 0) - dur) - Math.abs((b.duration ?? 0) - dur)
+    const forEachVideo = async (fn: (vid: string) => Promise<boolean>) => {
+      let tried = 0
+      const attempt = async (vid: string | null | undefined) =>
+        vid && ++tried <= 4 ? fn(vid) : Promise.resolve(false)
+      if (await attempt(ownVid)) return
+      for (const q of twinQueries) {
+        const res = await yt.search(q).catch(() => null)
+        for (const t of (res?.tracks ?? []).filter(fits).sort(byDur)) {
+          if (t.streamId === ownVid) continue
+          if (await attempt(t.streamId)) return
         }
-        videoId ??= null
       }
-      return videoId
+      // the music catalog carries no captions on many official uploads —
+      // general YouTube adds fan lyric videos (they nearly always ship
+      // ASR/manual subs for the same recording)
+      for (const q of [...new Set([`${artist} ${title} lyrics`, `${title} lyrics`].filter((x) => x.trim() !== "lyrics"))]) {
+        const vids = await yt.videoSearch(q).catch(() => [])
+        for (const t of vids.filter(fits).sort(byDur)) {
+          if (t.streamId === ownVid) continue
+          if (await attempt(t.streamId)) return
+        }
+      }
     }
     // DB lyrics describe the studio take — a lyric video's intro shifts
     // every line early. Measure the real lead-in against the video's own
-    // captions and nudge autoOff after the first paint rather than delay
-    // the render; a manual Shift+click offset always wins.
+    // captions (walking alternates when the playing upload has none) and
+    // nudge autoOff after the first paint rather than delay the render.
+    // Auto offsets persist under lrcoffa- and re-verify every open — a
+    // wrong measurement can't stick; a manual Shift+click always wins.
     const refineOffset = async (lrc: LrcLine[], fallback: number) => {
       try {
         if (!ytBridge()?.captions) return
@@ -630,53 +687,53 @@ export function NowPlaying() {
         // the real "is this still on screen" guard.
         const sameTrack = () => usePlayer.getState().current?.id === current.id
         if (!sameTrack()) return
-        let saved: string | null = null
         try {
-          saved = localStorage.getItem(`lrcoff2-${current.id}`)
+          if (localStorage.getItem(`lrcoff2-${current.id}`) !== null) return
         } catch { /* storage unavailable — measure anyway */ }
-        if (saved !== null) return
-        const vid = await resolveVideoId()
-        if (!vid || !sameTrack()) return
-        const cap = await yt.captions(vid)
-        if (!cap?.lines?.length || !sameTrack()) return
-        // content veto: a same-title DIFFERENT song's sheet passes the
-        // metadata gates but its words aren't in this audio. When the
-        // video's own captions can't find the lyrics at all, swap the
-        // sheet for the captions — they are the right words by definition
-        const clipped = cap.lines.filter((l) => !dur || l.t <= dur + 15)
-        if (!lrcContentOk(lrc, clipped) && clipped.length >= 4) {
-          setLyrics((cur) => (cur && "synced" in cur && cur.synced === lrc ? { synced: clipped, autoOff: 0 } : cur))
-          return
-        }
-        const off = alignOffset(lrc, cap.lines)
-        // measured ~0 also matters: it vetoes a wrong duration-delta guess
-        if (off == null || Math.abs(off - fallback) < 1.5) return
-        setLyrics((cur) => (cur && "synced" in cur && cur.synced === lrc ? { synced: lrc, autoOff: off } : cur))
-        // persist like a manual correction — next open applies instantly
-        // with no re-measure. Delayed so the "auto-synced" note still
-        // surfaces this run; a Shift+click meanwhile wins the key
-        setTimeout(() => {
+        await forEachVideo(async (vid) => {
+          const cap = await yt.captions(vid)
+          if (!cap?.lines?.length || !sameTrack()) return false
+          // content veto: a same-title DIFFERENT song's sheet passes the
+          // metadata gates but its words aren't in this audio. When the
+          // video's own captions can't find the lyrics at all, swap the
+          // sheet for the captions — they are the right words by definition
+          const clipped = cap.lines.filter((l) => !dur || l.t <= dur + 15)
+          if (!lrcContentOk(lrc, clipped) && clipped.length >= 4) {
+            setLyrics((cur) => (cur && "synced" in cur && cur.synced === lrc ? { synced: clipped, autoOff: 0 } : cur))
+            return true
+          }
+          const off = alignOffset(lrc, cap.lines)
+          // a failed quorum on this upload doesn't preclude the next one
+          if (off == null) return false
+          // measured ~0 also matters: it vetoes a wrong duration-delta guess
+          if (Math.abs(off - fallback) < 1.5) return true
+          // sanity before committing: with the shift applied, sampled
+          // lines must land near their own caption match — a twin whose
+          // structure differs can still quorum on hooky lines
+          if (!timingOk(lrc, cap.lines, off)) return false
+          setLyrics((cur) => (cur && "synced" in cur && cur.synced === lrc ? { synced: lrc, autoOff: off } : cur))
           try {
-            if (localStorage.getItem(`lrcoff2-${current.id}`) === null) {
-              localStorage.setItem(`lrcoff2-${current.id}`, String(off))
-            }
+            localStorage.setItem(`lrcoffa-${current.id}`, String(off))
           } catch { /* correction stays session-only */ }
-        }, 6000)
+          return true
+        })
       } catch { /* best-effort — the unaligned lyrics still display */ }
     }
     // YouTube's own captions as the synced catch-all — ASR tracks exist for
-    // nearly every music upload, covering songs the lyric databases don't
-    // carry
+    // nearly every music upload; alternates cover the ones that don't
     const fetchCaptions = async (): Promise<LrcLine[] | null> => {
       try {
         if (!ytBridge()?.captions) return null
-        const vid = await resolveVideoId()
-        if (!vid) return null
-        const cap = await yt.captions(vid)
-        if (!cap?.lines?.length) return null
-        // captions run to the video's end — clip to the track's runtime so
-        // a longer upload's outro chatter can't tail the lyric sheet
-        return sane(cap.lines.filter((l) => !dur || l.t <= dur + 15))
+        let out: LrcLine[] | null = null
+        await forEachVideo(async (vid) => {
+          const cap = await yt.captions(vid)
+          if (!cap?.lines?.length) return false
+          // captions run to the video's end — clip to the track's runtime
+          // so a longer upload's outro chatter can't tail the lyric sheet
+          out = sane(cap.lines.filter((l) => !dur || l.t <= dur + 15))
+          return out != null
+        })
+        return out
       } catch {
         return null
       }

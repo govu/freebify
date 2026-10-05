@@ -55,8 +55,10 @@ function ensureExecutable() {
       } catch { /* read-only bundle — probe may still pass */ }
       if (process.platform === "darwin") {
         const bundle = path.join(process.resourcesPath, "..", "..")
+        // hung xattr would pend dequarantineP forever → every yt-dlp call
+        // queues behind it and times out at 25s per play
         await new Promise((r) =>
-          execFile("/usr/bin/xattr", ["-dr", "com.apple.quarantine", bundle], () => r()),
+          execFile("/usr/bin/xattr", ["-dr", "com.apple.quarantine", bundle], { timeout: 10000 }, () => r()),
         )
       }
       if (await probe(bundled)) return
@@ -68,7 +70,7 @@ function ensureExecutable() {
         fs.chmodSync(alt, 0o755)
         if (process.platform === "darwin") {
           await new Promise((r) =>
-            execFile("/usr/bin/xattr", ["-d", "com.apple.quarantine", alt], () => r()),
+            execFile("/usr/bin/xattr", ["-d", "com.apple.quarantine", alt], { timeout: 10000 }, () => r()),
           )
         }
         if (await probe(alt)) execBin = alt
@@ -77,6 +79,19 @@ function ensureExecutable() {
         log("ytdlp", `exec fallback failed: ${e?.message ?? e}`)
       }
     })()
+    // a failed de-quarantine must not poison the session — transient
+    // Gatekeeper/lock errors retry on the next call instead of caching
+    // a dead bundled path forever
+    dequarantineP.catch(() => null).then(() => {
+      if (!execBin && process.platform !== "win32") {
+        // if the bundled probe failed AND no fallback was adopted, allow
+        // one future retry (flag reset so a later call re-runs the chain)
+        const p = dequarantineP
+        setTimeout(() => {
+          if (dequarantineP === p && !execBin) dequarantineP = null
+        }, 60000)
+      }
+    })
   }
   return dequarantineP
 }
@@ -832,6 +847,25 @@ async function search(query) {
   }
 }
 
+// general YouTube search (videos, not the music catalog) — caption source
+// for lyrics alignment: fan lyric videos almost always carry ASR/manual
+// subs while official audio uploads often ship none at all
+async function videoSearch(query) {
+  const yt = await getYt()
+  if (!yt) return []
+  const res = await yt.search(query).catch((e) => (log("vsearch", `${query}: ${e?.message}`), null))
+  if (!res) return []
+  return (res.results ?? [])
+    .filter((it) => it.type === "Video" && it.id)
+    .map((it) => ({
+      streamId: it.id,
+      title: text(it.title) || "",
+      duration: it.duration?.seconds ?? parseDuration(text(it.duration?.text ?? "")) ?? 0,
+      user: { id: it.author?.id ?? "", name: it.author?.name ?? "" },
+    }))
+    .slice(0, 10)
+}
+
 // last-resort imagery: any artist with songs has cover art — an artist page
 // should never render as a blank header just because YouTube ships no photos
 const trackArtwork = (tracks) =>
@@ -1453,13 +1487,21 @@ function captionLines(body, ext) {
 const CAP_LANGS = ["es", "en", "pt", "it", "fr", "de"]
 function pickCaptionFmt(dict) {
   if (!dict || typeof dict !== "object") return null
-  const keys = Object.keys(dict).filter((k) => Array.isArray(dict[k]) && dict[k].length)
+  let keys = Object.keys(dict).filter((k) => Array.isArray(dict[k]) && dict[k].length)
   if (!keys.length) return null
-  const rank = (k) => {
-    const i = CAP_LANGS.findIndex((l) => k === l || k.startsWith(`${l}-`))
-    return i === -1 ? CAP_LANGS.length : i
+  // automatic_captions lists ~150 machine-TRANSLATED targets alongside the
+  // one real track — picking a CAP_LANGS member here hands back e.g. a
+  // Spanish translation of English audio, which then never matches the
+  // lyrics. The "*-orig" key is the ASR of the actual audio: always first
+  const orig = keys.filter((k) => k.endsWith("-orig"))
+  if (orig.length) keys = orig
+  else {
+    const rank = (k) => {
+      const i = CAP_LANGS.findIndex((l) => k === l || k.startsWith(`${l}-`))
+      return i === -1 ? CAP_LANGS.length : i
+    }
+    keys.sort((a, b) => rank(a) - rank(b))
   }
-  keys.sort((a, b) => rank(a) - rank(b))
   // walk languages in preference order — the top pick may only carry a
   // format we can't parse (ttml) while a lower one has json3/vtt
   for (const k of keys) {
@@ -1655,6 +1697,9 @@ function register(ipcMain) {
   )
   ipcMain.handle("yt:captions", (_e, videoId) =>
     typeof videoId === "string" && VID.test(videoId) ? withTimeout(captions(videoId), 40000).catch(() => null) : null
+  )
+  ipcMain.handle("yt:videosearch", (_e, q) =>
+    typeof q === "string" && q.length < 100 ? withTimeout(videoSearch(Q(q)), 15000).catch(() => []) : []
   )
   ipcMain.handle("yt:suggest", (_e, q) =>
     typeof q === "string" && q.length < 100 ? withTimeout(suggestions(Q(q)), 8000).then((r) => r ?? [], () => []) : []

@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld("freebify", {
     playlistArts: (id) => ipcRenderer.invoke("yt:playlistarts", id),
     lyrics: (videoId) => ipcRenderer.invoke("yt:lyrics", videoId),
     captions: (videoId) => ipcRenderer.invoke("yt:captions", videoId),
+    videoSearch: (q) => ipcRenderer.invoke("yt:videosearch", q),
     suggest: (q) => ipcRenderer.invoke("yt:suggest", q),
   },
   dl: {

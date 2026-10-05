@@ -30,7 +30,13 @@ export function SettingsPage() {
   const setAutoplay = usePlayer((s) => s.setAutoplay)
   const playlists = useLibrary((s) => s.playlists)
   const liked = useLibrary((s) => s.liked)
-  const [discord, setDiscord] = useState(() => localStorage.getItem("freebify-discord") !== "off")
+  const [discord, setDiscord] = useState(() => {
+    try {
+      return localStorage.getItem("freebify-discord") !== "off"
+    } catch {
+      return true
+    }
+  })
   const [checking, setChecking] = useState(false)
 
   const checkUpdates = async () => {
@@ -41,6 +47,7 @@ export function SettingsPage() {
       const r = await fn()
       if (r?.pending) notify(`v${r.pending} is ready — restart from the banner`)
       else if (r?.update) notify(`v${r.latest} available — downloading in the background`)
+      else if (r?.failed) notify("Update check failed — try again later")
       else notify("You're up to date")
     } catch {
       notify("Update check failed")
@@ -51,7 +58,9 @@ export function SettingsPage() {
   const toggleDiscord = () => {
     const next = !discord
     setDiscord(next)
-    localStorage.setItem("freebify-discord", next ? "on" : "off")
+    try {
+      localStorage.setItem("freebify-discord", next ? "on" : "off")
+    } catch { /* storage unavailable — pref stays session-only */ }
     window.dispatchEvent(new CustomEvent("freebify:discord-toggle", { detail: next }))
   }
 

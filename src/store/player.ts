@@ -82,6 +82,12 @@ function adoptAudio(el: HTMLAudioElement, keepRamp = false) {
   // without this, a `waiting` blip on the outgoing element would leave
   // the transport spinner stuck on forever
   if (!el.paused) {
+    // adopted element already playing = the load is done — its 'playing'
+    // event fired while still gated, so it never cleared the pending seq;
+    // leaving it would break every later pause (and re-route a Play press
+    // into the cancel-load branch, restarting the track at 0)
+    loadPendingSeq = 0
+    disarmWatchdog()
     usePlayer.setState({ buffering: false, isPlaying: true })
     if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing"
   } else {
@@ -222,6 +228,42 @@ function disarmWatchdog() {
 // a stream that stalls DURING play (waiting/onBuffering with isPlaying
 // still true) would hang silently forever without this.
 let stallTimer: number | null = null
+// One-shot recovery for a resume that never produces 'playing' (a hung
+// play() promise, a stream that stalled while paused). Armed ONLY by
+// toggle()'s resume path so a stalled reload can't re-arm it into a loop
+// — the reload's own watchdog then owns the clock.
+let resumeWatch: number | null = null
+function disarmResume() {
+  if (resumeWatch) {
+    clearTimeout(resumeWatch)
+    resumeWatch = null
+  }
+}
+// Hidden-player heartbeat: a pause/resume command that produces no state
+// event within a few seconds means the iframe is dead or parked on
+// YouTube's "still watching?" interstitial — without this, toggle() calls
+// pause()/resume() on a corpse forever and the button does nothing.
+let ytBeat: number | null = null
+function armYtBeat() {
+  if (ytBeat) clearTimeout(ytBeat)
+  const seq = loadSeq
+  ytBeat = window.setTimeout(() => {
+    ytBeat = null
+    const s = usePlayer.getState()
+    if (seq !== loadSeq || engine !== "yt") return
+    // no event answered the command: if it was meant to be playing, reload
+    // at the shown position; if paused, mark the player dead so the NEXT
+    // press takes the reload path instead of resuming a corpse
+    if (s.isPlaying) void loadAtRef?.(s.index, s.currentTime)
+    else ytEngine.isActive = false
+  }, 4500)
+}
+function disarmYtBeat() {
+  if (ytBeat) {
+    clearTimeout(ytBeat)
+    ytBeat = null
+  }
+}
 function armStall() {
   if (stallTimer) clearTimeout(stallTimer)
   const mark = usePlayer.getState().currentTime
@@ -443,6 +485,8 @@ export const usePlayer = create<PlayerState>()(
         racingSeq = 0
         loadPendingSeq = seq
         pauseRequested = false // a new load always clears a stale pause marker
+        disarmResume() // a fresh load supersedes any pending resume watch
+        disarmYtBeat()
         // an in-flight crossfade is resolved by this load — if we're
         // adopting the element that's mid fade-in, BOTH scheduled curves
         // must keep running (outgoing dies to zero, incoming climbs to 1)
@@ -684,9 +728,15 @@ export const usePlayer = create<PlayerState>()(
             set({ buffering: false })
             return
           }
+          disarmResume()
           if (engine === "yt") {
-            if (isPlaying) ytEngine.pause()
-            else if (ytEngine.isActive) ytEngine.resume()
+            if (isPlaying) {
+              ytEngine.pause()
+              armYtBeat()
+            } else if (ytEngine.isActive) {
+              ytEngine.resume()
+              armYtBeat()
+            }
             // dead/stopped player — reload at the position the UI shows,
             // don't ghost-play and don't restart the song from zero
             else void loadAt(index, get().currentTime)
@@ -722,6 +772,16 @@ export const usePlayer = create<PlayerState>()(
             // if the element just dipped out (gain ≈ 0), climb back in —
             // no-op for elements already at full gain
             if (busAvailable) fadeCurve(audio, 1, 0.15)
+            // a resume that never reaches 'playing' (hung play(), URL that
+            // died while paused) gets ONE reload at the shown position —
+            // armed here, not in 'waiting', so it can't loop
+            const seqAtResume = loadSeq
+            resumeWatch = window.setTimeout(() => {
+              resumeWatch = null
+              const s = usePlayer.getState()
+              if (seqAtResume !== loadSeq || engine !== "audio" || s.isPlaying) return
+              void loadAtRef?.(s.index, s.currentTime)
+            }, 9000)
           }
         },
 
@@ -1299,6 +1359,7 @@ function bindAudio(a: HTMLAudioElement): HTMLAudioElement {
     // through would clobber the new load's buffering flag (and the
     // watchdog gate with it)
     if (loadPauseSeq === loadSeq || loadPendingSeq === loadSeq) return
+    disarmResume() // a real pause supersedes the resume watchdog
     saveResume()
     // a waiting→pause sequence would otherwise leave the spinner stuck on
     // a paused control
@@ -1321,13 +1382,17 @@ function bindAudio(a: HTMLAudioElement): HTMLAudioElement {
     loadPendingSeq = 0
     disarmWatchdog()
     disarmStall()
+    disarmResume()
     usePlayer.setState({ buffering: false })
     prefetchNextTrack()
   })
   on("canplay", () => {
     if (engine === "audio") {
       disarmStall()
-      usePlayer.setState({ buffering: false })
+      // a pending load isn't done at canplay — play() can still be
+      // rejected. Clearing buffering here would disarm the 30s watchdog
+      // and leave a rejected play() as a silent no-op with no spinner
+      if (loadPendingSeq !== loadSeq) usePlayer.setState({ buffering: false })
     }
   })
   on("timeupdate", () => {
@@ -1435,6 +1500,7 @@ ytEngine.setEvents({
     loadPendingSeq = 0
     disarmWatchdog()
     disarmStall()
+    disarmYtBeat()
     usePlayer.setState({ isPlaying: true, buffering: false, ...(d > 0 ? { duration: d } : {}) })
     if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing"
     prefetchNextTrack()
@@ -1445,24 +1511,31 @@ ytEngine.setEvents({
     if (engine === "yt" && Number.isFinite(d) && d > 0) usePlayer.setState({ duration: d })
   },
   onPaused: () => {
+    disarmYtBeat() // the player answered — it's alive
     if (engine !== "yt" || racingSeq !== 0) return
     saveResume()
-    usePlayer.setState({ isPlaying: false })
+    // a buffering→pause transition would otherwise strand the spinner
+    // on a paused control
+    usePlayer.setState({ isPlaying: false, buffering: false })
     if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused"
   },
   onBuffering: () => {
+    disarmYtBeat()
     if (engine === "yt" || racingSeq !== 0) {
       usePlayer.setState({ buffering: true })
       if (engine === "yt") armStall()
     }
   },
   onEnded: () => {
+    disarmYtBeat()
     if (engine === "yt" && racingSeq === 0) usePlayer.getState().next(true)
   },
   onTime: (t) => {
+    disarmYtBeat()
     if (engine === "yt") usePlayer.setState({ currentTime: t })
   },
   onError: () => {
+    disarmYtBeat()
     // the video died while the iframe OWNED playback — move on. While a
     // race is pending, the failure arrives via play()'s promise instead.
     if (engine !== "yt" || racingSeq !== 0) return
@@ -1634,7 +1707,13 @@ if ("mediaSession" in navigator) {
   // start/end timestamps, so only real transitions need a push: track
   // change, play/pause, and seeks (>3s position jumps). A presenceEnabled
   // broadcast toggles the whole feature from Settings.
-  let rpcEnabled = localStorage.getItem("freebify-discord") !== "off"
+  let rpcEnabled = (() => {
+    try {
+      return localStorage.getItem("freebify-discord") !== "off"
+    } catch {
+      return true
+    }
+  })()
   let rpcLastKey = ""
   const pushPresence = (s: ReturnType<typeof usePlayer.getState>) => {
     if (!rpcEnabled) return

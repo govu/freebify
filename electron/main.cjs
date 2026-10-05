@@ -308,6 +308,7 @@ if (!gotLock) {
         try {
           const res = await fetch("https://api.github.com/repos/govu/freebify/releases/latest", {
             headers: { "User-Agent": "freebify" },
+            signal: AbortSignal.timeout(12000),
           })
           const rel = await res.json()
           const latest = rel.tag_name?.replace(/^v/, "")
@@ -316,15 +317,18 @@ if (!gotLock) {
             logLine("update", `manual update available: ${latest}`)
             BrowserWindow.getAllWindows()[0]?.webContents.send("app:update-ready", { version: latest, manual: true })
           }
-        } catch {}
+          return true
+        } catch {
+          return false // caller distinguishes "no update" from "check failed"
+        }
       }
       ipcMain.handle("app:install-update", () => {
         if (pendingUpdate?.url) void shell.openExternal(pendingUpdate.url)
       })
       ipcMain.handle("app:update-status", () => ({ pending: pendingUpdate?.version ?? null, manual: true }))
       ipcMain.handle("app:check-update", async () => {
-        await checkManual()
-        return { pending: pendingUpdate?.version ?? null, manual: true }
+        const ok = await checkManual()
+        return { pending: pendingUpdate?.version ?? null, manual: true, failed: !ok }
       })
       checkManual()
       setInterval(checkManual, 30 * 60 * 1000).unref()

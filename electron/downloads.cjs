@@ -170,7 +170,17 @@ async function downloadYt(id, streamId, track) {
   }
   inFlight.set(id, { kill: () => { try { child.kill() } catch {} }, base })
   let buf = ""
+  let lastData = Date.now()
+  // a wedged child (post-extract stall, dead pipe) emits nothing forever —
+  // every in-flight slot it holds blocks the queue; kill on silence
+  const wd = setInterval(() => {
+    if (Date.now() - lastData > 90000) {
+      try { child.kill() } catch {}
+    }
+  }, 15000)
+  wd.unref?.()
   const onData = (d) => {
+    lastData = Date.now()
     buf += d
     const lines = buf.split(/\r?\n/)
     buf = lines.pop() ?? ""
@@ -185,6 +195,7 @@ async function downloadYt(id, streamId, track) {
   const finish = (ok) => {
     if (done) return
     done = true
+    clearInterval(wd)
     inFlight.delete(id)
     reservedBases.delete(base)
     if (abortedIds.delete(id)) {
@@ -242,7 +253,12 @@ async function downloadHttp(id, url, track) {
       if (done) break
       got += value.byteLength
       if (!out.write(Buffer.from(value))) {
-        await new Promise((r) => out.once("drain", r))
+        // an errored stream never emits 'drain' — without the error race
+        // this await hangs forever and the row freezes mid-write
+        await new Promise((r, j) => {
+          out.once("drain", r)
+          out.once("error", j)
+        })
       }
       if (total) emit({ type: "progress", id, pct: Math.min(99, Math.round((got / total) * 100)) })
     }
