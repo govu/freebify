@@ -6,11 +6,17 @@ import { yt } from "../api/youtube"
 import { notify } from "../store/player"
 import { useLibrary } from "../store/library"
 
-// Import playlists: YouTube Music URL (direct fetch) or a Spotify CSV
-// export (each row re-matched by search). Best-effort matching — the top
+// Import playlists: Spotify or YouTube Music links, or a CSV export
+// (each row re-matched by search). Best-effort matching — the top
 // YouTube Music hit is taken; originals-only catalog means a few misses.
 
 const YT_LIST = /[?&]list=([A-Za-z0-9_-]+)/
+const SPOTIFY_LIST = /open\.spotify\.com\/playlist\/([A-Za-z0-9]+)/
+
+interface ImportEntry {
+  title: string
+  artist: string
+}
 
 // minimal CSV cell parser — quoted fields, escaped "" quotes, comma sep
 function csvRows(text: string): string[][] {
@@ -69,10 +75,49 @@ export function ImportPlaylist() {
     navigate(`/playlist/${pid}`)
   }
 
+  // every entry is re-matched on YouTube Music — the top hit wins.
+  // batches of 4 so a long list doesn't hammer search in one burst
+  const matchEntries = async (playlistName: string, entries: ImportEntry[]) => {
+    setProgress({ done: 0, total: entries.length })
+    const pid = createPlaylist(playlistName)
+    let found = 0
+    const BATCH = 4
+    for (let i = 0; i < entries.length; i += BATCH) {
+      const chunk = entries.slice(i, i + BATCH)
+      const hits = await Promise.all(
+        chunk.map(async (e) => {
+          const q = `${e.artist} ${e.title}`.trim()
+          if (!q) return null
+          try {
+            const res = await yt.search(q)
+            return res.tracks[0] ?? null
+          } catch {
+            return null
+          }
+        })
+      )
+      addTracksToPlaylist(pid, hits.filter((t): t is NonNullable<typeof t> => Boolean(t)))
+      found += hits.filter(Boolean).length
+      setProgress({ done: Math.min(i + BATCH, entries.length), total: entries.length })
+    }
+    if (found === 0) {
+      // every row failed to match — an empty playlist is worse than none
+      deletePlaylist(pid)
+      notify("No tracks matched")
+      setBusy(false)
+      setProgress(null)
+      return
+    }
+    finish(pid, found)
+  }
+
   const importUrl = async () => {
-    const id = YT_LIST.exec(url.trim())?.[1]
+    const u = url.trim()
+    const spotifyId = SPOTIFY_LIST.exec(u)?.[1]
+    if (spotifyId) return importSpotify(spotifyId)
+    const id = YT_LIST.exec(u)?.[1]
     if (!id) {
-      notify("Paste a YouTube or YouTube Music playlist link")
+      notify("Paste a Spotify or YouTube Music playlist link")
       return
     }
     setBusy(true)
@@ -92,44 +137,34 @@ export function ImportPlaylist() {
     }
   }
 
+  const importSpotify = async (id: string) => {
+    setBusy(true)
+    try {
+      const res = await yt.spotifyList(id)
+      if (!res) {
+        notify("Couldn't read that playlist — check it's public")
+        setBusy(false)
+        return
+      }
+      await matchEntries(res.name, res.tracks)
+    } catch {
+      notify("Import failed — try again")
+      setBusy(false)
+      setProgress(null)
+    }
+  }
+
   const importCsv = async (file: File) => {
     setBusy(true)
     try {
       const rows = csvRows(await file.text())
       if (rows.length < 2) throw new Error("empty")
       const [ti, ai] = findCols(rows[0])
-      const entries = rows.slice(1).slice(0, 500) // cap — a 5000-row export would churn forever
-      setProgress({ done: 0, total: entries.length })
-      const pid = createPlaylist(file.name.replace(/\.[^.]+$/, ""))
-      let found = 0
-      const BATCH = 4
-      for (let i = 0; i < entries.length; i += BATCH) {
-        const chunk = entries.slice(i, i + BATCH)
-        const hits = await Promise.all(
-          chunk.map(async (r) => {
-            const q = `${r[ai]?.trim() ?? ""} ${r[ti]?.trim() ?? ""}`.trim()
-            if (!q) return null
-            try {
-              const res = await yt.search(q)
-              return res.tracks[0] ?? null
-            } catch {
-              return null
-            }
-          })
-        )
-        addTracksToPlaylist(pid, hits.filter((t): t is NonNullable<typeof t> => Boolean(t)))
-        found += hits.filter(Boolean).length
-        setProgress({ done: Math.min(i + BATCH, entries.length), total: entries.length })
-      }
-      if (found === 0) {
-        // every row failed to match — an empty playlist is worse than none
-        deletePlaylist(pid)
-        notify("No tracks matched — check the CSV columns")
-        setBusy(false)
-        setProgress(null)
-        return
-      }
-      finish(pid, found)
+      const entries: ImportEntry[] = rows
+        .slice(1)
+        .slice(0, 500) // cap — a 5000-row export would churn forever
+        .map((r) => ({ title: r[ti]?.trim() ?? "", artist: r[ai]?.trim() ?? "" }))
+      await matchEntries(file.name.replace(/\.[^.]+$/, ""), entries)
     } catch {
       notify("Couldn't read that CSV")
       setBusy(false)
@@ -176,30 +211,39 @@ export function ImportPlaylist() {
 
               <div className="mt-5">
                 <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-dim">
-                  <Link2 size={12} /> YouTube Music link
+                  <Link2 size={12} /> Spotify or YouTube Music link
                 </p>
                 <input
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && !busy && void importUrl()}
-                  placeholder="https://music.youtube.com/playlist?list=…"
+                  placeholder="open.spotify.com/playlist/…"
                   className="w-full rounded-lg border border-line bg-card px-3 py-2.5 text-sm outline-none transition placeholder:text-faint focus:border-white/40"
                 />
+                <p className="mt-2 text-xs text-faint">
+                  Spotify: public playlists, first 50 tracks. YouTube Music: full list, no matching needed.
+                </p>
                 <button
                   onClick={() => void importUrl()}
                   disabled={busy || !url.trim()}
                   className="mt-3 w-full rounded-full bg-white py-2.5 text-sm font-bold text-black transition enabled:hover:scale-[1.02] disabled:opacity-40"
                 >
-                  {busy && !progress ? <Loader2 size={15} className="mx-auto animate-spin" /> : "Import playlist"}
+                  {busy && !progress ? (
+                    <Loader2 size={15} className="mx-auto animate-spin" />
+                  ) : progress ? (
+                    `Matching ${progress.done}/${progress.total}…`
+                  ) : (
+                    "Import playlist"
+                  )}
                 </button>
               </div>
 
               <div className="mt-6 border-t border-line pt-5">
                 <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-dim">
-                  <FileSpreadsheet size={12} /> Spotify CSV export
+                  <FileSpreadsheet size={12} /> CSV export
                 </p>
                 <p className="mb-3 text-xs text-faint">
-                  Rows are re-matched on YouTube Music — most originals land. Max 500.
+                  For longer or private playlists. Title + artist columns are detected automatically. Max 500.
                 </p>
                 <input
                   ref={fileRef}

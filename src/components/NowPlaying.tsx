@@ -1,12 +1,12 @@
 import {
   ChevronDown, Heart, ListMusic, Loader2, MicVocal, Pause, Play,
-  Repeat, Repeat1, Shuffle, SkipBack, SkipForward,
+  Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Volume1, Volume2, VolumeX,
 } from "lucide-react"
 import { AnimatePresence, motion, useDragControls } from "motion/react"
 import { useEffect, useReducer, useRef, useState } from "react"
 import { Link } from "react-router-dom"
 import { useLibrary } from "../store/library"
-import { usePlayer } from "../store/player"
+import { usePlayer, applyVolume } from "../store/player"
 import { yt, ytBridge } from "../api/youtube"
 import { hasArtistPage } from "../api/types"
 import { dominantColor, rgb } from "../utils/color"
@@ -475,6 +475,11 @@ export function NowPlaying() {
   const cycleRepeat = usePlayer((s) => s.cycleRepeat)
   const setNpOpen = usePlayer((s) => s.setNpOpen)
   const setQueueOpen = usePlayer((s) => s.setQueueOpen)
+  const volume = usePlayer((s) => s.volume)
+  const muted = usePlayer((s) => s.muted)
+  const setVolume = usePlayer((s) => s.setVolume)
+  const toggleMute = usePlayer((s) => s.toggleMute)
+  const VolumeIcon = muted || volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2
 
   const liked = useLibrary((s) => (current ? Boolean(s.liked[current.id]) : false))
   const toggleLike = useLibrary((s) => s.toggleLike)
@@ -1078,7 +1083,7 @@ export function NowPlaying() {
               re-render this whole overlay (incl. the blur layer) per tick */}
           <NpSeekBar trackDuration={current.duration} />
 
-          <div className="mt-4 flex items-center justify-center gap-8">
+          <div className="relative mt-4 flex items-center justify-center gap-8">
             <button
               onClick={toggleShuffle}
               aria-label="Shuffle"
@@ -1119,6 +1124,19 @@ export function NowPlaying() {
                 <span className="absolute -bottom-2 left-1/2 size-1 -translate-x-1/2 rounded-full bg-ink" />
               )}
             </button>
+            <div className="absolute right-0 flex items-center gap-2">
+              <button onClick={toggleMute} aria-label={muted ? "Unmute" : "Mute"} aria-pressed={muted} className="text-ink/60 transition hover:text-ink">
+                <VolumeIcon size={20} />
+              </button>
+              <Slider
+                value={volume}
+                max={1}
+                onScrub={applyVolume}
+                onCommit={(v) => setVolume(v)}
+                className="w-24"
+                ariaLabel="Volume"
+              />
+            </div>
           </div>
         </div>
       </div>

@@ -866,6 +866,29 @@ async function videoSearch(query) {
     .slice(0, 10)
 }
 
+// Public Spotify playlist tracklist without an API key: the oEmbed-less
+// /embed/playlist/<id> page ships __NEXT_DATA__ with the first ~50 tracks
+// ({title, subtitle=artist}). Returns {name, tracks:[{title,artist}]}.
+async function spotifyPlaylist(id) {
+  const res = await fetch(`https://open.spotify.com/embed/playlist/${id}`, {
+    headers: { "User-Agent": "Mozilla/5.0", "Accept-Language": "en-US" },
+    signal: AbortSignal.timeout(15000),
+  })
+  if (!res.ok) return null
+  const html = await res.text()
+  const m = /<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/.exec(html)
+  if (!m) return null
+  const entity = JSON.parse(m[1])?.props?.pageProps?.state?.data?.entity
+  const list = entity?.trackList
+  if (!entity?.name || !Array.isArray(list) || list.length === 0) return null
+  return {
+    name: entity.name,
+    tracks: list
+      .filter((t) => t?.title && t?.subtitle)
+      .map((t) => ({ title: t.title, artist: t.subtitle })),
+  }
+}
+
 // last-resort imagery: any artist with songs has cover art — an artist page
 // should never render as a blank header just because YouTube ships no photos
 const trackArtwork = (tracks) =>
@@ -1719,6 +1742,9 @@ function register(ipcMain) {
   )
   ipcMain.handle("yt:videosearch", (_e, q) =>
     typeof q === "string" && q.length < 100 ? withTimeout(videoSearch(Q(q)), 15000).catch(() => []) : []
+  )
+  ipcMain.handle("yt:spotifylist", (_e, id) =>
+    typeof id === "string" && /^[A-Za-z0-9]{10,30}$/.test(id) ? spotifyPlaylist(id).catch(() => null) : null
   )
   ipcMain.handle("yt:suggest", (_e, q) =>
     typeof q === "string" && q.length < 100 ? withTimeout(suggestions(Q(q)), 8000).then((r) => r ?? [], () => []) : []
