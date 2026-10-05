@@ -10,8 +10,21 @@ permissions:
   contents: write
 
 jobs:
+  # electron-builder creates the release when --publish finds none — with 3
+  # matrix jobs racing, each one used to create its OWN release for the same
+  # tag (split assets across two objects). Create it once up front instead.
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: gh release create "${{ github.ref_name }}" --title "${{ github.ref_name }}" --verify-tag || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build:
     name: Build ${{ matrix.os }}
+    needs: create-release
+    runs-on: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
