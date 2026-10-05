@@ -25,7 +25,6 @@ jobs:
     name: Build ${{ matrix.os }}
     needs: create-release
     runs-on: ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
