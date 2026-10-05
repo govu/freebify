@@ -194,6 +194,22 @@ function VBand({
     return Math.round((t * RANGE * 2 - RANGE) * 2) / 2
   }
 
+  // window-level listeners instead of setPointerCapture — pointer capture
+  // drops move events on some macOS/Linux builds, freezing the fader mid-drag
+  useEffect(() => {
+    if (!drag) return
+    const move = (e: PointerEvent) => onChange(fromY(e.clientY))
+    const up = () => setDrag(false)
+    window.addEventListener("pointermove", move)
+    window.addEventListener("pointerup", up)
+    window.addEventListener("pointercancel", up)
+    return () => {
+      window.removeEventListener("pointermove", move)
+      window.removeEventListener("pointerup", up)
+      window.removeEventListener("pointercancel", up)
+    }
+  }, [drag]) // eslint-disable-line react-hooks/exhaustive-deps — fromY reads the rect fresh each event
+
   return (
     <div className="flex w-8 flex-col items-center gap-1.5">
       <div
@@ -204,7 +220,7 @@ function VBand({
         aria-valuemin={-RANGE}
         aria-valuemax={RANGE}
         aria-valuenow={value}
-        className="group relative h-24 w-6 cursor-pointer touch-none outline-none focus-visible:ring-1 focus-visible:ring-white/60"
+        className="group relative h-24 w-8 cursor-pointer touch-none outline-none focus-visible:ring-1 focus-visible:ring-white/60"
         // role=slider needs tab focus + arrow keys to be a real slider —
         // without them the faders are mouse-only (a11y dead zone)
         tabIndex={0}
@@ -226,17 +242,15 @@ function VBand({
         }}
         onPointerDown={(e) => {
           if (e.button !== 0 || !e.isPrimary) return
-          e.currentTarget.setPointerCapture(e.pointerId)
+          e.preventDefault()
           setDrag(true)
           onActive()
           onChange(fromY(e.clientY))
         }}
-        onPointerMove={(e) => {
-          if (!drag || !e.isPrimary) return
-          onChange(fromY(e.clientY))
+        onWheel={(e) => {
+          onActive()
+          onChange(Math.max(-RANGE, Math.min(RANGE, value + (e.deltaY < 0 ? 0.5 : -0.5))))
         }}
-        onPointerUp={() => setDrag(false)}
-        onPointerCancel={() => setDrag(false)}
         onDoubleClick={() => onChange(0)}
       >
         {/* track */}

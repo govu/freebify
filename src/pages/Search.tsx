@@ -269,13 +269,24 @@ export function SearchPage() {
                     <button
                       onClick={() => playTrack(top, tracks)}
                       onMouseEnter={() => prefetchStream(top)}
-                      className="group relative block w-full rounded-2xl bg-card p-5 text-left transition-colors hover:bg-cardhover"
+                      className="group relative block w-full overflow-hidden rounded-2xl bg-card p-5 text-left transition-colors hover:bg-cardhover"
                     >
-                      <ArtworkImg art={top.artwork} alt={top.title} className="size-28 rounded-xl shadow-lg" />
-                      <p className="mt-4 truncate text-2xl font-bold">{top.title}</p>
-                      <p className="mt-1 truncate text-sm text-dim">
-                        Song · {top.user.name}
-                      </p>
+                      {/* artwork-tinted backdrop fills the card so it reads
+                          as the result itself, not an empty container */}
+                      <ArtworkImg
+                        art={top.artwork}
+                        alt=""
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-[0.14] blur-2xl saturate-[0.6]"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-card via-card/40 to-transparent" />
+                      <div className="relative">
+                        <ArtworkImg art={top.artwork} alt={top.title} className="size-28 rounded-xl shadow-lg" />
+                        <p className="mt-4 truncate text-2xl font-bold">{top.title}</p>
+                        <p className="mt-1 truncate text-sm text-dim">
+                          Song · {top.user.name}
+                        </p>
+                      </div>
                       <span className="absolute bottom-5 right-5 grid size-12 translate-y-2 place-items-center rounded-full bg-white text-black opacity-0 shadow-xl transition-all group-hover:translate-y-0 group-hover:opacity-100">
                         <Play size={20} className="ml-0.5 fill-current" />
                       </span>
