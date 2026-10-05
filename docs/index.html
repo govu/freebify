@@ -334,11 +334,11 @@
   <div class="inner">
     <h2 class="rv">Get Freebify.<br><span>Keep the money.</span></h2>
     <div class="row rv d1">
-      <a class="btn solid" id="dlBtn" href="https://github.com/govu/freebify/releases/latest/download/Freebify-setup.exe" target="_blank" rel="noopener">Download for Windows</a>
+      <a class="btn solid" id="dlBtn" href="https://github.com/govu/freebify/releases/latest/download/Freebify-setup.exe" target="_blank" rel="noopener">Download Freebify 1.0.13</a>
       <a class="btn line" id="portableBtn" href="https://github.com/govu/freebify/releases/latest/download/Freebify-portable.exe" target="_blank" rel="noopener">Portable .exe</a>
     </div>
     <div class="note rv d2">
-      Free forever · Windows 10/11 · ~120 MB<b id="verMeta" hidden> · v?</b> · updates itself
+      Free forever · Windows 10/11 · ~120 MB<b id="verMeta"> · v1.0.13</b> · updates itself
       <span id="dlCount" style="display:none"> · <b id="dlCountN"></b> downloads</span>
     </div>
   </div>
@@ -530,7 +530,9 @@
   if (new URLSearchParams(location.search).has("vw")) document.title = `W${innerWidth}x${innerHeight} DPR${devicePixelRatio}`;
 
   /* ---------- release wiring ---------- */
-  fetch("https://api.github.com/repos/govu/freebify/releases/latest", { cache: "no-store" })
+  const relCtl = new AbortController();
+  setTimeout(() => relCtl.abort(), 8000);
+  fetch("https://api.github.com/repos/govu/freebify/releases/latest", { cache: "no-store", signal: relCtl.signal })
     .then(r => r.json())
     .then(rel => {
       const v = rel.tag_name?.replace(/^v/, "") || "";

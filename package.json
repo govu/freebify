@@ -12,7 +12,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "dist": "npm run build && electron-builder",
+    "dist": "node scripts/sync-site-version.mjs && npm run build && electron-builder",
     "fetch-bin": "node scripts/fetch-bin.mjs",
     "dist:dir": "npm run build && electron-builder --dir",
     "dist:portable": "npm run build && electron-builder --win portable"
