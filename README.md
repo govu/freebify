@@ -69,5 +69,18 @@ change it before publishing releases).
 
 ## Legal
 
-Freebify is an interface — music comes from each platform's own endpoints
-under their terms. For personal, non-commercial use.
+**Freebify is a media player, not a music service.** It hosts, stores,
+uploads and sells nothing — every byte of audio and metadata is fetched
+by the user's own device, directly from the third-party platforms that
+serve it (YouTube Music / the Audius public API), under those platforms'
+own terms. The software itself contains no copyrighted material and has
+substantial lawful uses; responsibility for complying with each platform's
+terms and local law rests with the person running it. Not affiliated with
+or endorsed by Spotify, YouTube, Google, Audius, or any rights holder.
+Free, open-source (GPL-3.0), non-commercial, no accounts, no tracking —
+for personal use.
+
+- [DISCLAIMER.md](DISCLAIMER.md) — full legal disclaimer, why & how
+- [TERMS.md](TERMS.md) — terms of use (no warranty, liability limits)
+- [PRIVACY.md](PRIVACY.md) — privacy policy (spoiler: collects nothing)
+- [LICENSE](LICENSE) — GNU GPL v3.0

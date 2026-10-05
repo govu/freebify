@@ -3,6 +3,7 @@
   "private": true,
   "version": "1.0.7",
   "description": "Freebify — free music streaming. No ads, no subscriptions.",
+  "license": "GPL-3.0-only",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -78,6 +79,7 @@
     "nsis": {
       "oneClick": false,
       "perMachine": false,
+      "license": "build/license.txt",
       "allowToChangeInstallationDirectory": true,
       "shortcutName": "Freebify",
       "artifactName": "Freebify-${version}-setup.exe"

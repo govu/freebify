@@ -1,5 +1,5 @@
 import { motion } from "motion/react"
-import { FolderOpen, Gamepad2, Heart, Infinity as InfinityIcon, Keyboard, Trash2 } from "lucide-react"
+import { FolderOpen, Gamepad2, Heart, Infinity as InfinityIcon, Keyboard, Scale, Trash2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useLibrary } from "../store/library"
 import { notify, usePlayer } from "../store/player"
@@ -138,8 +138,10 @@ export function SettingsPage() {
           <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-dim">About</h2>
           <p className="text-sm font-semibold">Freebify {info ? `v${info.version}` : ""}</p>
           <p className="mt-1 text-xs leading-relaxed text-dim">
-            Free, ad-free music. Catalog metadata via YouTube Music & the Audius open catalog —
-            Freebify is a player, not a host; it doesn't upload or share anything.
+            Free, ad-free music. Freebify is a player, not a host — all audio & metadata are fetched
+            by your device, directly from YouTube Music & the Audius public API, under their own
+            terms. For personal, non-commercial use. Not affiliated with Spotify, YouTube, Google
+            or Audius.
             {info && (
               <span className="mt-1 block text-faint">
                 Electron {info.electron} · Chromium {info.chromium}
@@ -162,6 +164,14 @@ export function SettingsPage() {
               className="flex items-center gap-2 rounded-full border border-line px-4 py-2 text-xs font-semibold text-dim transition hover:border-dim hover:text-ink"
             >
               <Heart size={13} /> Open source — contribute on GitHub
+            </a>
+            <a
+              href="https://github.com/govu/freebify/blob/main/DISCLAIMER.md"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 rounded-full border border-line px-4 py-2 text-xs font-semibold text-dim transition hover:border-dim hover:text-ink"
+            >
+              <Scale size={13} /> Legal — disclaimer & terms
             </a>
           </div>
         </section>

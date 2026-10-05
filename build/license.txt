@@ -1,0 +1,23 @@
+Freebify — Copyright (C) 2026 Freebify contributors
+
+This program is free software licensed under the GNU General Public
+License v3.0 (GPL-3.0). You may copy, modify and redistribute it under
+the terms of that license; a copy ships with this distribution and is
+available at https://github.com/govu/freebify/blob/main/LICENSE
+
+DISCLAIMER
+----------
+Freebify is a media player, not a music service. It hosts, stores,
+uploads and sells nothing. All audio and metadata are fetched by YOUR
+device, at YOUR request, directly from third-party services (YouTube /
+YouTube Music and the Audius public API) under those services' own
+terms. Freebify is not affiliated with or endorsed by Spotify, YouTube,
+Google, Audius, or any rights holder.
+
+This software is intended for personal, non-commercial use. You are
+responsible for complying with the terms of each platform you access
+through it and with the laws of your jurisdiction.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. IN NO
+EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM OR DAMAGES ARISING FROM
+ITS USE. Full terms: https://github.com/govu/freebify
