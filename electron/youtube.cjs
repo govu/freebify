@@ -541,7 +541,8 @@ function mapSong(item) {
   }
 
   artistName ||= "Unknown artist"
-  const title = (text(item.title) || "Untitled").replace(
+  const rawTitle = text(item.title) || "Untitled"
+  const title = rawTitle.replace(
     /\s*[\(\[](video oficial|official video|official audio|audio oficial|official music video|video lyric|lyric video|visualizer)[\)\]]/gi,
     ""
   )
@@ -551,6 +552,10 @@ function mapSong(item) {
     source: "yt",
     streamId: videoId,
     title,
+    // lyric-detection upstream must see the RAW uploader title — "(lyric
+    // video)" gets stripped above for display but marks a stripped-intro
+    // upload that must never vote in offset measurement
+    origTitle: rawTitle,
     duration: durationSec,
     play_count: playCount ?? 0,
     repost_count: 0,
@@ -734,7 +739,8 @@ function mapPanelVideo(item) {
     0
   // panel thumbs are 4:3 i.ytimg URLs — derive stable sizes from the videoId
   const vi = `https://i.ytimg.com/vi/${videoId}`
-  const title = (text(item.title?.text ?? item.title) || "Untitled").replace(
+  const rawTitle = text(item.title?.text ?? item.title) || "Untitled"
+  const title = rawTitle.replace(
     /\s*[\(\[](video oficial|official video|official audio|audio oficial|official music video|video lyric|lyric video|visualizer)[\)\]]/gi,
     ""
   )
@@ -743,6 +749,7 @@ function mapPanelVideo(item) {
     source: "yt",
     streamId: videoId,
     title,
+    origTitle: rawTitle,
     duration: durationSec,
     play_count: 0,
     repost_count: 0,
@@ -1786,6 +1793,30 @@ function register(ipcMain) {
   ipcMain.handle("yt:upnext", (_e, videoId) =>
     typeof videoId === "string" && VID.test(videoId) ? withTimeout(upNext(videoId), 20000).then((r) => r ?? [], () => []) : []
   )
+  // REAL YouTube web search via yt-dlp ytsearch — Innertube's music client
+  // ranks official-video reuploads (the caption+intro twins the lyrics
+  // aligner needs) out of its top results; web search surfaces them
+  ipcMain.handle("yt:ytsearch", (_e, q, n) => {
+    if (typeof q !== "string" || !q.trim()) return []
+    const count = Math.min(20, Math.max(1, typeof n === "number" ? n : 10))
+    return withTimeout(
+      runYtdlp(["--flat-playlist", "-J", `ytsearch${count}:${q}`], 25000)
+        .then((out) => {
+          const j = JSON.parse(out)
+          return (j.entries ?? [])
+            .filter((v) => v && typeof v.id === "string")
+            .map((v) => ({
+              streamId: v.id,
+              title: v.title ?? "",
+              origTitle: v.title ?? "",
+              duration: v.duration ?? 0,
+              user: { name: v.channel ?? v.uploader ?? "" },
+            }))
+        })
+        .catch(() => []),
+      30000,
+    ).then((r) => r ?? [], () => [])
+  })
   ipcMain.handle("yt:trending", () => withTimeout(trending(), 20000).then((r) => r ?? [], () => []))
   ipcMain.handle("yt:charts", () =>
     withTimeout(charts(), 25000).then((r) => r ?? { tracks: [], artists: [] }, () => ({ tracks: [], artists: [] }))
