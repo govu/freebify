@@ -4,7 +4,7 @@ A free, ad-free music streaming desktop app — a Spotify-style experience
 powered by the YouTube Music catalog, with the Audius open catalog as a
 built-in fallback so playback never dead-ends.
 
-![Platform](https://img.shields.io/badge/platform-Windows%20%C2%B7%20macOS-lightgrey)
+![Platform](https://img.shields.io/badge/platform-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-lightgrey)
 ![Stack](https://img.shields.io/badge/stack-Electron%20%C2%B7%20React%2019%20%C2%B7%20TypeScript%20%C2%B7%20Tailwind%20v4-lightgrey)
 
 **[Download & website → govu.github.io/freebify](https://govu.github.io/freebify/)**
@@ -59,10 +59,11 @@ npm run build                # typecheck + bundle to dist/
 npm run dist                 # Windows: portable exe + NSIS installer → release/
 ```
 
-**Windows + macOS builds are produced by CI**: pushing a `v*` tag runs
-`.github/workflows/release.yml`, which builds on `windows-latest` and
-`macos-latest` (dmg + zip for x64 **and** arm64) and uploads every artifact
-plus `latest.yml`/`latest-mac.yml` into the matching GitHub Release.
+**Windows + macOS + Linux builds are produced by CI**: pushing a `v*` tag runs
+`.github/workflows/release.yml`, which builds on `windows-latest`,
+`macos-latest` (dmg + zip for x64 **and** arm64) and `ubuntu-latest`
+(AppImage + deb) and uploads every artifact plus the `latest*.yml` update
+manifests into the matching GitHub Release.
 
 > **macOS caveat:** the app is unsigned (no Apple Developer cert). First
 > launch: right-click the app → **Open**, or `xattr -dr com.apple.quarantine
