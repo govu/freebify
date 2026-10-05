@@ -37,6 +37,6 @@ jobs:
         run: node scripts/sync-site-version.mjs && npm run build && npx electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # no Apple/cert signing — skip cert discovery instead of failing
+          # no Apple/cert signing — skip cert discovery instead of failing.
+          # (do NOT set CSC_LINK — an empty value is still read as a cert path)
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-          CSC_LINK: ""
