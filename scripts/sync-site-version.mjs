@@ -8,5 +8,6 @@ const html = readFileSync("docs/index.html", "utf8")
 const out = html
   .replace(/id="dlBtn"([^>]*)>[^<]*</, `id="dlBtn"$1>Download Freebify ${version}<`)
   .replace(/<b id="verMeta"[^>]*> · v[^<]*<\/b>/, `<b id="verMeta"> · v${version}</b>`)
+  .replace(/id="footVer">[^<]*</, `id="footVer"> · v${version}<`)
 if (out !== html) writeFileSync("docs/index.html", out)
 console.log(`site fallback version → ${version}`)

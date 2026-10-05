@@ -136,7 +136,7 @@ export function SearchPage() {
         initial={{ opacity: 0, y: -8, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ type: "spring", stiffness: 320, damping: 28 }}
-        className="sticky top-14 z-20 mx-auto mb-8 mt-4 max-w-md"
+        className="sticky top-14 z-20 mx-auto mb-8 mt-4 max-w-lg"
       >
         <div className="relative">
           <div className="group flex items-center gap-3 rounded-full border border-line bg-panel/90 px-5 py-3.5 shadow-xl shadow-black/30 backdrop-blur transition-all duration-300 focus-within:border-white/50 focus-within:shadow-[0_0_0_4px_rgba(255,255,255,0.07),0_18px_40px_-12px_rgba(0,0,0,0.8)] hover:border-white/25">
@@ -157,7 +157,7 @@ export function SearchPage() {
                 }
               }}
               placeholder="Songs, artists, playlists…"
-              className="w-full bg-transparent text-[15px] font-medium placeholder:font-normal placeholder:text-faint/70"
+              className="w-full bg-transparent text-[15px] font-medium placeholder:font-normal placeholder:text-faint/70 focus-visible:shadow-none"
             />
             <AnimatePresence>
               {query && (

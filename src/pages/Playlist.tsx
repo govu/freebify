@@ -238,7 +238,7 @@ function RemotePlaylistView({ id }: { id: string }) {
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
                 placeholder="Find in playlist"
-                className="w-32 bg-transparent placeholder:text-faint"
+                className="w-32 bg-transparent placeholder:text-faint focus-visible:shadow-none"
               />
             </label>
           )}
