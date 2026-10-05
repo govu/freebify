@@ -105,6 +105,90 @@ const cleanTitle = (s: string) => {
 // drops every bracket group + pipe tail — the "(feat. X)"-stripped retry
 const stripGroups = (s: string) => s.replace(/\s*(\([^(]*\)|\[[^\]]*\])/g, "").replace(/\s*\|.*$/, "").trim()
 
+// tokens in ANY script — \p{L} keeps Japanese/Cyrillic/etc. that norm()'s
+// [a-z0-9] would strip to nothing, leaving those songs unalignable
+const simTokens = (s: string): string[] =>
+  s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .match(/[\p{L}\p{N}]+/gu) ?? []
+
+// char bigrams of the concatenated text — covers unsegmented scripts
+// (Japanese/Chinese have no spaces → one token per line) and captions
+// that merge two lyric rows into one cue
+const simBigrams = (s: string): Set<string> => {
+  const t = simTokens(s).join("")
+  const b = new Set<string>()
+  if (t.length === 1) b.add(t)
+  for (let i = 0; i + 1 < t.length; i++) b.add(t.slice(i, i + 2))
+  return b
+}
+
+const dice = (a: Set<string>, b: Set<string>) => {
+  if (!a.size || !b.size) return 0
+  let hit = 0
+  for (const x of a) if (b.has(x)) hit++
+  return (2 * hit) / (a.size + b.size)
+}
+
+// word-Dice survives ASR mishearings; bigram-Dice survives script and
+// granularity differences — take whichever reads the lines as more alike
+const lineSim = (a: Set<string>, aBi: Set<string>, b: Set<string>, bBi: Set<string>) =>
+  Math.max(dice(a, b), dice(aBi, bBi))
+
+// A lyric DB's timestamps describe the studio recording; playback is THIS
+// upload, whose video intro the record never saw. The video's own caption
+// track is timed to our exact audio, so matching the first lyric lines
+// against it measures the real lead-in. Captions are ASR-messy — a quorum
+// of agreeing deltas is required so one bad match can't beat the duration
+// guess it replaces. null = couldn't measure (keep the guess).
+const alignOffset = (lrc: LrcLine[], caps: LrcLine[]): number | null => {
+  // captions often split one lyric row across two cues — scoring against
+  // line+next merged (bounded gap so distant rows can't fake a match)
+  // keeps a granularity quirk from costing us a candidate
+  const pool: { t: number; w: Set<string>; bi: Set<string> }[] = []
+  for (let i = 0; i < caps.length; i++) {
+    pool.push({ t: caps[i].t, w: new Set(simTokens(caps[i].text)), bi: simBigrams(caps[i].text) })
+    const nx = caps[i + 1]
+    if (nx && nx.t - caps[i].t < 4) {
+      const text = `${caps[i].text} ${nx.text}`
+      pool.push({ t: caps[i].t, w: new Set(simTokens(text)), bi: simBigrams(text) })
+    }
+  }
+  const cands: number[] = []
+  for (const l of lrc.slice(0, 14)) {
+    const w = new Set(simTokens(l.text))
+    const bi = simBigrams(l.text)
+    let best = 0
+    let bestT = 0
+    for (const c of pool) {
+      const s = lineSim(w, bi, c.w, c.bi)
+      if (s > best) {
+        best = s
+        bestT = c.t
+      }
+    }
+    if (best >= 0.55) cands.push(bestT - l.t)
+  }
+  if (cands.length < 3) return null
+  cands.sort((a, b) => a - b)
+  // the true offset clusters within a couple seconds; wrong matches scatter
+  let bi = 0
+  let bn = 0
+  for (let i = 0, j = 0; i < cands.length; i++) {
+    while (j < cands.length && cands[j] - cands[i] <= 3) j++
+    if (j - i > bn) {
+      bi = i
+      bn = j - i
+    }
+  }
+  if (bn < Math.max(3, Math.ceil(cands.length * 0.45))) return null
+  const off = Math.round(cands[bi + Math.floor(bn / 2)] * 10) / 10
+  // >90s means the captions belong to a different structure, not an intro
+  return Math.abs(off) <= 90 ? off : null
+}
+
 const lrcGet = async (path: string, p: Record<string, string>): Promise<LrcRec[]> => {
   try {
     const u = new URL(path, "https://lrclib.net")
@@ -388,8 +472,10 @@ export function NowPlaying() {
         const synced = sane(parseLrc(rec.syncedLyrics!))
         if (!synced) continue
         // auto-calibration: our version longer than the record usually
-        // means the extra time is lead-in intro → shift lyrics later
-        const g = dur && rec.duration ? Math.max(-15, Math.min(15, dur - rec.duration)) : 0
+        // means the extra time is lead-in intro → shift lyrics later.
+        // ±45 — a lyric-video intro easily exceeds the old ±15 clamp, and
+        // caption alignment refines (or vetoes) the guess right after
+        const g = dur && rec.duration ? Math.max(-45, Math.min(45, dur - rec.duration)) : 0
         return { synced, autoOff: Math.abs(g) >= 2.5 ? Math.round(g * 2) / 2 : 0 }
       }
       const plain = cand.filter((r) => r.plainLyrics?.trim()).sort(by)[0]?.plainLyrics?.trim()
@@ -452,38 +538,86 @@ export function NowPlaying() {
         return null
       }
     }
+    // the video we're ACTUALLY playing: direct for yt tracks; for Audius
+    // the closest same-recording upload (title overlap + duration ≤25s
+    // keeps mixes/clips out). Resolved once — DB-lyrics alignment and the
+    // caption fallback share it instead of twin-searching twice.
+    let videoId: string | null | undefined
+    const resolveVideoId = async (): Promise<string | null> => {
+      if (videoId !== undefined) return videoId
+      videoId = current.source === "yt" ? current.streamId ?? null : null
+      if (!videoId) {
+        const queries = [...new Set([`${artist} ${title}`.trim(), title, stripped].filter(Boolean))]
+        for (const q of queries) {
+          const res = await yt.search(q).catch(() => null)
+          const twin = (res?.tracks ?? [])
+            .filter(
+              (t) =>
+                t.streamId &&
+                titleLike(t.title, title) &&
+                // ±45 used to let fan mixes/compilation uploads in —
+                // "X MIX" passes a word-boundary title match and their
+                // captions are another song's words. 25s still covers
+                // lyric-video intros/endscreens on the same recording.
+                (!dur || !t.duration || Math.abs(t.duration - dur) <= 25)
+            )
+            .sort((a, b) => Math.abs((a.duration ?? 0) - dur) - Math.abs((b.duration ?? 0) - dur))[0]
+          if (twin?.streamId) {
+            videoId = twin.streamId
+            break
+          }
+        }
+        videoId ??= null
+      }
+      return videoId
+    }
+    // DB lyrics describe the studio take — a lyric video's intro shifts
+    // every line early. Measure the real lead-in against the video's own
+    // captions and nudge autoOff after the first paint rather than delay
+    // the render; a manual Shift+click offset always wins.
+    const refineOffset = async (lrc: LrcLine[], fallback: number) => {
+      try {
+        if (!ytBridge()?.captions) return
+        // can't use `live` — finish()'s setLyricsTried re-runs the effect
+        // and its cleanup trips the flag while this measurement is still
+        // in flight. The store + the synced-lines identity check below are
+        // the real "is this still on screen" guard.
+        const sameTrack = () => usePlayer.getState().current?.id === current.id
+        if (!sameTrack()) return
+        let saved: string | null = null
+        try {
+          saved = localStorage.getItem(`lrcoff-${current.id}`)
+        } catch { /* storage unavailable — measure anyway */ }
+        if (saved !== null) return
+        const vid = await resolveVideoId()
+        if (!vid || !sameTrack()) return
+        const cap = await yt.captions(vid)
+        if (!cap?.lines?.length || !sameTrack()) return
+        const off = alignOffset(lrc, cap.lines)
+        // measured ~0 also matters: it vetoes a wrong duration-delta guess
+        if (off == null || Math.abs(off - fallback) < 1.5) return
+        setLyrics((cur) => (cur && "synced" in cur && cur.synced === lrc ? { synced: lrc, autoOff: off } : cur))
+        // persist like a manual correction — next open applies instantly
+        // with no re-measure. Delayed so the "auto-synced" note still
+        // surfaces this run; a Shift+click meanwhile wins the key
+        setTimeout(() => {
+          try {
+            if (localStorage.getItem(`lrcoff-${current.id}`) === null) {
+              localStorage.setItem(`lrcoff-${current.id}`, String(off))
+            }
+          } catch { /* correction stays session-only */ }
+        }, 6000)
+      } catch { /* best-effort — the unaligned lyrics still display */ }
+    }
     // YouTube's own captions as the synced catch-all — ASR tracks exist for
     // nearly every music upload, covering songs the lyric databases don't
-    // carry. yt tracks caption their own video; Audius tracks first find a
-    // YouTube twin (title overlap + duration ≤45s keeps mixes/clips out)
+    // carry
     const fetchCaptions = async (): Promise<LrcLine[] | null> => {
       try {
         if (!ytBridge()?.captions) return null
-        let videoId = current.source === "yt" ? current.streamId ?? null : null
-        if (!videoId) {
-          const queries = [...new Set([`${artist} ${title}`.trim(), title, stripped].filter(Boolean))]
-          for (const q of queries) {
-            const res = await yt.search(q).catch(() => null)
-            const twin = (res?.tracks ?? [])
-              .filter(
-                (t) =>
-                  t.streamId &&
-                  titleLike(t.title, title) &&
-                  // ±45 used to let fan mixes/compilation uploads in —
-                  // "X MIX" passes a word-boundary title match and their
-                  // captions are another song's words. 25s still covers
-                  // lyric-video intros/endscreens on the same recording.
-                  (!dur || !t.duration || Math.abs(t.duration - dur) <= 25)
-              )
-              .sort((a, b) => Math.abs((a.duration ?? 0) - dur) - Math.abs((b.duration ?? 0) - dur))[0]
-            if (twin?.streamId) {
-              videoId = twin.streamId
-              break
-            }
-          }
-        }
-        if (!videoId) return null
-        const cap = await yt.captions(videoId)
+        const vid = await resolveVideoId()
+        if (!vid) return null
+        const cap = await yt.captions(vid)
         if (!cap?.lines?.length) return null
         // captions run to the video's end — clip to the track's runtime so
         // a longer upload's outro chatter can't tail the lyric sheet
@@ -520,12 +654,21 @@ export function NowPlaying() {
         setLyricsLoading(false)
       }
       const lrclib = await fetchLrcLib()
-      if (lrclib && "synced" in lrclib) return finish(lrclib)
+      if (lrclib && "synced" in lrclib) {
+        void refineOffset(lrclib.synced, lrclib.autoOff)
+        return finish(lrclib)
+      }
       // lyrist + textyl race in parallel — independent hosts, no reason to
       // pay two timeouts serially when a song is missing from both
       const [lyrist, textyl] = await Promise.all([fetchLyrist(), fetchTextyl()])
-      if (lyrist) return finish({ synced: lyrist, autoOff: 0 })
-      if (textyl) return finish({ synced: textyl, autoOff: 0 })
+      if (lyrist) {
+        void refineOffset(lyrist, 0)
+        return finish({ synced: lyrist, autoOff: 0 })
+      }
+      if (textyl) {
+        void refineOffset(textyl, 0)
+        return finish({ synced: textyl, autoOff: 0 })
+      }
       // lyric databases exhausted — YouTube captions (ASR included) are the
       // coverage net: virtually every song has SOME captioned upload
       const caps = await fetchCaptions()

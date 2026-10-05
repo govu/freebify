@@ -4,7 +4,7 @@ A free, ad-free music streaming desktop app — a Spotify-style experience
 powered by the YouTube Music catalog, with the Audius open catalog as a
 built-in fallback so playback never dead-ends.
 
-![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
+![Platform](https://img.shields.io/badge/platform-Windows%20%C2%B7%20macOS-lightgrey)
 ![Stack](https://img.shields.io/badge/stack-Electron%20%C2%B7%20React%2019%20%C2%B7%20TypeScript%20%C2%B7%20Tailwind%20v4-lightgrey)
 
 **[Download & website → govu.github.io/freebify](https://govu.github.io/freebify/)**
@@ -52,16 +52,22 @@ npm run dev          # Vite dev server (browser preview, Audius only)
 npm run dev:electron # full app: Vite + Electron against the dev server
 ```
 
-## Packaging (Windows)
+## Packaging
 
 ```bash
 npm run build                # typecheck + bundle to dist/
-npm run dist                 # portable exe + NSIS installer → freebify-release/
+npm run dist                 # Windows: portable exe + NSIS installer → release/
 ```
 
-Artifacts land in the `build.directories.output` folder configured in
-`package.json` (`C:/Users/Administrator/freebify-release` on this machine —
-change it before publishing releases).
+**Windows + macOS builds are produced by CI**: pushing a `v*` tag runs
+`.github/workflows/release.yml`, which builds on `windows-latest` and
+`macos-latest` (dmg + zip for x64 **and** arm64) and uploads every artifact
+plus `latest.yml`/`latest-mac.yml` into the matching GitHub Release.
+
+> **macOS caveat:** the app is unsigned (no Apple Developer cert). First
+> launch: right-click the app → **Open**, or `xattr -dr com.apple.quarantine
+> /Applications/Freebify.app` (also clears quarantine on the bundled yt-dlp
+> binary). Auto-update doesn't apply unsigned mac builds — grab the new dmg.
 
 > **Note on `yt-dlp`:** the binary lives in `bin/yt-dlp.exe` and ships as an
 > extra resource. It self-updates (`yt-dlp -U`) 15s after launch because
