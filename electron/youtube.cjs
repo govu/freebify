@@ -563,7 +563,13 @@ function mapSong(item) {
     genre: null,
     permalink: `https://music.youtube.com/watch?v=${videoId}`,
     artwork: thumb
-      ? { "150x150": smallThumb(item) ?? thumb, "480x480": bigThumb(thumb) ?? thumb, "1000x1000": bigThumb(thumb) ?? thumb }
+      ? {
+          "150x150": smallThumb(item) ?? thumb,
+          "480x480": bigThumb(thumb) ?? thumb,
+          "1000x1000": bigThumb(thumb) ?? thumb,
+          // separate CDN budget — survives googleusercontent throttling
+          fallback: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+        }
       : null,
     user: {
       id: `yt-${channelId ?? artistName}`,

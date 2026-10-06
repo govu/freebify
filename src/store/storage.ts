@@ -53,10 +53,35 @@ export function isValidTrack(t: unknown): t is Track {
 
 // Backfill fields added after earlier builds persisted tracks.
 export function repairTrack(t: Track): Track {
+  let out = t
   if (t.id.startsWith("yt-") && !t.streamId) {
-    return { ...t, streamId: t.id.slice(3), source: "yt" }
+    out = { ...out, streamId: t.id.slice(3), source: "yt" }
   }
-  return t
+  const art = out.artwork
+  if (art) {
+    // i.ytimg URLs persisted with signed context params (?sqp=…&rs=…) go
+    // dead when the signature expires — strip them so stored artwork
+    // keeps loading forever (cleanThumb already does this for new fetches)
+    const keys = ["150x150", "480x480", "1000x1000"] as const
+    const next = { ...art }
+    let fixed = false
+    for (const k of keys) {
+      const u = next[k]
+      if (typeof u === "string" && /ytimg\.com\/[^?]+\?/.test(u)) {
+        next[k] = u.replace(/(ytimg\.com\/[^?]+)\?.*$/, "$1")
+        fixed = true
+      }
+    }
+    // older persisted yt tracks predate the i.ytimg fallback key — backfill
+    // so every stored track survives googleusercontent throttling
+    const vid = out.streamId ?? (out.id.startsWith("yt-") ? out.id.slice(3) : null)
+    if (vid && !next.fallback) {
+      next.fallback = `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`
+      fixed = true
+    }
+    if (fixed) out = { ...out, artwork: next }
+  }
+  return out
 }
 
 // Strip heavy fields that don't need persisting (Audius descriptions/bios

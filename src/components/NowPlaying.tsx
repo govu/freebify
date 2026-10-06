@@ -568,11 +568,13 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
   // manual scroll pauses auto-follow ~5s — without this the next line
   // change yanks the view back while the user reads ahead
   const userScrollUntil = useRef(0)
+  const scrollAnim = useRef(0)
   useEffect(() => {
     const sc = listRef.current
     if (!sc) return
     const mark = () => {
       userScrollUntil.current = Date.now() + 5000
+      cancelAnimationFrame(scrollAnim.current)
     }
     sc.addEventListener("wheel", mark)
     sc.addEventListener("touchmove", mark, { passive: true })
@@ -581,20 +583,41 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
       sc.removeEventListener("touchmove", mark)
     }
   }, [lines.length])
+  useEffect(() => () => cancelAnimationFrame(scrollAnim.current), [])
   useEffect(() => {
     const sc = listRef.current
     const el = active >= 0 ? sc?.querySelector<HTMLElement>(`[data-l="${active}"]`) : undefined
     if (!sc) return
+    // browser "smooth" scroll takes ~500ms — the active line visibly lags
+    // the music. A 220ms ease-out glide reads as instant but not jumpy.
+    const glide = (top: number) => {
+      cancelAnimationFrame(scrollAnim.current)
+      const from = sc.scrollTop
+      const d = top - from
+      if (Math.abs(d) < 2) return void (sc.scrollTop = top)
+      const t0 = performance.now()
+      const dur = 220
+      const step = (now: number) => {
+        const p = Math.min(1, (now - t0) / dur)
+        const e = 1 - Math.pow(1 - p, 3)
+        sc.scrollTop = from + d * e
+        if (p < 1) scrollAnim.current = requestAnimationFrame(step)
+      }
+      scrollAnim.current = requestAnimationFrame(step)
+    }
     if (!el) {
       // intro: park the view at the first line instead of a phantom scroll
-      if (Date.now() >= userScrollUntil.current) sc.scrollTo({ top: 0 })
+      if (Date.now() >= userScrollUntil.current) {
+        cancelAnimationFrame(scrollAnim.current)
+        sc.scrollTop = 0
+      }
       return
     }
     if (Date.now() < userScrollUntil.current) return
     // rect-based target: offsetTop chains break on the absolutely-positioned
     // overlay ancestor; this measures real viewport distance + scrollTop
     const target = el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - sc.clientHeight / 2 + el.offsetHeight / 2
-    sc.scrollTo({ top: target, behavior: "smooth" })
+    glide(target)
   }, [active])
   return (
     <div className="relative h-full w-full">
@@ -612,7 +635,7 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
                 else seek(l.t + offset)
               }}
               title="Click to jump · Shift+click to sync this line to now"
-              className={`block w-full cursor-pointer px-4 py-2.5 text-2xl font-bold leading-snug transition-all duration-300 md:text-3xl ${
+              className={`block w-full cursor-pointer px-4 py-2.5 text-2xl font-bold leading-snug transition-[transform,color] duration-200 ease-out md:text-3xl ${
                 i === active
                   ? "scale-[1.04] text-ink"
                   : i < active
@@ -629,7 +652,7 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
                 const prog = Math.min(1, Math.max(0, (adj - l.t) / Math.max(0.4, nextT - l.t)))
                 const lit = Math.floor(prog * words.length)
                 return words.map((wd, wi) => (
-                  <span key={wi} className={`transition-colors duration-150 ${wi <= lit ? "text-ink" : "text-ink/40"}`}>
+                  <span key={wi} className={`transition-colors duration-100 ${wi <= lit ? "text-ink" : "text-ink/40"}`}>
                     {wd}{wi < words.length - 1 ? " " : ""}
                   </span>
                 ))

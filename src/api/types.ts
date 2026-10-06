@@ -3,6 +3,10 @@ export interface Artwork {
   "480x480"?: string
   "1000x1000"?: string
   mirrors?: string[]
+  // last-resort full URL (yt tracks derive i.ytimg.com/vi/<id>/hqdefault.jpg)
+  // — googleusercontent thumbs sit on a separate rate-limit budget, so a
+  // ytimg fallback keeps covers alive when the primary CDN throttles
+  fallback?: string
 }
 
 export interface CoverPhoto {
