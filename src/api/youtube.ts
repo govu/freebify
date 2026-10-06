@@ -25,7 +25,8 @@ interface YtBridge {
   mood: (params: string) => Promise<{ name: string | null; playlists: Playlist[]; tracks: Track[] } | null>
   playlistArts: (id: string) => Promise<string[]>
   lyrics: (videoId: string) => Promise<{ lyrics: string } | null>
-  captions?: (videoId: string) => Promise<{ lines: { t: number; text: string }[]; wordy?: number } | null>
+  captions?: (videoId: string) => Promise<{ lines: { t: number; text: string }[]; wordy?: number; blocked?: boolean } | null>
+  audioHead?: (videoId: string) => Promise<Uint8Array | null>
   timedLyrics?: (videoId: string) => Promise<{ lines: { t: number; text: string }[] } | null>
   qqLyrics?: (query: string) => Promise<{ lyrics: string; trackName: string; artistName: string; duration: number }[] | null>
   mxmLyrics?: (title: string, artist: string) => Promise<{ lyrics: string; trackName: string; artistName: string; duration: number }[] | null>
@@ -134,6 +135,7 @@ export const yt = {
   playlistArts: (id: string) => ytBridge()?.playlistArts(id) ?? Promise.resolve([]),
   lyrics: (videoId: string) => ytBridge()?.lyrics(videoId) ?? Promise.resolve(null),
   captions: (videoId: string) => ytBridge()?.captions?.(videoId) ?? Promise.resolve(null),
+  audioHead: (videoId: string) => ytBridge()?.audioHead?.(videoId) ?? Promise.resolve(null),
   timedLyrics: (videoId: string) => ytBridge()?.timedLyrics?.(videoId) ?? Promise.resolve(null),
   qqLyrics: (query: string) => ytBridge()?.qqLyrics?.(query) ?? Promise.resolve(null),
   mxmLyrics: (title: string, artist: string) => ytBridge()?.mxmLyrics?.(title, artist) ?? Promise.resolve(null),

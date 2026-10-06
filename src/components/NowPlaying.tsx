@@ -1149,6 +1149,11 @@ export function NowPlaying() {
           ? (sameStruct(a) ? 0 : 1) - (sameStruct(b) ? 0 : 1) || lyricish(a) - lyricish(b) || byDur(a, b)
           : byDur(a, b)
       const getCaps = (vid: string) => yt.captions(vid).catch(() => null)
+      // `blocked` means the video HAS caption tracks but the download hit
+      // the timedtext wall (PoToken/429) — a network-wide condition. After
+      // a handful of blocked probes every remaining probe can only fail
+      // the same way, so the walk stops instead of burning yt-dlp spawns.
+      let capsBlocked = 0
       // batch-evaluate a candidate list: fetch all captions at once (bounded
       // by remaining budget), then walk the ranked results in order
       const batch = async (cands: { streamId?: string; title: string; origTitle?: string; duration?: number; user?: { name?: string } }[]) => {
@@ -1160,6 +1165,11 @@ export function NowPlaying() {
           for (const t of slice) seen.add(t.streamId!)
           tried += slice.length
           const caps = await Promise.all(slice.map((t) => getCaps(t.streamId!)))
+          capsBlocked += caps.filter((c) => c?.blocked).length
+          if (capsBlocked >= 4) {
+            dbgL(`captions: ${capsBlocked} probes blocked (timedtext wall) — walk aborted`)
+            return true
+          }
           for (let j = 0; j < slice.length; j++) {
             if (!alive()) return true
             if (await fn(slice[j].streamId!, false, slice[j], caps[j])) return true
@@ -1170,7 +1180,9 @@ export function NowPlaying() {
       if (ownVid && alive()) {
         seen.add(ownVid)
         tried++
-        if (await fn(ownVid, true, undefined, await getCaps(ownVid))) return
+        const cap = await getCaps(ownVid)
+        if (cap?.blocked) capsBlocked++
+        if (await fn(ownVid, true, undefined, cap)) return
       }
       if (!alternates) return
       // source order = caption likelihood × ranking quality:
@@ -1223,6 +1235,47 @@ export function NowPlaying() {
     // wrong measurement can't stick; a manual Shift+click always wins.
     const sheetFp = sheetFpOf
     const dbgL = (m: string) => window.freebify?.app?.log?.(`lyrics: ${m}`)
+    // last-resort audio truth: fetch the head of the actual playing stream
+    // and measure how much DEAD AIR precedes the content. A sheet line
+    // scheduled inside that zone is definitionally misplaced (nothing is
+    // audible there) — the one unambiguous, audio-measured correction
+    // available when every caption source is blocked or absent.
+    const measureHeadSilence = async (): Promise<number> => {
+      if (!ownVid || !yt.audioHead) return 0
+      try {
+        const bytes = await yt.audioHead(ownVid)
+        if (!bytes || bytes.byteLength < 20000) return 0
+        const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+        if (!AC) return 0
+        const ctx = new AC()
+        try {
+          const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+          const audio = await ctx.decodeAudioData(ab)
+          const ch = audio.getChannelData(0)
+          // 20ms RMS windows, stride-sampled — we only need the boundary
+          const win = Math.max(1, Math.floor(audio.sampleRate * 0.02))
+          const frames: number[] = []
+          for (let i = 0; i + win <= ch.length && frames.length < 4500; i += win) {
+            let acc = 0
+            for (let j = i; j < i + win; j += 4) acc += ch[j] * ch[j]
+            frames.push(Math.sqrt(acc / (win / 4)))
+          }
+          // DEAD-AIR-ONLY detector: -48dBFS absolute. Quiet musical intros
+          // (fade-ins, whispers, tape hiss) stay above it and never trigger
+          // — a peak-relative threshold can't tell a soft intro from
+          // silence and would shift sheets that are already right (Shape
+          // of You's marimba fades in over 6s while staying <12% of peak).
+          const SIL = 0.004
+          let i = 0
+          while (i < frames.length && frames[i] < SIL) i++
+          // no audible content in the whole head — can't locate a boundary
+          if (i >= frames.length) return 0
+          return i * 0.02
+        } finally {
+          ctx.close().catch(() => {})
+        }
+      } catch { return 0 }
+    }
     const refineOffset = async (lrc: LrcLine[], fallback: number, alts: LrcLine[][] = []) => {
       const dbg = dbgL
       try {
@@ -1502,9 +1555,28 @@ export function NowPlaying() {
           return
         }
         if (lyricMeasured.length) {
-          if (Math.abs(fallback) >= 1.5) return dbg(`kept fallback ${fallback.toFixed(1)} over lyric-only measurements`)
-          lyricMeasured.sort((a, b) => a - b)
-          applyOff(lyricMeasured[Math.floor(lyricMeasured.length / 2)], false)
+          if (Math.abs(fallback) < 1.5) {
+            lyricMeasured.sort((a, b) => a - b)
+            applyOff(lyricMeasured[Math.floor(lyricMeasured.length / 2)], false)
+            return
+          }
+          dbg(`kept fallback ${fallback.toFixed(1)} over lyric-only measurements`)
+        }
+        // audio truth as the last resort: dead air at the head of OUR
+        // stream. A sheet line scheduled inside it is certainly wrong —
+        // shift the sheet past it. Runs after the caption walk because a
+        // matched caption track is more precise; covers the case where
+        // timedtext is PoToken-blocked and no twin helped.
+        // audio truth as the last resort: dead air at the head of OUR
+        // stream. A sheet line scheduled inside it is certainly wrong —
+        // shift the sheet past it. Only applied when no structural guess
+        // is in play (|fallback|<1.5): a large fallback already encodes a
+        // crop/intro hypothesis we can't disentangle from silence, and
+        // overwriting it blind could land worse.
+        const sil = await measureHeadSilence().catch(() => 0)
+        if (sameTrack() && sil >= 1 && Math.abs(fallback) < 1.5 && (lrc[0]?.t ?? 0) < sil - 0.4) {
+          dbg(`head-silence ${sil.toFixed(1)}s — first line lands in dead air; offset +${sil.toFixed(1)}`)
+          applyOff(sil, false)
           return
         }
         if (fallback !== 0) dbg(`kept fallback ${fallback.toFixed(1)} — no same-structure twin found`)

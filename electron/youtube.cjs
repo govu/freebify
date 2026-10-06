@@ -1567,13 +1567,61 @@ function pickCaptionFmt(dict) {
   return null
 }
 
-// resolved results (null included — a video with no captions shouldn't
+// resolved results (null included — a video with no caption tracks shouldn't
 // re-run a 5s yt-dlp -J every time the lyrics panel reopens)
 const capCache = new Map()
 const capInflight = new Map()
+// a FAILED caption download (429 PoToken wall, network blip) is not the
+// same as "this video has no captions" — it gets a short negative TTL so
+// the next play retries instead of poisoning the track for the session
+const capFailAt = new Map()
+const CAP_FAIL_RETRY_MS = 4 * 60 * 1000
+// once youtube.com/api/timedtext answers 429 every timedtext URL on this
+// network will too — remember the block so the twin-walk stops spawning
+// fetches that can only fail. manifest.googlevideo.com HLS caption
+// playlists live on the stream CDN (NOT throttled) and still get tried.
+let timedtextBlockedUntil = 0
+const TIMEDTEXT_BLOCK_MS = 10 * 60 * 1000
+
+const capSleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const isManifestCap = (url) => /manifest\.googlevideo\.com|hls_timedtext/.test(url ?? "")
+
+// { body } on success, { status } on failure — caption content from either
+// a timedtext URL or an HLS timedtext playlist (m3u8 of VTT segments)
+async function fetchCaptionBody(url) {
+  if (isManifestCap(url)) {
+    const pl = await fetch(url, { signal: AbortSignal.timeout(9000) })
+    if (!pl.ok) return { status: pl.status }
+    const m3 = await pl.text()
+    const segs = m3
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l && !l.startsWith("#"))
+      .slice(0, 30)
+    if (!segs.length) return { status: 0 }
+    const bodies = await Promise.all(
+      segs.map((s) =>
+        fetch(new URL(s, url).href, { signal: AbortSignal.timeout(9000) })
+          .then((r) => (r.ok ? r.text() : ""))
+          .catch(() => "")
+      )
+    )
+    const body = bodies.filter(Boolean).join("\n\n")
+    return body ? { body } : { status: 0 }
+  }
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Freebify/1.0" },
+    signal: AbortSignal.timeout(9000),
+  })
+  if (!res.ok) return { status: res.status }
+  return { body: await res.text() }
+}
+
 async function captions(videoId) {
   if (!ytdlpAvailable()) return null
   if (capCache.has(videoId)) return capCache.get(videoId)
+  const failAt = capFailAt.get(videoId)
+  if (failAt && Date.now() - failAt < CAP_FAIL_RETRY_MS) return null
   if (capInflight.has(videoId)) return capInflight.get(videoId)
   const job = (async () => {
     // only cache once -J succeeds — a thrown yt-dlp/network error is
@@ -1603,20 +1651,63 @@ async function captions(videoId) {
         ?.replace(/-orig$/, "")
       const fmt =
         sub && asr && origLang && !sub.lang.startsWith(origLang) ? asr : sub ?? asr
-      if (!fmt?.url) return done(null)
-      const res = await fetch(fmt.url, { headers: { "User-Agent": "Freebify/1.0" }, signal: AbortSignal.timeout(9000) })
-      // transient fetch/parse failures must NOT cache — a 403'd signed url
-      // or an odd format would otherwise poison the video all session
-      if (!res.ok) return null
-      const lines = captionLines(await res.text(), fmt.ext)
-      if (lines.length < 4) return null
-      // wrong-language ASR (e.g. a Spanish song whose `en-orig` track
-      // hallucinates English) emits short noise fragments — flag the track
-      // so the renderer can refuse to let it VETO a good DB sheet
-      const wordy = lines.filter(
-        (l) => (String(l.text).toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).length >= 3
-      ).length
-      return done({ lines, wordy: lines.length ? wordy / lines.length : 0 })
+      // attempt order: the picked fmt first (timedtext gives word-timed
+      // json3), then every manifest-hosted HLS caption playlist ordered by
+      // language affinity — googlevideo is the fallback path when
+      // timedtext is under the PoToken wall
+      const attempts = []
+      if (fmt?.url) attempts.push(fmt)
+      for (const dict of [info.subtitles, info.automatic_captions]) {
+        for (const [k, fmts] of Object.entries(dict ?? {})) {
+          if (k.startsWith("live_chat") || !Array.isArray(fmts)) continue
+          for (const f of fmts) {
+            if (!isManifestCap(f.url) || attempts.some((a) => a.url === f.url)) continue
+            attempts.push({ ...f, lang: k })
+          }
+        }
+      }
+      if (!attempts.length) return done(null) // genuinely zero tracks — cache for good
+      const langRank = (a) =>
+        a.lang === fmt?.lang ? 0
+          : a.lang === origLang || a.lang === `${origLang}-orig` ? 1
+          : String(a.lang ?? "").endsWith("-orig") ? 2 : 3
+      const ordered = [attempts[0], ...attempts.slice(1).sort((a, b) => langRank(a) - langRank(b))]
+      let lastStatus = 0
+      for (const a of ordered) {
+        const manifest = isManifestCap(a.url)
+        if (!manifest && Date.now() < timedtextBlockedUntil) {
+          lastStatus = lastStatus || 429
+          continue
+        }
+        let r = await fetchCaptionBody(a.url).catch(() => ({ status: 0 }))
+        if (!manifest && r.status === 429) {
+          // PoToken wall — one retry in case it's a transient blip, then
+          // stop trusting timedtext for a while
+          timedtextBlockedUntil = Date.now() + TIMEDTEXT_BLOCK_MS
+          await capSleep(1200)
+          r = await fetchCaptionBody(a.url).catch(() => ({ status: 0 }))
+        }
+        if (r.status || !r.body) {
+          lastStatus = r.status || lastStatus
+          continue
+        }
+        const lines = captionLines(r.body, manifest ? "vtt" : a.ext)
+        if (lines.length < 4) continue
+        // wrong-language ASR (e.g. a Spanish song whose `en-orig` track
+        // hallucinates English) emits short noise fragments — flag the
+        // track so the renderer can refuse to let it VETO a good DB sheet
+        const wordy = lines.filter(
+          (l) => (String(l.text).toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).length >= 3
+        ).length
+        return done({ lines, wordy: lines.length ? wordy / lines.length : 0 })
+      }
+      // every attempt failed — NOT the same as "no captions": short TTL,
+      // and a `blocked` flag so the renderer can stop burning twin probes
+      // once the wall is confirmed (each probe is a yt-dlp -J spawn)
+      capFailAt.set(videoId, Date.now())
+      if (capFailAt.size > 120) capFailAt.delete(capFailAt.keys().next().value)
+      log("captions", `${videoId}: ${ordered.length} track(s) advertised, fetch blocked (http ${lastStatus})`)
+      return { lines: [], wordy: 0, blocked: true }
     } catch (e) {
       log("captions", `${videoId}: ${e?.message ?? e}`)
       return null
@@ -1626,6 +1717,23 @@ async function captions(videoId) {
   })()
   capInflight.set(videoId, job)
   return job
+}
+
+// fetch the head of the resolved audio stream so the renderer can measure
+// LEADING SILENCE — uploads with a dead-air head (common on lyric/fan
+// uploads) make an otherwise-correct sheet start N seconds early, which is
+// the dominant "las lyrics empiezan tarde" report. Range-limited: ~1.5MB
+// covers the first ≈90s at 128kbps.
+async function audioHead(videoId) {
+  const url = await resolveStreamUrl(videoId)
+  if (!url) return null
+  const res = await fetch(url, {
+    headers: { Range: "bytes=0-1600000", "User-Agent": "Freebify/1.0" },
+    signal: AbortSignal.timeout(15000),
+  })
+  if (!res.ok) return null
+  const buf = await res.arrayBuffer()
+  return buf.byteLength ? Buffer.from(buf) : null
 }
 
 // Line-timed lyrics straight from YouTube Music — official LyricFind data
@@ -1957,6 +2065,9 @@ function register(ipcMain) {
   )
   ipcMain.handle("yt:captions", (_e, videoId) =>
     typeof videoId === "string" && VID.test(videoId) ? withTimeout(captions(videoId), 40000).catch(() => null) : null
+  )
+  ipcMain.handle("yt:audiohead", (_e, videoId) =>
+    typeof videoId === "string" && VID.test(videoId) ? withTimeout(audioHead(videoId), 30000).catch(() => null) : null
   )
   ipcMain.handle("yt:timedlyrics", (_e, videoId) =>
     typeof videoId === "string" && VID.test(videoId) ? withTimeout(timedLyrics(videoId), 25000).catch(() => null) : null
