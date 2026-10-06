@@ -960,6 +960,28 @@ export function NowPlaying() {
       }
       return null
     }
+    // Musixmatch — the same timed-lyrics catalog Spotify displays (anonymous
+    // client API). Human-curated timing: best-quality sheet when it hits.
+    const fetchMxm = async (): Promise<LrcLine[][] | null> => {
+      for (const t of titles) {
+        const cands = await yt.mxmLyrics(t, artist).catch(() => null)
+        if (!Array.isArray(cands) || !cands.length) continue
+        const sheets = cands
+          .filter((c) => typeof c?.lyrics === "string")
+          .filter((c) => titleLike(c.trackName ?? "", t))
+          .filter((c) => !artist || artistSim(c.artistName) > 0 || Boolean(dur && c.duration && Math.abs(c.duration - dur) <= 5))
+          .map((c) => {
+            const lines = parseLrc(c.lyrics)
+            const card = norm(`${c.trackName} ${c.artistName?.split(",")[0] ?? ""}`).trim()
+            while (lines.length && lines[0].t < 3 && [card, norm(c.trackName ?? "")].includes(norm(lines[0].text))) lines.shift()
+            return sane(lines)
+          })
+          .filter((s): s is LrcLine[] => Boolean(s))
+        if (dur) sheets.sort((a, b) => Math.abs(a[a.length - 1].t + 12 - dur) - Math.abs(b[b.length - 1].t + 12 - dur))
+        if (sheets.length) return sheets
+      }
+      return null
+    }
     // the video we're ACTUALLY playing: direct for yt tracks; for Audius
     // the closest same-recording uploads. Twins must share title AND
     // artist AND near-identical duration — ±10 keeps mixes/clips/live
@@ -1476,7 +1498,15 @@ export function NowPlaying() {
           return finish({ synced: timedLines, autoOff: 0 })
         }
       }
-      const lrclib = await fetchLrcLib()
+      // Musixmatch + LRCLIB race in parallel — MXM's curated timing is
+      // preferred when it hits; every other sheet stays as an alignment
+      // alternate in case the winner can't anchor to the audio.
+      const [mxm, lrclib] = await Promise.all([fetchMxm(), fetchLrcLib()])
+      if (mxm) {
+        const alts = [...mxm.slice(1), ...(lrclib && "synced" in lrclib ? [lrclib.synced, ...(lrclib.alts ?? [])] : [])]
+        void refineOffset(mxm[0], 0, alts.length ? alts : undefined)
+        return finish({ synced: mxm[0], autoOff: 0 })
+      }
       if (lrclib && "synced" in lrclib) {
         void refineOffset(lrclib.synced, lrclib.autoOff, lrclib.alts)
         return finish(lrclib)

@@ -28,6 +28,7 @@ interface YtBridge {
   captions?: (videoId: string) => Promise<{ lines: { t: number; text: string }[]; wordy?: number } | null>
   timedLyrics?: (videoId: string) => Promise<{ lines: { t: number; text: string }[] } | null>
   qqLyrics?: (query: string) => Promise<{ lyrics: string; trackName: string; artistName: string; duration: number }[] | null>
+  mxmLyrics?: (title: string, artist: string) => Promise<{ lyrics: string; trackName: string; artistName: string; duration: number }[] | null>
   videoSearch?: (q: string) => Promise<Track[]>
   ytsearch?: (q: string, n?: number) => Promise<Track[]>
   spotifyList?: (id: string) => Promise<{ name: string; tracks: { title: string; artist: string }[] } | null>
@@ -135,6 +136,7 @@ export const yt = {
   captions: (videoId: string) => ytBridge()?.captions?.(videoId) ?? Promise.resolve(null),
   timedLyrics: (videoId: string) => ytBridge()?.timedLyrics?.(videoId) ?? Promise.resolve(null),
   qqLyrics: (query: string) => ytBridge()?.qqLyrics?.(query) ?? Promise.resolve(null),
+  mxmLyrics: (title: string, artist: string) => ytBridge()?.mxmLyrics?.(title, artist) ?? Promise.resolve(null),
   videoSearch: (q: string) => ytBridge()?.videoSearch?.(q) ?? Promise.resolve([]),
   ytsearch: (q: string, n = 10) => ytBridge()?.ytsearch?.(q, n) ?? Promise.resolve([]),
   spotifyList: (id: string) => ytBridge()?.spotifyList?.(id) ?? Promise.resolve(null),

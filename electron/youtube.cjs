@@ -1761,6 +1761,71 @@ async function qqLyrics(query) {
   }
 }
 
+// ---- Musixmatch timed lyrics ----
+// The catalog Spotify itself displays — the anonymous client API
+// (token.get needs no account since 2024) serves human-curated timed LRC
+// via track.subtitle.get. Single best-quality free source; the renderer's
+// gates still decide what to trust.
+let mxmToken = null
+const mxmGet = async (path, params) => {
+  const r = await fetch(`https://apic.musixmatch.com/ws/1.1/${path}?${new URLSearchParams(params)}`, {
+    headers: { "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 9; Pixel 3)" },
+    signal: AbortSignal.timeout(8000),
+  })
+  return r.ok ? r.json() : null
+}
+async function mxmLyrics(title, artist) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      if (!mxmToken) {
+        const t = await mxmGet("token.get", { app_id: "android-player-v1.0", user_language: "en" })
+        mxmToken = t?.message?.body?.user_token ?? null
+        if (!mxmToken) return null
+      }
+      const s = await mxmGet("track.search", {
+        q_track: title,
+        q_artist: artist,
+        app_id: "android-player-v1.0",
+        usertoken: mxmToken,
+        page_size: 4,
+        s_track_rating: "desc",
+      })
+      const code = s?.message?.header?.status_code
+      if (code === 401 || code === 419) {
+        mxmToken = null // expired guest token — one refresh, then bail
+        continue
+      }
+      const list = Array.isArray(s?.message?.body?.track_list) ? s.message.body.track_list : []
+      const out = []
+      for (const t of list.slice(0, 3)) {
+        const tr = t?.track
+        if (!tr?.track_id || !tr.has_subtitles) continue
+        try {
+          const sub = await mxmGet("track.subtitle.get", {
+            track_id: String(tr.track_id),
+            subtitle_format: "lrc",
+            app_id: "android-player-v1.0",
+            usertoken: mxmToken,
+          })
+          const body = sub?.message?.body?.subtitle?.subtitle_body
+          if (typeof body === "string" && /\[\d{1,2}:\d{2}/.test(body)) {
+            out.push({
+              lyrics: body,
+              trackName: String(tr.track_name ?? ""),
+              artistName: String(tr.artist_name ?? ""),
+              duration: Math.round(tr.track_length ?? 0),
+            })
+          }
+        } catch {}
+      }
+      return out.length ? out : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
 // ---------- registration ----------
 // validate every argument crossing the IPC boundary — the renderer is our
 // own code, but defense in depth is cheap here
@@ -1898,6 +1963,11 @@ function register(ipcMain) {
   )
   ipcMain.handle("yt:qqlyrics", (_e, q) =>
     typeof q === "string" && q.length < 120 ? withTimeout(qqLyrics(Q(q)), 25000).catch(() => null) : null
+  )
+  ipcMain.handle("yt:mxmlyrics", (_e, t, a) =>
+    typeof t === "string" && t.length < 120 && typeof a === "string" && a.length < 120
+      ? withTimeout(mxmLyrics(Q(t), Q(a)), 25000).catch(() => null)
+      : null
   )
   ipcMain.handle("yt:videosearch", (_e, q) =>
     typeof q === "string" && q.length < 100 ? withTimeout(videoSearch(Q(q)), 15000).catch(() => []) : []
