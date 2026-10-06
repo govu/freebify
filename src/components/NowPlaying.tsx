@@ -3,7 +3,7 @@ import {
   Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Volume1, Volume2, VolumeX,
 } from "lucide-react"
 import { AnimatePresence, motion, useDragControls } from "motion/react"
-import { useEffect, useReducer, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useReducer, useRef, useState, type MouseEvent } from "react"
 import { Link } from "react-router-dom"
 import { useLibrary } from "../store/library"
 import { usePlayer, applyVolume } from "../store/player"
@@ -473,6 +473,57 @@ const lrcGet = async (path: string, p: Record<string, string>): Promise<LrcRec[]
 // Click a line to seek to it; Shift+click pins THAT line to right now —
 // a one-tap fix for versions whose LRC timestamps are offset. Persisted
 // per track id so the correction survives restarts
+// karaoke word-fill: distribute the line's span across its words — reads
+// as word-level sync without word timings
+function KaraokeFill({ text, start, span, adj }: { text: string; start: number; span: number; adj: number }) {
+  const words = text.split(/\s+/).filter(Boolean)
+  if (words.length < 2) return <>{text}</>
+  const lit = Math.floor(Math.min(1, Math.max(0, (adj - start) / span)) * words.length)
+  return (
+    <>
+      {words.map((wd, wi) => (
+        <span key={wi} className={`transition-colors duration-100 ${wi <= lit ? "text-ink" : "text-ink/40"}`}>
+          {wd}
+          {wi < words.length - 1 ? " " : ""}
+        </span>
+      ))}
+    </>
+  )
+}
+
+// memoized row — the 10fps lyric clock ticks the whole list, but only the
+// row whose active flag (or adj, when active) changed re-renders
+const LineRow = memo(function LineRow({
+  i,
+  l,
+  nextT,
+  active,
+  past,
+  adj,
+  onTap,
+}: {
+  i: number
+  l: LrcLine
+  nextT: number
+  active: boolean
+  past: boolean
+  adj: number
+  onTap: (e: MouseEvent<HTMLButtonElement>, l: LrcLine) => void
+}) {
+  return (
+    <button
+      data-l={i}
+      onClick={(e) => onTap(e, l)}
+      title="Click to jump · Shift+click to sync this line to now"
+      className={`block w-full cursor-pointer px-4 py-2.5 text-2xl font-bold leading-snug transition-[transform,color] duration-200 ease-out md:text-3xl ${
+        active ? "scale-[1.04] text-ink" : past ? "text-ink/45 hover:text-ink/70" : "text-ink/25 hover:text-ink/50"
+      }`}
+    >
+      {active ? <KaraokeFill text={l.text} start={l.t} span={Math.max(0.4, nextT - l.t)} adj={adj} /> : l.text}
+    </button>
+  )
+})
+
 function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number }) {
   // The store clock ticks at ~4Hz (the element's timeupdate) — between
   // ticks a line can sit ~250ms behind the music, which reads as a laggy
@@ -557,6 +608,19 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
     }
   }
   const adj = t - offset
+  // refs feed the click handler so memoized rows never close over a stale
+  // clock — a Shift+click pin must read "now", not render-time
+  const live = useRef({ adj, offset })
+  live.current = { adj, offset }
+  const applyOffsetRef = useRef(applyOffset)
+  applyOffsetRef.current = applyOffset
+  const onLineTap = useCallback(
+    (e: React.MouseEvent, l: LrcLine) => {
+      if (e.shiftKey) applyOffsetRef.current(live.current.adj + live.current.offset - l.t)
+      else seek(l.t + live.current.offset)
+    },
+    [seek]
+  )
   // small lookahead lands the highlight *on* the line being sung;
   // -1 while the intro still plays — nothing gets wrongly lit early
   let active = -1
@@ -627,37 +691,16 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
       <div ref={listRef} className="scroller h-full w-full overflow-y-auto px-8 text-center">
         <div className="py-[38vh]">
           {lines.map((l, i) => (
-            <button
+            <LineRow
               key={i}
-              data-l={i}
-              onClick={(e) => {
-                if (e.shiftKey) applyOffset(t - l.t)
-                else seek(l.t + offset)
-              }}
-              title="Click to jump · Shift+click to sync this line to now"
-              className={`block w-full cursor-pointer px-4 py-2.5 text-2xl font-bold leading-snug transition-[transform,color] duration-200 ease-out md:text-3xl ${
-                i === active
-                  ? "scale-[1.04] text-ink"
-                  : i < active
-                    ? "text-ink/45 hover:text-ink/70"
-                    : "text-ink/25 hover:text-ink/50"
-              }`}
-            >
-              {i === active ? (() => {
-                // karaoke word-fill: distribute the line's span across its
-                // words — reads as word-level sync without word timings
-                const words = l.text.split(/\s+/).filter(Boolean)
-                if (words.length < 2) return l.text
-                const nextT = lines[i + 1]?.t ?? l.t + 4
-                const prog = Math.min(1, Math.max(0, (adj - l.t) / Math.max(0.4, nextT - l.t)))
-                const lit = Math.floor(prog * words.length)
-                return words.map((wd, wi) => (
-                  <span key={wi} className={`transition-colors duration-100 ${wi <= lit ? "text-ink" : "text-ink/40"}`}>
-                    {wd}{wi < words.length - 1 ? " " : ""}
-                  </span>
-                ))
-              })() : l.text}
-            </button>
+              i={i}
+              l={l}
+              nextT={lines[i + 1]?.t ?? l.t + 4}
+              active={i === active}
+              past={i < active}
+              adj={i === active ? adj : 0}
+              onTap={onLineTap}
+            />
           ))}
           <p className="mt-10 pb-6 text-[11px] font-normal tracking-wide text-ink/25">
             Lyrics may not be accurate
@@ -1570,10 +1613,14 @@ export function NowPlaying() {
                 className="absolute inset-0 flex flex-col items-center justify-center"
               >
                 {/* ambient artwork wash behind the lyric column — without it
-                    the panel reads as flat black with text floating in a void */}
+                    the panel reads as flat black with text floating in a void.
+                    The blur runs on a 176px layer then scales up — a full-
+                    viewport blur-3xl re-rasterizes every repaint (CPU hog). */}
                 {current.artwork && (
-                  <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden opacity-[0.17] blur-3xl saturate-[0.8]">
-                    <ArtworkImg art={current.artwork} size="1000x1000" className="size-full scale-125" />
+                  <div aria-hidden className="pointer-events-none absolute inset-0 grid place-items-center overflow-hidden opacity-[0.17]">
+                    <div className="size-44 blur-2xl saturate-[0.8] [transform:scale(10)]">
+                      <ArtworkImg art={current.artwork} size="150x150" className="size-full object-cover" />
+                    </div>
                   </div>
                 )}
                 {lyricsLoading ? (
