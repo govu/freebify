@@ -702,11 +702,11 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
               onTap={onLineTap}
             />
           ))}
-          <p className="mt-10 pb-6 text-[11px] font-normal tracking-wide text-ink/25">
-            Lyrics may not be accurate
-          </p>
         </div>
       </div>
+      <p className="pointer-events-none absolute bottom-2 left-0 right-0 text-center text-[11px] font-normal tracking-wide text-ink/25">
+        Lyrics may not be accurate
+      </p>
     </div>
   )
 }
@@ -1618,7 +1618,7 @@ export function NowPlaying() {
                     viewport blur-3xl re-rasterizes every repaint (CPU hog). */}
                 {current.artwork && (
                   <div aria-hidden className="pointer-events-none absolute inset-0 grid place-items-center overflow-hidden opacity-[0.17]">
-                    <div className="size-44 blur-2xl saturate-[0.8] [transform:scale(10)]">
+                    <div className="size-56 blur-xl saturate-[0.8] [transform:scale(14)]">
                       <ArtworkImg art={current.artwork} size="150x150" className="size-full object-cover" />
                     </div>
                   </div>
@@ -1630,11 +1630,13 @@ export function NowPlaying() {
                     <SyncedLyrics lines={lyrics.synced} autoOff={lyrics.autoOff} />
                   </div>
                 ) : lyrics ? (
-                  <div className="scroller h-full w-[min(92vw,840px)] overflow-y-auto overscroll-contain px-2 [mask-image:linear-gradient(180deg,transparent,black_8%,black_92%,transparent)]">
-                    <p className="whitespace-pre-line py-8 text-center text-lg font-medium leading-relaxed text-ink/90">
-                      {lyrics.plain}
-                    </p>
-                    <p className="pb-6 text-center text-[11px] font-normal tracking-wide text-ink/25">
+                  <div className="relative h-full w-[min(92vw,840px)]">
+                    <div className="scroller h-full overflow-y-auto overscroll-contain px-2 [mask-image:linear-gradient(180deg,transparent,black_8%,black_92%,transparent)]">
+                      <p className="whitespace-pre-line py-8 text-center text-lg font-medium leading-relaxed text-ink/90">
+                        {lyrics.plain}
+                      </p>
+                    </div>
+                    <p className="pointer-events-none absolute bottom-2 left-0 right-0 text-center text-[11px] font-normal tracking-wide text-ink/25">
                       Lyrics may not be accurate
                     </p>
                   </div>
