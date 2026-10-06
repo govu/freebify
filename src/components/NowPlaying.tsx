@@ -1645,10 +1645,12 @@ export function NowPlaying() {
               >
                 {/* ambient artwork wash behind the lyric column — without it
                     the panel reads as flat black with text floating in a void.
-                    The blur runs on a 176px layer then scales up — a full-
-                    viewport blur-3xl re-rasterizes every repaint (CPU hog). */}
+                    The blur runs on a small layer then scales up — a full-
+                    viewport blur-3xl re-rasterizes every repaint (CPU hog).
+                    The radial mask fades the wash to transparent in every
+                    direction, so its bounds can never read as a hard edge. */}
                 {current.artwork && (
-                  <div aria-hidden className="pointer-events-none absolute inset-0 grid place-items-center overflow-hidden opacity-[0.17]">
+                  <div aria-hidden className="pointer-events-none absolute inset-0 grid place-items-center overflow-hidden opacity-[0.2] [mask-image:radial-gradient(75%_75%_at_50%_45%,black_25%,transparent_78%)]">
                     <div className="size-56 blur-xl saturate-[0.8] [transform:scale(14)]">
                       <ArtworkImg art={current.artwork} size="150x150" className="size-full object-cover" />
                     </div>

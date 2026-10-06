@@ -1695,6 +1695,10 @@ if ("mediaSession" in navigator) {
     s.queue.slice(s.index, s.index + 5).forEach(prefetchStream)
   }, 1200)
   usePlayer.subscribe((s) => {
+    // window title = what the taskbar hover preview shows ("SONG - ARTIST",
+    // like Spotify's thumbnail) — Electron mirrors document.title for us
+    const t = s.current
+    document.title = t ? `${t.title}${t.user?.name ? ` - ${t.user.name}` : ""}` : "Freebify"
     const sig = `${s.isPlaying}|${s.current?.id ?? ""}`
     const progress = s.isPlaying && s.duration > 0 ? Math.round((s.currentTime / s.duration) * 40) / 40 : -1
     if (sig === lastSig && progress === lastProgress) return
