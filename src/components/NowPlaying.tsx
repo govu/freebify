@@ -473,41 +473,20 @@ const lrcGet = async (path: string, p: Record<string, string>): Promise<LrcRec[]
 // Click a line to seek to it; Shift+click pins THAT line to right now —
 // a one-tap fix for versions whose LRC timestamps are offset. Persisted
 // per track id so the correction survives restarts
-// karaoke word-fill: distribute the line's span across its words — reads
-// as word-level sync without word timings
-function KaraokeFill({ text, start, span, adj }: { text: string; start: number; span: number; adj: number }) {
-  const words = text.split(/\s+/).filter(Boolean)
-  if (words.length < 2) return <>{text}</>
-  const lit = Math.floor(Math.min(1, Math.max(0, (adj - start) / span)) * words.length)
-  return (
-    <>
-      {words.map((wd, wi) => (
-        <span key={wi} className={`transition-colors duration-100 ${wi <= lit ? "text-ink" : "text-ink/40"}`}>
-          {wd}
-          {wi < words.length - 1 ? " " : ""}
-        </span>
-      ))}
-    </>
-  )
-}
-
 // memoized row — the 10fps lyric clock ticks the whole list, but only the
-// row whose active flag (or adj, when active) changed re-renders
+// row whose active/past flag changed re-renders (Spotify-style: the whole
+// line lights up — no word fill, no scale)
 const LineRow = memo(function LineRow({
   i,
   l,
-  nextT,
   active,
   past,
-  adj,
   onTap,
 }: {
   i: number
   l: LrcLine
-  nextT: number
   active: boolean
   past: boolean
-  adj: number
   onTap: (e: MouseEvent<HTMLButtonElement>, l: LrcLine) => void
 }) {
   return (
@@ -515,11 +494,11 @@ const LineRow = memo(function LineRow({
       data-l={i}
       onClick={(e) => onTap(e, l)}
       title="Click to jump · Shift+click to sync this line to now"
-      className={`block w-full cursor-pointer px-4 py-2.5 text-2xl font-bold leading-snug transition-[transform,color] duration-200 ease-out md:text-3xl ${
-        active ? "scale-[1.04] text-ink" : past ? "text-ink/45 hover:text-ink/70" : "text-ink/25 hover:text-ink/50"
+      className={`block w-full cursor-pointer px-4 py-2.5 text-2xl font-bold leading-snug transition-colors duration-150 ease-out md:text-3xl ${
+        active ? "text-ink" : past ? "text-ink/45 hover:text-ink/70" : "text-ink/25 hover:text-ink/50"
       }`}
     >
-      {active ? <KaraokeFill text={l.text} start={l.t} span={Math.max(0.4, nextT - l.t)} adj={adj} /> : l.text}
+      {l.text}
     </button>
   )
 })
@@ -695,10 +674,8 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
               key={i}
               i={i}
               l={l}
-              nextT={lines[i + 1]?.t ?? l.t + 4}
               active={i === active}
               past={i < active}
-              adj={i === active ? adj : 0}
               onTap={onLineTap}
             />
           ))}
@@ -957,6 +934,31 @@ export function NowPlaying() {
       } catch {
         return null
       }
+    }
+    // QQ Music direct — Tencent's catalog is huge where LRCLIB/lyrist run
+    // thin (Latin/Asian/regional). Candidates get the same gates as LRCLIB
+    // records; all parseable sheets come back as alignment alternates
+    const fetchQq = async (): Promise<LrcLine[][] | null> => {
+      for (const t of titles) {
+        const cands = await yt.qqLyrics(`${artist} ${t}`.trim()).catch(() => null)
+        if (!Array.isArray(cands) || !cands.length) continue
+        const sheets = cands
+          .filter((c) => typeof c?.lyrics === "string")
+          .filter((c) => titleLike(c.trackName ?? "", t))
+          .filter((c) => !artist || artistSim(c.artistName) > 0 || Boolean(dur && c.duration && Math.abs(c.duration - dur) <= 5))
+          .map((c) => {
+            const lines = parseLrc(c.lyrics)
+            // QQ prepends a "[00:00.00] Title - Artist" card — as a lyric
+            // line it shows the song name before anything is sung
+            const card = norm(`${c.trackName} ${c.artistName?.split(",")[0] ?? ""}`).trim()
+            while (lines.length && lines[0].t < 3 && [card, norm(c.trackName ?? "")].includes(norm(lines[0].text))) lines.shift()
+            return sane(lines)
+          })
+          .filter((s): s is LrcLine[] => Boolean(s))
+        if (dur) sheets.sort((a, b) => Math.abs(a[a.length - 1].t + 12 - dur) - Math.abs(b[b.length - 1].t + 12 - dur))
+        if (sheets.length) return sheets
+      }
+      return null
     }
     // the video we're ACTUALLY playing: direct for yt tracks; for Audius
     // the closest same-recording uploads. Twins must share title AND
@@ -1479,16 +1481,15 @@ export function NowPlaying() {
         void refineOffset(lrclib.synced, lrclib.autoOff, lrclib.alts)
         return finish(lrclib)
       }
-      // lyrist + textyl race in parallel — independent hosts, no reason to
-      // pay two timeouts serially when a song is missing from both
-      const [lyrist, textyl] = await Promise.all([fetchLyrist(), fetchTextyl()])
-      if (lyrist) {
-        void refineOffset(lyrist, 0)
-        return finish({ synced: lyrist, autoOff: 0 })
-      }
-      if (textyl) {
-        void refineOffset(textyl, 0)
-        return finish({ synced: textyl, autoOff: 0 })
+      // lyrist + textyl + QQ race in parallel — independent hosts, no
+      // reason to pay three timeouts serially. Every sheet that parses
+      // becomes an alignment alternate: if the first pick can't anchor to
+      // the audio, refineOffset retries the rest before giving up.
+      const [qq, lyrist, textyl] = await Promise.all([fetchQq(), fetchLyrist(), fetchTextyl()])
+      const pool = [...(qq ?? []), ...(lyrist ? [lyrist] : []), ...(textyl ? [textyl] : [])]
+      if (pool.length) {
+        void refineOffset(pool[0], 0, pool)
+        return finish({ synced: pool[0], autoOff: 0 })
       }
       // lyric databases exhausted — YouTube captions (ASR included) are the
       // coverage net: virtually every song has SOME captioned upload

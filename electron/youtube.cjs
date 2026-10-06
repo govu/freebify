@@ -1719,6 +1719,48 @@ async function available() {
   return { meta: Boolean(yt), bin: bin }
 }
 
+// ---- QQ Music timed lyrics ----
+// Tencent's catalog covers the Latin/Asian/regional niches where LRCLIB
+// runs thin. Free public endpoints: search returns songmids, the lyric
+// endpoint serves timed LRC. Candidates carry their metadata so the
+// renderer's gates (title/artist/duration/sane) decide what to trust.
+async function qqLyrics(query) {
+  const headers = { Referer: "https://y.qq.com", "User-Agent": "Mozilla/5.0" }
+  try {
+    const sr = await fetch(
+      `https://c.y.qq.com/soso/fcgi-bin/client_search_cp?w=${encodeURIComponent(query)}&format=json&p=1&n=6&t=0`,
+      { headers, signal: AbortSignal.timeout(9000) }
+    )
+    if (!sr.ok) return null
+    const j = await sr.json()
+    const list = Array.isArray(j?.data?.song?.list) ? j.data.song.list : []
+    const out = []
+    for (const s of list.slice(0, 4)) {
+      if (!s?.songmid) continue
+      try {
+        const lr = await fetch(
+          `https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?songmid=${s.songmid}&format=json&nobase64=1`,
+          { headers, signal: AbortSignal.timeout(8000) }
+        )
+        if (!lr.ok) continue
+        const lj = await lr.json()
+        const lyric = lj?.lyric
+        if (typeof lyric === "string" && /\[\d{1,2}:\d{2}/.test(lyric)) {
+          out.push({
+            lyrics: lyric,
+            trackName: String(s.songname ?? ""),
+            artistName: Array.isArray(s.singer) ? s.singer.map((x) => x?.name).filter(Boolean).join(", ") : "",
+            duration: typeof s.interval === "number" ? s.interval : 0,
+          })
+        }
+      } catch {}
+    }
+    return out.length ? out : null
+  } catch {
+    return null
+  }
+}
+
 // ---------- registration ----------
 // validate every argument crossing the IPC boundary — the renderer is our
 // own code, but defense in depth is cheap here
@@ -1853,6 +1895,9 @@ function register(ipcMain) {
   )
   ipcMain.handle("yt:timedlyrics", (_e, videoId) =>
     typeof videoId === "string" && VID.test(videoId) ? withTimeout(timedLyrics(videoId), 25000).catch(() => null) : null
+  )
+  ipcMain.handle("yt:qqlyrics", (_e, q) =>
+    typeof q === "string" && q.length < 120 ? withTimeout(qqLyrics(Q(q)), 25000).catch(() => null) : null
   )
   ipcMain.handle("yt:videosearch", (_e, q) =>
     typeof q === "string" && q.length < 100 ? withTimeout(videoSearch(Q(q)), 15000).catch(() => []) : []
