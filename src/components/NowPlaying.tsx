@@ -898,8 +898,11 @@ export function NowPlaying() {
     // flip that loses half the time.
     const introOff = (synced: LrcLine[], recDur?: number | null) => {
       const selfEst = (synced[synced.length - 1]?.t ?? 0) + 12
-      const estRecDur =
-        recDur && Math.abs(recDur - selfEst) <= 25 ? Math.max(recDur, selfEst) : selfEst
+      // recDur (MXM track_length / LRCLIB record) is canonical truth — the
+      // old ±25 guard fell back to selfEst on long outros: a sheet that
+      // ends at the last vocal while the recording plays 40s more made
+      // dur-selfEst look like a 40s INTRO and shifted every line late
+      const estRecDur = recDur ? Math.max(recDur, selfEst) : selfEst
       const g = dur && estRecDur ? Math.max(-15, Math.min(dur - selfEst - 5, dur - estRecDur)) : 0
       return Math.abs(g) >= 2.5 ? Math.round(g * 2) / 2 : 0
     }
@@ -1235,20 +1238,47 @@ export function NowPlaying() {
     // wrong measurement can't stick; a manual Shift+click always wins.
     const sheetFp = sheetFpOf
     const dbgL = (m: string) => window.freebify?.app?.log?.(`lyrics: ${m}`)
-    // last-resort audio truth: fetch the head of the actual playing stream
-    // and measure how much DEAD AIR precedes the content. A sheet line
-    // scheduled inside that zone is definitionally misplaced (nothing is
-    // audible there) — the one unambiguous, audio-measured correction
-    // available when every caption source is blocked or absent.
-    const measureHeadSilence = async (): Promise<number> => {
-      if (!ownVid || !yt.audioHead) return 0
+    // last-resort audio truth: decode the actual playing stream and measure
+    // its dead-air bounds. HEAD: uploads with a silent lead-in make an
+    // otherwise-right sheet sing early. TAIL: when the intro estimate
+    // attributed a duration gap to the head but the gap is actually a
+    // silent tail, the whole sheet was shifted late for nothing — the tail
+    // measurement claws that back. Strict -48dBFS threshold: quiet musical
+    // intros (fade-ins, whispers, tape hiss) never trigger (verified: Shape
+    // of You's 6s marimba fade-in stays above it).
+    const measureAudioBounds = async (): Promise<{ headSil: number; tailSil: number } | null> => {
+      if (!ownVid || !yt.audioProbe) return null
       try {
-        const bytes = await yt.audioHead(ownVid)
-        if (!bytes || bytes.byteLength < 20000) return 0
+        const probe = await yt.audioProbe(ownVid)
+        if (!probe?.head || probe.head.byteLength < 20000) return null
+        // trun tail estimate: silent AAC frames compress to a few dozen
+        // bytes while music needs hundreds — the trailing run of tiny
+        // frames is dead air. Pooled-median threshold stays honest across
+        // bitrates; a whole-fragment-silent segment can't self-threshold
+        // (its own median IS silence) so a max-size rule catches it.
+        const tailFromTrun = (t: NonNullable<typeof probe.tail>): number => {
+          if (!t.truns.length || !t.timescale) return 0
+          const all = t.truns.flatMap((r) => r.sizes)
+          const med = [...all].sort((a, b) => a - b)[all.length >> 1]
+          const thr = Math.min(90, Math.max(40, med * 0.25))
+          let sec = 0
+          for (let h = t.truns.length - 1; h >= 0; h--) {
+            const { sizes, durs } = t.truns[h]
+            if (Math.max(...sizes) < 90) {
+              sec += durs.reduce((a, b) => a + b, 0) / t.timescale
+              continue
+            }
+            let i = sizes.length - 1
+            while (i >= 0 && sizes[i] < thr) sec += durs[i--] / t.timescale
+            if (i >= 0) break // audible content — the silence ends here
+          }
+          return sec
+        }
         const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-        if (!AC) return 0
+        if (!AC) return null
         const ctx = new AC()
         try {
+          const bytes = probe.head
           const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
           const audio = await ctx.decodeAudioData(ab)
           const ch = audio.getChannelData(0)
@@ -1260,21 +1290,15 @@ export function NowPlaying() {
             for (let j = i; j < i + win; j += 4) acc += ch[j] * ch[j]
             frames.push(Math.sqrt(acc / (win / 4)))
           }
-          // DEAD-AIR-ONLY detector: -48dBFS absolute. Quiet musical intros
-          // (fade-ins, whispers, tape hiss) stay above it and never trigger
-          // — a peak-relative threshold can't tell a soft intro from
-          // silence and would shift sheets that are already right (Shape
-          // of You's marimba fades in over 6s while staying <12% of peak).
           const SIL = 0.004
           let i = 0
           while (i < frames.length && frames[i] < SIL) i++
-          // no audible content in the whole head — can't locate a boundary
-          if (i >= frames.length) return 0
-          return i * 0.02
+          if (i >= frames.length) return null // whole decode silent — broken audio, can't bound
+          return { headSil: i * 0.02, tailSil: probe.tail ? tailFromTrun(probe.tail) : 0 }
         } finally {
           ctx.close().catch(() => {})
         }
-      } catch { return 0 }
+      } catch { return null }
     }
     const refineOffset = async (lrc: LrcLine[], fallback: number, alts: LrcLine[][] = []) => {
       const dbg = dbgL
@@ -1567,17 +1591,28 @@ export function NowPlaying() {
         // shift the sheet past it. Runs after the caption walk because a
         // matched caption track is more precise; covers the case where
         // timedtext is PoToken-blocked and no twin helped.
-        // audio truth as the last resort: dead air at the head of OUR
-        // stream. A sheet line scheduled inside it is certainly wrong —
-        // shift the sheet past it. Only applied when no structural guess
-        // is in play (|fallback|<1.5): a large fallback already encodes a
-        // crop/intro hypothesis we can't disentangle from silence, and
-        // overwriting it blind could land worse.
-        const sil = await measureHeadSilence().catch(() => 0)
-        if (sameTrack() && sil >= 1 && Math.abs(fallback) < 1.5 && (lrc[0]?.t ?? 0) < sil - 0.4) {
-          dbg(`head-silence ${sil.toFixed(1)}s — first line lands in dead air; offset +${sil.toFixed(1)}`)
-          applyOff(sil, false)
-          return
+        // audio truth as the last resort: decode the actual stream's dead
+        // air bounds and repair whichever boundary the estimate got wrong.
+        // TAIL rule: a big positive fallback attributes the duration gap
+        // to the head — proven tail air removes it (off := off − tailSil).
+        // HEAD rule: a first lyric line scheduled inside proven dead air
+        // is certainly wrong — the sheet shifts past it (off += headSil,
+        // additive to whatever crop/intro structure the guess carried).
+        const bounds = await measureAudioBounds().catch(() => null)
+        if (sameTrack() && bounds) {
+          let off = fallback
+          if (bounds.tailSil >= 2 && off > 1.5) {
+            off = Math.max(0, off - bounds.tailSil)
+            dbg(`tail-silence ${bounds.tailSil.toFixed(1)}s — intro guess ${fallback.toFixed(1)} trimmed to ${off.toFixed(1)}`)
+          }
+          if (bounds.headSil >= 1 && (lrc[0]?.t ?? 0) + off < bounds.headSil - 0.4) {
+            off += bounds.headSil
+            dbg(`head-silence ${bounds.headSil.toFixed(1)}s — first line lands in dead air; offset ${off.toFixed(1)}`)
+          }
+          if (off !== fallback) {
+            applyOff(off, false)
+            return
+          }
         }
         if (fallback !== 0) dbg(`kept fallback ${fallback.toFixed(1)} — no same-structure twin found`)
       } catch { /* best-effort — the unaligned lyrics still display */ }

@@ -1719,21 +1719,131 @@ async function captions(videoId) {
   return job
 }
 
-// fetch the head of the resolved audio stream so the renderer can measure
-// LEADING SILENCE — uploads with a dead-air head (common on lyric/fan
-// uploads) make an otherwise-correct sheet start N seconds early, which is
-// the dominant "las lyrics empiezan tarde" report. Range-limited: ~1.5MB
-// covers the first ≈90s at 128kbps.
-async function audioHead(videoId) {
+// minimal MP4 atom walker — enough to reach moov/trak/mdia and moof/traf/trun
+function mp4Children(buf, start, end) {
+  const atoms = []
+  let p = start
+  while (p + 8 <= end) {
+    let size = buf.readUInt32BE(p)
+    const type = buf.toString("latin1", p + 4, p + 8)
+    let hdr = 8
+    if (size === 1) {
+      if (p + 16 > end) break
+      size = Number(buf.readBigUInt64BE(p + 8))
+      hdr = 16
+    } else if (size === 0) size = end - p // box runs to EOF
+    if (size < hdr) break
+    atoms.push({ type, off: p + hdr, end: p + size })
+    p += size
+  }
+  return atoms
+}
+const mp4Find = (buf, box, type) => mp4Children(buf, box.off, box.end).find((a) => a.type === type)
+
+// media timescale from the head moov's mdhd — needed to turn trun frame
+// counts into seconds. v0: verflags(4)+ctime(4)+mtime(4)+timescale(4);
+// v1 uses 8-byte times so timescale sits at +20
+function mp4Timescale(buf) {
+  const moov = mp4Children(buf, 0, buf.length).find((a) => a.type === "moov")
+  if (!moov) return 0
+  for (const trak of mp4Children(buf, moov.off, Math.min(moov.end, buf.length))) {
+    if (trak.type !== "trak") continue
+    const mdia = mp4Find(buf, trak, "mdia")
+    const mdhd = mdia && mp4Find(buf, mdia, "mdhd")
+    if (!mdhd || mdhd.end > buf.length) continue
+    const ver = buf[mdhd.off]
+    const ts = buf.readUInt32BE(mdhd.off + (ver === 1 ? 20 : 12))
+    if (ts >= 1000 && ts <= 192000) return ts
+  }
+  return 0
+}
+
+// scan a tail buffer for 'moof' signatures and parse EACH one's trun —
+// every sample's byte size. Silent AAC frames compress to a few dozen
+// bytes vs hundreds for music, so the trailing run of tiny frames is the
+// dead-air tail. Signature hits are validated by structure (mfhd+traf
+// children whose sizes stay in bounds) so mdat content can't spoof one.
+// A ~400KB window holds 2-3 fragments (~25s) — walking them backwards
+// measures tails longer than one fragment.
+function tailTruns(buf) {
+  const hits = []
+  for (let p = 0; p + 16 <= buf.length; p++) {
+    if (buf.toString("latin1", p + 4, p + 8) !== "moof") continue
+    const size = buf.readUInt32BE(p)
+    if (size < 24 || size > 5_000_000 || p + size > buf.length + 16) continue
+    const kids = mp4Children(buf, p + 8, Math.min(p + size, buf.length))
+    const mfhd = kids.find((k) => k.type === "mfhd")
+    const traf = kids.find((k) => k.type === "traf")
+    if (mfhd && traf) hits.push(traf)
+  }
+  const truns = []
+  for (const traf of hits.slice(-4)) {
+    const trun = mp4Children(buf, traf.off, traf.end).find((k) => k.type === "trun")
+    if (!trun || trun.end > buf.length) continue
+    const flags = buf.readUInt32BE(trun.off) & 0xffffff
+    const count = buf.readUInt32BE(trun.off + 4)
+    let p = trun.off + 8
+    if (flags & 0x1) p += 4 // data_offset
+    if (flags & 0x4) p += 4 // first_sample_flags
+    const hasDur = flags & 0x100
+    const hasSize = flags & 0x200
+    const stride = (hasDur ? 4 : 0) + (hasSize ? 4 : 0) + (flags & 0x400 ? 4 : 0) + (flags & 0x800 ? 4 : 0)
+    if (!stride || !count || count > 100000 || p + count * stride > buf.length) continue
+    // tfhd defaults fill whatever the trun omits
+    const tfhd = mp4Children(buf, traf.off, traf.end).find((k) => k.type === "tfhd")
+    let defDur = 0
+    let defSize = 0
+    if (tfhd) {
+      const f2 = buf.readUInt32BE(tfhd.off) & 0xffffff
+      let q = tfhd.off + 8 // verflags + track_ID
+      if (f2 & 0x1) q += 8
+      if (f2 & 0x2) q += 4
+      if (f2 & 0x8) { defDur = buf.readUInt32BE(q); q += 4 }
+      if (f2 & 0x10) { defSize = buf.readUInt32BE(q); q += 4 }
+    }
+    const sizes = new Array(count)
+    const durs = new Array(count)
+    for (let i = 0; i < count; i++) {
+      let q = p + i * stride
+      durs[i] = hasDur ? buf.readUInt32BE(q) : defDur
+      if (hasDur) q += 4
+      sizes[i] = hasSize ? buf.readUInt32BE(q) : defSize
+    }
+    truns.push({ sizes, durs })
+  }
+  return truns
+}
+
+// fetch audio for waveform-boundary analysis: the head range feeds the
+// renderer's leading-dead-air decode, and a tail range feeds trun frame
+// sizes — the dead-air tail measurement needs no multi-MB download.
+async function audioProbe(videoId) {
   const url = await resolveStreamUrl(videoId)
   if (!url) return null
-  const res = await fetch(url, {
+  const headP = fetch(url, {
     headers: { Range: "bytes=0-1600000", "User-Agent": "Freebify/1.0" },
     signal: AbortSignal.timeout(15000),
   })
-  if (!res.ok) return null
-  const buf = await res.arrayBuffer()
-  return buf.byteLength ? Buffer.from(buf) : null
+  const clen = Number(/[?&]clen=(\d+)/.exec(url)?.[1] ?? 0)
+  const tailP =
+    clen > 2_000_000
+      ? fetch(url, {
+          headers: { Range: `bytes=${clen - 400000}-${clen - 1}`, "User-Agent": "Freebify/1.0" },
+          signal: AbortSignal.timeout(15000),
+        })
+      : Promise.resolve(null)
+  const [headRes, tailRes] = await Promise.all([headP, tailP.catch(() => null)])
+  if (!headRes.ok) return null
+  const head = Buffer.from(await headRes.arrayBuffer())
+  if (!head.byteLength) return null
+  const timescale = mp4Timescale(head)
+  let tail = null
+  if (tailRes?.ok) {
+    const tailBuf = Buffer.from(await tailRes.arrayBuffer())
+    const truns = tailTruns(tailBuf)
+    if (truns.length && timescale) tail = { truns, timescale }
+  }
+  return { head, tail }
 }
 
 // Line-timed lyrics straight from YouTube Music — official LyricFind data
@@ -2066,8 +2176,8 @@ function register(ipcMain) {
   ipcMain.handle("yt:captions", (_e, videoId) =>
     typeof videoId === "string" && VID.test(videoId) ? withTimeout(captions(videoId), 40000).catch(() => null) : null
   )
-  ipcMain.handle("yt:audiohead", (_e, videoId) =>
-    typeof videoId === "string" && VID.test(videoId) ? withTimeout(audioHead(videoId), 30000).catch(() => null) : null
+  ipcMain.handle("yt:audioprobe", (_e, videoId) =>
+    typeof videoId === "string" && VID.test(videoId) ? withTimeout(audioProbe(videoId), 40000).catch(() => null) : null
   )
   ipcMain.handle("yt:timedlyrics", (_e, videoId) =>
     typeof videoId === "string" && VID.test(videoId) ? withTimeout(timedLyrics(videoId), 25000).catch(() => null) : null

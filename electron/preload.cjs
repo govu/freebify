@@ -20,7 +20,7 @@ contextBridge.exposeInMainWorld("freebify", {
     playlistArts: (id) => ipcRenderer.invoke("yt:playlistarts", id),
     lyrics: (videoId) => ipcRenderer.invoke("yt:lyrics", videoId),
     captions: (videoId) => ipcRenderer.invoke("yt:captions", videoId),
-    audioHead: (videoId) => ipcRenderer.invoke("yt:audiohead", videoId),
+    audioProbe: (videoId) => ipcRenderer.invoke("yt:audioprobe", videoId),
     timedLyrics: (videoId) => ipcRenderer.invoke("yt:timedlyrics", videoId),
     qqLyrics: (query) => ipcRenderer.invoke("yt:qqlyrics", query),
     mxmLyrics: (title, artist) => ipcRenderer.invoke("yt:mxmlyrics", title, artist),
