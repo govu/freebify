@@ -1494,7 +1494,15 @@ function captionLines(body, ext) {
           out.at(-1).text = `${out.at(-1).text} ${rows.at(-1)}`
           continue
         }
-        push(ev.tStartMs / 1000, rows.at(-1))
+        // rolling captions repeat the previous cue as the first row for
+        // context — drop it only when it really IS the previous line.
+        // Stacked multi-row captions (common in manual subs) carry two
+        // real sung lines; taking just the last halves every match.
+        if (rows.length > 1 && out.length && out.at(-1).text === rows.at(-2)) {
+          push(ev.tStartMs / 1000, rows.at(-1))
+        } else {
+          push(ev.tStartMs / 1000, rows.join(" "))
+        }
       }
     } catch {}
     return out
