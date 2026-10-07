@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Freebify · All the music. None of the ads.</title>
-<meta name="description" content="Freebify is a free, open-source desktop music player. Original studio recordings, live synced lyrics, zero ads. For Windows.">
+<meta name="description" content="Freebify is a free, open-source desktop music player. Original studio recordings, synced lyrics, offline downloads, zero ads.">
 <meta property="og:title" content="Freebify · All the music. None of the ads.">
-<meta property="og:description" content="Free music player for Windows. Original recordings, synced lyrics, zero ads.">
+<meta property="og:description" content="Free music player. Original recordings, synced lyrics, offline downloads, zero ads.">
 <meta property="og:image" content="https://govu.github.io/freebify/shots/home.png">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -318,7 +318,10 @@
   <h2 class="rv">Everything inside.</h2>
   <div class="feat-row rv"><span class="t">Original recordings</span><span class="d">Search returns the real studio release, not a slowed edit, a sped-up rip or a cover with the same title.</span><span class="arr">→</span></div>
   <div class="feat-row rv"><span class="t">Zero ads</span><span class="d">No audio interruptions, no banners, no “go premium” nags. The player plays. That’s the deal.</span><span class="arr">→</span></div>
-  <div class="feat-row rv"><span class="t">Live synced lyrics</span><span class="d">Line-by-line karaoke that follows the song, auto-calibrated to the exact version you’re hearing.</span><span class="arr">→</span></div>
+  <div class="feat-row rv"><span class="t">Live synced lyrics</span><span class="d">The current line lights up as it's sung — pulled from multiple lyric sources and auto-timed against the exact upload that's playing. Shift-click any line to pin it yourself.</span><span class="arr">→</span></div>
+  <div class="feat-row rv"><span class="t">Offline downloads</span><span class="d">Save songs to disk and keep listening with the internet off — the Downloads tab is a real offline mode, not a cache lottery.</span><span class="arr">→</span></div>
+  <div class="feat-row rv"><span class="t">Stats that remember</span><span class="d">Top tracks, artists and listening time, counted on your machine all year — a Wrapped that doesn't wait for December.</span><span class="arr">→</span></div>
+  <div class="feat-row rv"><span class="t">Built-in equalizer</span><span class="d">A real multi-band EQ baked into the player — tune the sound once and it applies everywhere, every song.</span><span class="arr">→</span></div>
   <div class="feat-row rv"><span class="t">Genre radio</span><span class="d">Start a radio from any track and the queue stays on-vibe: the same sound, not the same song rehashed.</span><span class="arr">→</span></div>
   <div class="feat-row rv"><span class="t">Discord presence</span><span class="d">Your status shows the song, the artist, the artwork and live progress, like the big players do.</span><span class="arr">→</span></div>
   <div class="feat-row rv"><span class="t">Silent auto-updates</span><span class="d">New versions download in the background and install when you quit. You never manage the app.</span><span class="arr">→</span></div>
@@ -331,7 +334,7 @@
     <div class="gal-left">
       <div class="gal-steps" id="galSteps">
         <div class="gal-step"><h3>Pick up where<br>you left off</h3><div class="c">Recently played, weekly charts and editorial picks, the moment you open the app.</div></div>
-        <div class="gal-step"><h3>Lyrics that keep<br>the tempo</h3><div class="c">Line-synced karaoke that follows the song. Tap any line to jump to it.</div></div>
+        <div class="gal-step"><h3>Lyrics that keep<br>the tempo</h3><div class="c">Every line lights up as it's sung, calibrated to the version that's actually playing. Tap a line to jump to it.</div></div>
         <div class="gal-step"><h3>Find it in<br>three letters</h3><div class="c">Songs, artists, albums and playlists, ranked the way you'd expect.</div></div>
         <div class="gal-step"><h3>Every artist,<br>properly profiled</h3><div class="c">Top tracks, monthly listeners and full discographies.</div></div>
       </div>
@@ -351,12 +354,12 @@
   <div class="inner">
     <h2 class="rv">Get Freebify.<br><span>Keep the money.</span></h2>
     <div class="row rv d1">
-      <a class="btn solid" id="dlBtn" href="https://github.com/govu/freebify/releases/latest/download/Freebify-setup.exe" target="_blank" rel="noopener">Download Freebify 1.0.42</a>
+      <a class="btn solid" id="dlBtn" href="https://github.com/govu/freebify/releases/latest/download/Freebify-setup.exe" target="_blank" rel="noopener">Download Freebify 1.0.46</a>
       <a class="btn line" id="altBtn" href="https://github.com/govu/freebify/releases/latest/download/Freebify-portable.exe" target="_blank" rel="noopener">Portable .exe</a>
       <a class="btn line" id="osBtn" href="https://github.com/govu/freebify/releases/latest/download/Freebify-arm64.dmg" target="_blank" rel="noopener">macOS .dmg</a>
     </div>
     <div class="note rv d2">
-      <span id="platNote">Free forever · Windows 10/11 · ~120 MB</span><b id="verMeta"> · v1.0.42</b><span id="updNote"> · updates itself</span>
+      <span id="platNote">Free forever · Windows 10/11 · ~120 MB</span><b id="verMeta"> · v1.0.46</b><span id="updNote"> · updates itself</span>
       <span id="dlCount" style="display:none"> · <b id="dlCountN"></b> downloads</span>
       <span id="macNote" style="display:none"><br>macOS: unsigned app: right-click → Open on first launch. Updates don't auto-install on Mac (sorry for the extra step). New versions get downloaded manually from right here.</span>
     </div>
@@ -375,7 +378,7 @@
     <h2>FREEBIFY</h2>
   </div>
   <div class="foot">
-    <span class="l">© 2026 Freebify · free software, free music.<span id="footVer"> · v1.0.42</span></span>
+    <span class="l">© 2026 Freebify · free software, free music.<span id="footVer"> · v1.0.46</span></span>
     <div class="r">
       <a href="https://github.com/govu/freebify" target="_blank" rel="noopener">GitHub</a>
       <a href="https://github.com/govu/freebify/releases" target="_blank" rel="noopener">Releases</a>
