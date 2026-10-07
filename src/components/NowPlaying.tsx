@@ -1870,8 +1870,8 @@ export function NowPlaying() {
           <div className="flex-1 text-center">
             <p className="text-xs font-semibold text-ink/50">Now playing</p>
             {showLyrics && lyrics != null && (
-              <p className="text-[10px] font-normal tracking-wide text-ink/35">
-                Lyrics may not be accurate
+              <p className="mt-0.5 text-[13px] font-medium tracking-wide text-ink/60">
+                Lyrics may not be accurate for some songs
               </p>
             )}
           </div>
