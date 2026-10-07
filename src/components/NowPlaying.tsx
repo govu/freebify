@@ -631,14 +631,14 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
         }
         localStorage.setItem("lrcpin-purged-v2", "1")
       }
-      // v3: wipe AUTO offsets/alignments only — a recDur-disagreement
-      // regression (fixed in 1.0.44) persisted ~−15s shifts that would
-      // otherwise reload forever. Manual lrcoff2- pins survive.
-      if (!localStorage.getItem("lrcpin-purged-v3")) {
+      // v4: wipe AUTO offsets/alignments again — negative-duration
+      // guesses (fixed in 1.0.45) could still persist ≈−15s shifts under
+      // 1.0.43/44 and reload forever. Manual lrcoff2- pins survive.
+      if (!localStorage.getItem("lrcpin-purged-v4")) {
         for (const k of Object.keys(localStorage)) {
           if (k.startsWith("lrcoffa-") || k.startsWith("lrcaln-")) localStorage.removeItem(k)
         }
-        localStorage.setItem("lrcpin-purged-v3", "1")
+        localStorage.setItem("lrcpin-purged-v4", "1")
       }
       // lrcoff2- = manual (Shift+click); lrcoffa- = auto-measured —
       // both fingerprinted to their sheet; lrcoff- = v1 keys → purge
@@ -914,7 +914,12 @@ export function NowPlaying() {
       // (lyrics visibly skipping at 0:01). Big positive guesses get
       // verified against measured dead air downstream instead.
       const estRecDur = recDur && Math.abs(recDur - selfEst) <= 25 ? Math.max(recDur, selfEst) : selfEst
-      const g = dur && estRecDur ? Math.max(-15, Math.min(dur - selfEst - 5, dur - estRecDur)) : 0
+      // negative guesses are near-useless: a video SHORTER than the
+      // record is almost always a tail-trim (offset should stay ~0 —
+      // the sheet's absolute times still hold for the kept portion),
+      // while a video that starts mid-record is vanishingly rare. A −15
+      // guess lit mid-song lines at 0:00 — bound it to noise.
+      const g = dur && estRecDur ? Math.max(-2, Math.min(dur - selfEst - 5, dur - estRecDur)) : 0
       return Math.abs(g) >= 2.5 ? Math.round(g * 2) / 2 : 0
     }
     const pickLrc = (ref: string): { synced: LrcLine[]; autoOff: number; alts?: LrcLine[][] } | { plain: string } | null => {
