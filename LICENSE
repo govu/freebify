@@ -672,3 +672,41 @@ may consider it more useful to permit linking proprietary applications with
 the library.  If this is what you want to do, use the GNU Lesser General
 Public License instead of this License.  But first, please read
 <https://www.gnu.org/licenses/why-not-lgpl.html>.
+
+                    ADDITIONAL TERMS — FREEBIFY ATTRIBUTION CLAUSE
+                    (per GNU GPL v3 Section 7 "Additional Terms")
+
+The following additional terms apply to this work, as permitted by
+Section 7 of the GNU General Public License, Version 3:
+
+  1. ATTRIBUTION. Any copy, fork, derivative work, or redistribution of
+     this software — in source or binary form, modified or not — must
+     give clear, visible credit to the original author:
+
+       "Freebify by govu — https://github.com/govu/freebify"
+
+     This notice must appear:
+       (a) in the user interface of any distributed application, in a
+           place a user can actually see it (an About, Settings, or
+           credits screen qualifies — a buried source comment does not);
+       (b) in the README, repository description, or documentation of
+           any public redistribution;
+       (c) alongside every offer for download.
+
+  2. NO REMOVAL OF NOTICES. Copyright notices, this attribution clause,
+     and the GPL license text must be preserved intact in all copies and
+     derivative works.
+
+  3. NAME AND BRANDING. The name "Freebify", its logo, and its visual
+     identity are identifiers of the original project. Derivative works
+     must be distributed under a different name and may not use the
+     Freebify name or logo to promote or identify themselves, except to
+     state the factual attribution required above.
+
+  4. COPYLEFT PRESERVED. All derivative works remain licensed under the
+     GNU GPL v3 with these same additional terms — the credit travels
+     with the code.
+
+If you convey a work based on this program without complying with these
+terms, your rights under the GPL terminate automatically (GPL v3
+Section 8).

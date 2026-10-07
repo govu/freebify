@@ -84,10 +84,14 @@ own terms. The software itself contains no copyrighted material and has
 substantial lawful uses; responsibility for complying with each platform's
 terms and local law rests with the person running it. Not affiliated with
 or endorsed by Spotify, YouTube, Google, Audius, or any rights holder.
-Free, open-source (GPL-3.0), non-commercial, no accounts, no tracking —
-for personal use.
+Free, open-source (GPL-3.0 + attribution terms), non-commercial, no
+accounts, no tracking — for personal use. Fork it, learn from it, ship
+your own — just keep the credit: GPL-3.0 copyleft plus the Freebify
+Attribution Clause (see LICENSE). Clones must stay open-source, name
+the original project, and can't use the Freebify name or logo.
 
 - [DISCLAIMER.md](DISCLAIMER.md) — full legal disclaimer, why & how
 - [TERMS.md](TERMS.md) — terms of use (no warranty, liability limits)
 - [PRIVACY.md](PRIVACY.md) — privacy policy (spoiler: collects nothing)
-- [LICENSE](LICENSE) — GNU GPL v3.0
+- [LICENSE](LICENSE) — GNU GPL v3.0 + Freebify Attribution Clause
+- [NOTICE](NOTICE) — attribution requirement, in short
