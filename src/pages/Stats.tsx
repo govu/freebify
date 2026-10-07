@@ -1,7 +1,9 @@
 import { motion } from "motion/react"
-import { BarChart3, Clock3, Disc3, Play, Users } from "lucide-react"
+import { BarChart3, Clock3, Disc3, Play, Sparkles, Users } from "lucide-react"
+import { useMemo } from "react"
 import { ArtworkImg } from "../components/ArtworkImg"
 import { usePlayer } from "../store/player"
+import { availableRewind, useRewind } from "../store/rewind"
 import { dayKey, useStats } from "../store/stats"
 import { fmtCount, fmtDuration } from "../utils/format"
 
@@ -18,6 +20,9 @@ export function StatsPage() {
   const days = useStats((s) => s.days)
   const totalPlays = useStats((s) => s.totalPlays)
   const playTrack = usePlayer((s) => s.playTrack)
+  const months = useStats((s) => s.months)
+  const rewind = useMemo(() => (Object.keys(months).length ? availableRewind() : null), [months])
+  const openRewind = useRewind((s) => s.open)
 
   const topTracks = Object.values(tracks)
     .sort((a, b) => b.ms - a.ms)
@@ -45,6 +50,19 @@ export function StatsPage() {
         Your stats
       </motion.h1>
       <p className="mt-1 text-sm text-dim">Counted on this device. Never uploaded.</p>
+
+      {rewind && (
+        <motion.button
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          onClick={() => openRewind(rewind)}
+          className="mt-4 inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-bold text-black transition hover:scale-[1.03]"
+        >
+          <Sparkles size={15} />
+          Watch your {rewind.partial ? `${rewind.label} so far` : `${rewind.label} Rewind`}
+        </motion.button>
+      )}
 
       {empty ? (
         <div className="mt-16 flex flex-col items-center rounded-2xl border border-dashed border-line py-20 text-center">

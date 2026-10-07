@@ -25,18 +25,31 @@ interface ArtistAgg {
   ms: number
 }
 
+// one bucket per calendar month — powers the monthly Rewind (top tracks /
+// artists / minutes of THAT month, not the all-time aggregates)
+interface MonthAgg {
+  ms: number
+  plays: number
+  tracks: Record<string, TrackAgg>
+  artists: Record<string, ArtistAgg>
+}
+
 // caps keep a years-long library from outgrowing localStorage — entries are
 // evicted lowest-playtime-first, so the stats that survive are the ones
 // that actually matter
 const MAX_TRACKS = 300
 const MAX_ARTISTS = 200
 const MAX_DAYS = 120
+const MAX_MONTHS = 14 // a year + headroom — older months drop off the edge
+const MAX_MONTH_TRACKS = 60
+const MAX_MONTH_ARTISTS = 40
 const FLUSH_MS = 15_000
 
 interface StatsState {
   tracks: Record<string, TrackAgg>
   artists: Record<string, ArtistAgg>
   days: Record<string, number> // YYYY-MM-DD → ms listened
+  months: Record<string, MonthAgg> // YYYY-MM → per-month aggregate
   totalMs: number
   totalPlays: number
   recordMs: (t: Track, ms: number) => void
@@ -48,6 +61,8 @@ interface StatsState {
 // (UTC+1/+2) on the next day and midnight sessions on the previous one
 export const dayKey = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+export const monthKey = (d = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0)
 
@@ -77,12 +92,92 @@ function pruneDays(days: Record<string, number>): Record<string, number> {
   return out
 }
 
+function pruneMonths(months: Record<string, MonthAgg>): Record<string, MonthAgg> {
+  const keys = Object.keys(months)
+  if (keys.length <= MAX_MONTHS) return months
+  const keep = new Set(keys.sort().slice(-MAX_MONTHS))
+  const out: Record<string, MonthAgg> = {}
+  for (const k of keys) if (keep.has(k)) out[k] = months[k]
+  return out
+}
+
+// increment plays inside a month bucket — mirrors the all-time merge below
+function bumpMonthPlays(months: Record<string, MonthAgg>, mk: string, t: Track): Record<string, MonthAgg> {
+  const m = months[mk] ?? { ms: 0, plays: 0, tracks: {}, artists: {} }
+  const prevT = m.tracks[t.id]
+  const a = t.user?.name ?? "Unknown artist"
+  const prevA = m.artists[a]
+  const art = t.artwork?.["480x480"] ?? t.artwork?.["150x150"] ?? t.artwork?.fallback ?? null
+  const tracks = prune({ ...m.tracks, [t.id]: { track: slimTrack(t), plays: (prevT?.plays ?? 0) + 1, ms: prevT?.ms ?? 0 } }, MAX_MONTH_TRACKS, (v) => v.ms)
+  const artists = prune({ ...m.artists, [a]: { name: a, art: prevA?.art ?? art, plays: (prevA?.plays ?? 0) + 1, ms: prevA?.ms ?? 0 } }, MAX_MONTH_ARTISTS, (v) => v.ms)
+  return { ...months, [mk]: { ms: m.ms, plays: m.plays + 1, tracks, artists } }
+}
+
+// shared sanitizers — merge() validates the all-time records AND every
+// month bucket with the same rules
+function sanTracks(v: unknown, cap: number): Record<string, TrackAgg> {
+  const out: Record<string, TrackAgg> = {}
+  if (isObj(v)) {
+    for (const [k, a] of Object.entries(v)) {
+      if (isObj(a) && isValidTrack(a.track)) {
+        out[k] = { track: slimTrack(a.track), plays: num(a.plays), ms: num(a.ms) }
+      }
+    }
+  }
+  return prune(out, cap, (x) => x.ms)
+}
+function sanArtists(v: unknown, cap: number): Record<string, ArtistAgg> {
+  const out: Record<string, ArtistAgg> = {}
+  if (isObj(v)) {
+    for (const [k, a] of Object.entries(v)) {
+      if (isObj(a) && typeof a.name === "string") {
+        out[k] = { name: a.name, art: typeof a.art === "string" ? a.art : null, plays: num(a.plays), ms: num(a.ms) }
+      }
+    }
+  }
+  return prune(out, cap, (x) => x.ms)
+}
+
+// pulled out of the persist options so merge failures surface instead of
+// dying silently inside zustand's hydration catch
+function mergePersisted(persisted: unknown, current: StatsState): StatsState {
+  const p = isObj(persisted) ? persisted : {}
+  const days: Record<string, number> = {}
+  if (isObj(p.days)) {
+    for (const [k, v] of Object.entries(p.days)) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(k)) days[k] = num(v)
+    }
+  }
+  const months: Record<string, MonthAgg> = {}
+  if (isObj(p.months)) {
+    for (const [k, v] of Object.entries(p.months)) {
+      if (!/^\d{4}-\d{2}$/.test(k) || !isObj(v)) continue
+      months[k] = {
+        ms: num(v.ms),
+        plays: num(v.plays),
+        tracks: sanTracks(v.tracks, MAX_MONTH_TRACKS),
+        artists: sanArtists(v.artists, MAX_MONTH_ARTISTS),
+      }
+    }
+  }
+  return {
+    ...current,
+    tracks: sanTracks(p.tracks, MAX_TRACKS),
+    artists: sanArtists(p.artists, MAX_ARTISTS),
+    days: pruneDays(days),
+    months: pruneMonths(months),
+    totalMs: num(p.totalMs),
+    totalPlays: num(p.totalPlays),
+  }
+}
+
 export const useStats = create<StatsState>()(
   persist(
     (set) => ({
       tracks: {},
       artists: {},
       days: {},
+      months: {},
       totalMs: 0,
       totalPlays: 0,
 
@@ -103,9 +198,10 @@ export const useStats = create<StatsState>()(
           const prev = s.tracks[t.id]
           const a = t.user?.name ?? "Unknown artist"
           const prevA = s.artists[a]
-          const art = t.artwork?.["150x150"] ?? null
+          const art = t.artwork?.["480x480"] ?? t.artwork?.["150x150"] ?? t.artwork?.fallback ?? null
           return {
             totalPlays: s.totalPlays + 1,
+            months: pruneMonths(bumpMonthPlays(s.months, monthKey(), t)),
             tracks: prune(
               {
                 ...s.tracks,
@@ -139,6 +235,10 @@ export const useStats = create<StatsState>()(
           const dayMs = pendDays
           const tracks = { ...s.tracks }
           const artists = { ...s.artists }
+          const mk = monthKey()
+          const mo: MonthAgg = s.months[mk]
+            ? { ...s.months[mk], tracks: { ...s.months[mk].tracks }, artists: { ...s.months[mk].artists } }
+            : { ms: 0, plays: 0, tracks: {}, artists: {} }
           for (const [id, ms] of pendMs) {
             const t = pendTracks.get(id)
             if (!t) continue
@@ -146,20 +246,28 @@ export const useStats = create<StatsState>()(
             tracks[id] = { track: t, plays: prev?.plays ?? 0, ms: (prev?.ms ?? 0) + ms }
             const a = t.user?.name ?? "Unknown artist"
             const prevA = artists[a]
-            artists[a] = {
-              name: a,
-              art: prevA?.art ?? t.artwork?.["150x150"] ?? null,
-              plays: prevA?.plays ?? 0,
-              ms: (prevA?.ms ?? 0) + ms,
-            }
+            const art = prevA?.art ?? t.artwork?.["480x480"] ?? t.artwork?.["150x150"] ?? t.artwork?.fallback ?? null
+            artists[a] = { name: a, art, plays: prevA?.plays ?? 0, ms: (prevA?.ms ?? 0) + ms }
+            const prevMT = mo.tracks[id]
+            mo.tracks[id] = { track: t, plays: prevMT?.plays ?? 0, ms: (prevMT?.ms ?? 0) + ms }
+            const prevMA = mo.artists[a]
+            mo.artists[a] = { name: a, art: prevMA?.art ?? art, plays: prevMA?.plays ?? 0, ms: (prevMA?.ms ?? 0) + ms }
           }
+          mo.ms += msTotal
           pendMs = new Map()
           pendTracks = new Map()
           pendDays = 0
           pendTotal = 0
+          const months = { ...s.months }
+          months[mk] = {
+            ...mo,
+            tracks: prune(mo.tracks, MAX_MONTH_TRACKS, (v) => v.ms),
+            artists: prune(mo.artists, MAX_MONTH_ARTISTS, (v) => v.ms),
+          }
           return {
             totalMs: s.totalMs + msTotal,
             days: pruneDays({ ...s.days, [dayKey()]: (s.days[dayKey()] ?? 0) + dayMs }),
+            months: pruneMonths(months),
             tracks: prune(tracks, MAX_TRACKS, (v) => v.ms),
             artists: prune(artists, MAX_ARTISTS, (v) => v.ms),
           }
@@ -174,6 +282,7 @@ export const useStats = create<StatsState>()(
         tracks: s.tracks,
         artists: s.artists,
         days: s.days,
+        months: s.months,
         totalMs: s.totalMs,
         totalPlays: s.totalPlays,
       }),
@@ -181,41 +290,11 @@ export const useStats = create<StatsState>()(
       // non-track values) must degrade to zeroed stats, never throw inside
       // a player listener that happens to trigger the merge
       merge: (persisted, current) => {
-        const p = isObj(persisted) ? persisted : {}
-        const tracks: Record<string, TrackAgg> = {}
-        if (isObj(p.tracks)) {
-          for (const [k, v] of Object.entries(p.tracks)) {
-            if (isObj(v) && isValidTrack(v.track)) {
-              tracks[k] = { track: slimTrack(v.track), plays: num(v.plays), ms: num(v.ms) }
-            }
-          }
-        }
-        const artists: Record<string, ArtistAgg> = {}
-        if (isObj(p.artists)) {
-          for (const [k, v] of Object.entries(p.artists)) {
-            if (isObj(v) && typeof v.name === "string") {
-              artists[k] = {
-                name: v.name,
-                art: typeof v.art === "string" ? v.art : null,
-                plays: num(v.plays),
-                ms: num(v.ms),
-              }
-            }
-          }
-        }
-        const days: Record<string, number> = {}
-        if (isObj(p.days)) {
-          for (const [k, v] of Object.entries(p.days)) {
-            if (/^\d{4}-\d{2}-\d{2}$/.test(k)) days[k] = num(v)
-          }
-        }
-        return {
-          ...current,
-          tracks: prune(tracks, MAX_TRACKS, (v) => v.ms),
-          artists: prune(artists, MAX_ARTISTS, (v) => v.ms),
-          days: pruneDays(days),
-          totalMs: num(p.totalMs),
-          totalPlays: num(p.totalPlays),
+        try {
+          return mergePersisted(persisted, current)
+        } catch (e) {
+          console.error("[stats] merge failed:", e)
+          return current
         }
       },
       // v1 blobs used the same shape minus validation — plain merge suffices
@@ -288,4 +367,5 @@ if (typeof window !== "undefined") {
       useStats.getState().flush()
     } catch {}
   })
+  ;(window as unknown as { __stats?: typeof useStats }).__stats = useStats
 }

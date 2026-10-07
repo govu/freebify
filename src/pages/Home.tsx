@@ -1,6 +1,6 @@
 import { motion } from "motion/react"
-import { Play } from "lucide-react"
-import { useEffect, useState } from "react"
+import { Play, Sparkles } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
 import { apiClient, originalsOnly } from "../api/audius"
 import { prefetchStream, yt, ytAvailable } from "../api/youtube"
 import type { Playlist, Track, User } from "../api/types"
@@ -10,6 +10,8 @@ import { TrackTable } from "../components/TrackTable"
 import { ArtworkImg } from "../components/ArtworkImg"
 import { useLibrary } from "../store/library"
 import { usePlayer } from "../store/player"
+import { availableRewind, useRewind } from "../store/rewind"
+import { useStats } from "../store/stats"
 import { greeting } from "../utils/format"
 
 const fadeUp = {
@@ -47,6 +49,10 @@ export function Home() {
   const [run, setRun] = useState(0)
 
   const recents = useLibrary((s) => s.recents)
+  // Rewind card — recompute when month buckets flush; newest edition wins
+  const months = useStats((s) => s.months)
+  const rewind = useMemo(() => (Object.keys(months).length ? availableRewind() : null), [months])
+  const openRewind = useRewind((s) => s.open)
 
   useEffect(() => {
     let live = true
@@ -213,6 +219,35 @@ export function Home() {
       </div>
 
       <motion.div {...fadeUp} transition={{ duration: 0.5, delay: 0.14 }}>
+        {/* monthly Rewind — your own Wrapped, rebuilt from local stats */}
+        {rewind && (
+          <section className="mx-6 mb-10">
+            <button
+              onClick={() => openRewind(rewind)}
+              className="group relative flex w-full items-center gap-4 overflow-hidden rounded-2xl border border-line bg-card px-5 py-4 text-left transition-colors hover:bg-cardhover"
+            >
+              <div
+                className="pointer-events-none absolute inset-0 opacity-60"
+                style={{ background: "radial-gradient(60% 120% at 0% 50%, rgb(255 255 255 / 0.08), transparent 62%)" }}
+              />
+              <span className="relative grid size-11 shrink-0 place-items-center rounded-xl bg-ink text-black">
+                <Sparkles size={19} />
+              </span>
+              <span className="relative min-w-0 flex-1">
+                <p className="truncate text-[15px] font-bold">
+                  Your {rewind.partial ? `${rewind.label} so far` : `${rewind.label} Rewind`} is ready
+                </p>
+                <p className="truncate text-xs text-dim">
+                  {rewind.tracks[0] ? `#1 ${rewind.tracks[0].track.title}` : "Your month in music"} · {Math.round(rewind.ms / 60000).toLocaleString()} min
+                </p>
+              </span>
+              <span className="relative shrink-0 rounded-full bg-white/10 px-4 py-2 text-xs font-bold transition group-hover:bg-ink group-hover:text-black">
+                Watch
+              </span>
+            </button>
+          </section>
+        )}
+
         {failed && (
           <div className="mx-6 mb-6 rounded-xl border border-line bg-card px-5 py-4">
             <p className="text-sm font-semibold">Couldn't load your music</p>

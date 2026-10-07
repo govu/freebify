@@ -6,6 +6,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary"
 import { NowPlaying } from "./components/NowPlaying"
 import { PlayerBar } from "./components/PlayerBar"
 import { QueuePanel } from "./components/QueuePanel"
+import { RewindOverlay } from "./components/Rewind"
 import { Sidebar } from "./components/Sidebar"
 import { TitleBar } from "./components/TitleBar"
 import { Toast } from "./components/Toast"
@@ -14,6 +15,7 @@ import { Home } from "./pages/Home"
 import { SearchPage } from "./pages/Search"
 import { useLibrary } from "./store/library"
 import { applyVolume, usePlayer } from "./store/player"
+import { isRewindSeen, latestRewind, useRewind } from "./store/rewind"
 
 // Route-level splitting: pages lazy-load off the initial bundle (~40%
 // lighter first paint), then idle-prefetch warms every chunk while the
@@ -57,6 +59,9 @@ function useShortcuts() {
       const el = e.target as HTMLElement
       const typing = el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable
       const p = usePlayer.getState()
+      // the Rewind story owns the keyboard while it's open — Space/arrows
+      // navigate slides, not playback
+      if (useRewind.getState().active) return
       // Ctrl/Cmd+F — Spotify's in-app find: jump to search AND focus the
       // input (navigating to the same route wouldn't remount/focus it)
       if ((e.ctrlKey || e.metaKey) && e.code === "KeyF") {
@@ -158,6 +163,23 @@ function OfflineBanner() {
   )
 }
 
+// fires the monthly Rewind once per month — the story opens by itself the
+// first launch after a month closes (and stays replayable from Home/Stats)
+function RewindAutoOpen() {
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        const r = latestRewind()
+        if (r && !isRewindSeen(r.key)) useRewind.getState().open(r)
+      } catch {
+        /* a rewind surprise must never block app startup */
+      }
+    }, 3500)
+    return () => clearTimeout(t)
+  }, [])
+  return null
+}
+
 export default function App() {
   const npOpen = usePlayer((s) => s.npOpen)
   const queueOpen = usePlayer((s) => s.queueOpen)
@@ -256,6 +278,8 @@ export default function App() {
       <OfflineBanner />
       <UpdateBanner />
       <AnimatePresence>{npOpen && <NowPlaying />}</AnimatePresence>
+      <RewindOverlay />
+      <RewindAutoOpen />
     </div>
   )
 }
