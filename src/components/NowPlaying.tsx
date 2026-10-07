@@ -631,6 +631,15 @@ function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number })
         }
         localStorage.setItem("lrcpin-purged-v2", "1")
       }
+      // v3: wipe AUTO offsets/alignments only — a recDur-disagreement
+      // regression (fixed in 1.0.44) persisted ~−15s shifts that would
+      // otherwise reload forever. Manual lrcoff2- pins survive.
+      if (!localStorage.getItem("lrcpin-purged-v3")) {
+        for (const k of Object.keys(localStorage)) {
+          if (k.startsWith("lrcoffa-") || k.startsWith("lrcaln-")) localStorage.removeItem(k)
+        }
+        localStorage.setItem("lrcpin-purged-v3", "1")
+      }
       // lrcoff2- = manual (Shift+click); lrcoffa- = auto-measured —
       // both fingerprinted to their sheet; lrcoff- = v1 keys → purge
       const read = (k: string): number | null => {
@@ -898,11 +907,13 @@ export function NowPlaying() {
     // flip that loses half the time.
     const introOff = (synced: LrcLine[], recDur?: number | null) => {
       const selfEst = (synced[synced.length - 1]?.t ?? 0) + 12
-      // recDur (MXM track_length / LRCLIB record) is canonical truth — the
-      // old ±25 guard fell back to selfEst on long outros: a sheet that
-      // ends at the last vocal while the recording plays 40s more made
-      // dur-selfEst look like a 40s INTRO and shifted every line late
-      const estRecDur = recDur ? Math.max(recDur, selfEst) : selfEst
+      // recDur (MXM track_length / LRCLIB record) only anchors when it
+      // roughly AGREES with the sheet's own extent. A recDur that
+      // disagrees by >25s belongs to a different version — trusting it
+      // let dur−recDur go deep negative and shift every line ~15s EARLY
+      // (lyrics visibly skipping at 0:01). Big positive guesses get
+      // verified against measured dead air downstream instead.
+      const estRecDur = recDur && Math.abs(recDur - selfEst) <= 25 ? Math.max(recDur, selfEst) : selfEst
       const g = dur && estRecDur ? Math.max(-15, Math.min(dur - selfEst - 5, dur - estRecDur)) : 0
       return Math.abs(g) >= 2.5 ? Math.round(g * 2) / 2 : 0
     }
@@ -1586,27 +1597,26 @@ export function NowPlaying() {
           }
           dbg(`kept fallback ${fallback.toFixed(1)} over lyric-only measurements`)
         }
-        // audio truth as the last resort: dead air at the head of OUR
-        // stream. A sheet line scheduled inside it is certainly wrong —
-        // shift the sheet past it. Runs after the caption walk because a
-        // matched caption track is more precise; covers the case where
-        // timedtext is PoToken-blocked and no twin helped.
-        // audio truth as the last resort: decode the actual stream's dead
-        // air bounds and repair whichever boundary the estimate got wrong.
-        // TAIL rule: a big positive fallback attributes the duration gap
-        // to the head — proven tail air removes it (off := off − tailSil).
-        // HEAD rule: a first lyric line scheduled inside proven dead air
-        // is certainly wrong — the sheet shifts past it (off += headSil,
-        // additive to whatever crop/intro structure the guess carried).
+        // audio truth as the last resort: the probe measures dead air at
+        // both ends of OUR stream. A big positive fallback means "the
+        // video runs longer than the record" — believable as an intro
+        // only if the air actually sits at the head. Tail air (or none)
+        // means the gap was an outro/end-card and the intro guess must
+        // shrink; unverifiable gaps get capped rather than trusted.
+        // Independently, a first line landing inside proven lead-in air
+        // is certainly wrong — the sheet shifts right to the air's edge.
         const bounds = await measureAudioBounds().catch(() => null)
         if (sameTrack() && bounds) {
           let off = fallback
-          if (bounds.tailSil >= 2 && off > 1.5) {
-            off = Math.max(0, off - bounds.tailSil)
-            dbg(`tail-silence ${bounds.tailSil.toFixed(1)}s — intro guess ${fallback.toFixed(1)} trimmed to ${off.toFixed(1)}`)
+          if (off > 4) {
+            if (bounds.headSil >= 1) off = Math.min(off, bounds.headSil + 0.3)
+            else if (bounds.tailSil >= 2) off = Math.max(0, off - bounds.tailSil)
+            else off = Math.min(off, 8)
+            if (off !== fallback)
+              dbg(`intro guess ${fallback.toFixed(1)} reconciled to ${off.toFixed(1)} (head ${bounds.headSil.toFixed(1)}s tail ${bounds.tailSil.toFixed(1)}s)`)
           }
           if (bounds.headSil >= 1 && (lrc[0]?.t ?? 0) + off < bounds.headSil - 0.4) {
-            off += bounds.headSil
+            off = bounds.headSil
             dbg(`head-silence ${bounds.headSil.toFixed(1)}s — first line lands in dead air; offset ${off.toFixed(1)}`)
           }
           if (off !== fallback) {
