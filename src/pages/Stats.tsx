@@ -1,7 +1,8 @@
 import { motion } from "motion/react"
-import { BarChart3, Clock3, Disc3, Play, Sparkles, Users } from "lucide-react"
+import { BarChart3, Clock3, Disc3, Play, Users } from "lucide-react"
 import { useMemo } from "react"
 import { ArtworkImg } from "../components/ArtworkImg"
+import { Logo } from "../components/Logo"
 import { usePlayer } from "../store/player"
 import { availableRewind, useRewind } from "../store/rewind"
 import { dayKey, useStats } from "../store/stats"
@@ -59,7 +60,7 @@ export function StatsPage() {
           onClick={() => openRewind(rewind)}
           className="mt-4 inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-bold text-black transition hover:scale-[1.03]"
         >
-          <Sparkles size={15} />
+          <Logo size={15} />
           Watch your {rewind.partial ? `${rewind.label} so far` : `${rewind.label} Rewind`}
         </motion.button>
       )}

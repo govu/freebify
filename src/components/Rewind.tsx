@@ -82,13 +82,15 @@ function Cascade({ text, delay = 0, className = "" }: { text: string; delay?: nu
   )
 }
 
-function Eyebrow({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+// centered tracked type needs text-indent == letter-spacing — the trailing
+// space after the last char otherwise drags the line left of true center
+function Eyebrow({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
   return (
     <motion.p
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: EASE, delay }}
-      className="text-xs font-bold uppercase tracking-[0.32em] text-faint"
+      className={`text-xs font-bold uppercase tracking-[0.32em] text-faint ${className}`}
     >
       {children}
     </motion.p>
@@ -257,18 +259,18 @@ function IntroSlide({ data }: { data: RewindData }) {
   return (
     <div className="flex flex-col items-center text-center">
       <RewindMark />
-      <Eyebrow delay={1.15}>
+      <Eyebrow delay={1.15} className="mt-4 indent-[0.32em]">
         {data.partial ? "Freebify · still counting" : "Freebify · monthly"}
       </Eyebrow>
       <Cascade
         text={data.label.toUpperCase()}
         delay={1.28}
-        className="mt-5 block text-[19vw] font-black leading-[0.95] tracking-[-0.04em] text-ink sm:text-[7.5rem]"
+        className="mt-5 block text-[19vw] font-black leading-[0.95] tracking-[-0.04em] -indent-[0.04em] text-ink sm:text-[7.5rem]"
       />
       <Cascade
         text="REWIND"
         delay={1.58}
-        className="mt-1 block text-[11vw] font-black leading-none tracking-[0.14em] text-white/25 sm:text-6xl"
+        className="mt-1 block text-[11vw] font-black leading-none tracking-[0.14em] indent-[0.14em] text-white/25 sm:text-6xl"
       />
       <motion.p
         initial={{ opacity: 0, y: 14 }}
@@ -287,7 +289,7 @@ function MinutesSlide({ data }: { data: RewindData }) {
   const minutes = Math.round(data.ms / 60_000)
   return (
     <div className="flex flex-col items-center text-center">
-      <Eyebrow delay={0.1}>you listened for</Eyebrow>
+      <Eyebrow delay={0.1} className="indent-[0.32em]">you listened for</Eyebrow>
       <div className="mt-4 flex items-baseline gap-3">
         <CountUp to={minutes} className="text-[26vw] font-black leading-none tabular-nums tracking-[-0.05em] text-ink sm:text-[11rem]" />
         <motion.span
@@ -321,7 +323,7 @@ function ArtistSlide({ data }: { data: RewindData }) {
   const art: Artwork | null = a.art ? { "480x480": a.art } : null
   return (
     <div className="flex flex-col items-center text-center">
-      <Eyebrow delay={0.1}>your #1 artist</Eyebrow>
+      <Eyebrow delay={0.1} className="indent-[0.32em]">your #1 artist</Eyebrow>
       <motion.div
         initial={{ opacity: 0, scale: 0.86, y: 30 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -350,7 +352,7 @@ function ArtistSlide({ data }: { data: RewindData }) {
           1
         </motion.div>
       </motion.div>
-      <Cascade text={a.name} delay={0.7} className="mt-7 block max-w-full truncate text-4xl font-black tracking-tight text-ink sm:text-6xl" />
+      <Cascade text={a.name} delay={0.7} className="mt-6 block max-w-full text-4xl font-black tracking-tight text-ink sm:text-6xl" />
       <motion.p
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -418,7 +420,7 @@ function OutroSlide({ data, onClose, onPlay }: { data: RewindData; onClose: () =
   const topT = data.tracks[0]
   return (
     <div className="flex flex-col items-center text-center">
-      <Eyebrow delay={0.05}>that was</Eyebrow>
+      <Eyebrow delay={0.05} className="indent-[0.32em]">that was</Eyebrow>
       <Cascade
         text={`${data.label}.`}
         delay={0.18}
@@ -478,7 +480,7 @@ function OutroSlide({ data, onClose, onPlay }: { data: RewindData; onClose: () =
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.8, delay: 1.6 }}
-        className="mt-10 text-[11px] font-semibold uppercase tracking-[0.3em] text-faint"
+        className="mt-10 text-[11px] font-semibold uppercase tracking-[0.3em] indent-[0.3em] text-faint"
       >
         Free forever.
       </motion.p>

@@ -1,11 +1,12 @@
 import { motion } from "motion/react"
-import { Play, Sparkles } from "lucide-react"
+import { Play } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { apiClient, originalsOnly } from "../api/audius"
 import { prefetchStream, yt, ytAvailable } from "../api/youtube"
 import type { Playlist, Track, User } from "../api/types"
 import { ArtistCard, PlaylistCard, Section, TrackCard } from "../components/Cards"
 import { CardsRowSkeleton, RowsSkeleton } from "../components/Skeletons"
+import { Logo } from "../components/Logo"
 import { TrackTable } from "../components/TrackTable"
 import { ArtworkImg } from "../components/ArtworkImg"
 import { useLibrary } from "../store/library"
@@ -231,15 +232,13 @@ export function Home() {
                 style={{ background: "radial-gradient(60% 120% at 0% 50%, rgb(255 255 255 / 0.08), transparent 62%)" }}
               />
               <span className="relative grid size-11 shrink-0 place-items-center rounded-xl bg-ink text-black">
-                <Sparkles size={19} />
+                <Logo size={24} />
               </span>
               <span className="relative min-w-0 flex-1">
                 <p className="truncate text-[15px] font-bold">
                   Your {rewind.partial ? `${rewind.label} so far` : `${rewind.label} Rewind`} is ready
                 </p>
-                <p className="truncate text-xs text-dim">
-                  {rewind.tracks[0] ? `#1 ${rewind.tracks[0].track.title}` : "Your month in music"} · {Math.round(rewind.ms / 60000).toLocaleString()} min
-                </p>
+                <p className="truncate text-xs text-dim">Every play, counted on this device.</p>
               </span>
               <span className="relative shrink-0 rounded-full bg-white/10 px-4 py-2 text-xs font-bold transition group-hover:bg-ink group-hover:text-black">
                 Watch
