@@ -275,6 +275,9 @@ if (!gotLock) {
             submenu: [
               { role: "minimize" },
               { role: "zoom" },
+              // frameless windows get no green light — without this role
+              // there is no way at all to enter fullscreen on macOS
+              { role: "togglefullscreen" },
               { type: "separator" },
               { label: "Show Freebify", click: showWindow },
             ],
@@ -373,7 +376,9 @@ if (!gotLock) {
     }
 
     // production ships no application menu — the default one leaks
-    // Ctrl+R reloads and devtools accelerators into the packaged app
+    // Ctrl+R reloads and devtools accelerators into the packaged app.
+    // macOS keeps its menu (set above): without one there is no Cmd+Q,
+    // no copy/paste accelerators, no fullscreen role.
     const { session } = require("electron")
     const CSP = [
       "default-src 'self'",
@@ -401,7 +406,7 @@ if (!gotLock) {
       }
       cb({})
     })
-    if (!isDev) Menu.setApplicationMenu(null)
+    if (!isDev && process.platform !== "darwin") Menu.setApplicationMenu(null)
 
     // frameless window controls — the renderer draws its own min/max/close
     ipcMain.on("win:control", (e, action) => {

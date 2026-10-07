@@ -15,7 +15,8 @@
     "dist": "node scripts/sync-site-version.mjs && npm run build && electron-builder",
     "fetch-bin": "node scripts/fetch-bin.mjs",
     "dist:dir": "npm run build && electron-builder --dir",
-    "dist:portable": "npm run build && electron-builder --win portable"
+    "dist:portable": "npm run build && electron-builder --win portable",
+    "dist:mac": "npm run build && electron-builder --mac"
   },
   "dependencies": {
     "@xhayper/discord-rpc": "^1.5.1",
@@ -56,6 +57,14 @@
       "electron/**/*",
       "package.json"
     ],
+    "afterPack": "scripts/after-pack.cjs",
+    "protocols": [
+      {
+        "name": "Freebify",
+        "schemes": ["freebify"],
+        "role": "Viewer"
+      }
+    ],
     "win": {
       "target": [
         "portable",
@@ -76,6 +85,11 @@
     "mac": {
       "category": "public.app-category.music",
       "icon": "build/icon.png",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "darkModeSupport": true,
+      "minimumSystemVersion": "11.0",
       "target": [
         {
           "target": "dmg",
