@@ -1,5 +1,5 @@
 import { motion } from "motion/react"
-import { BadgeCheck, Play, UserX } from "lucide-react"
+import { BadgeCheck, Play, UserCheck, UserPlus, UserX } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
 import { apiClient } from "../api/audius"
@@ -8,6 +8,7 @@ import type { Playlist, Track, User } from "../api/types"
 import { PlaylistCard, Section } from "../components/Cards"
 import { HeroSkeleton, RowsSkeleton } from "../components/Skeletons"
 import { TrackTable } from "../components/TrackTable"
+import { useLibrary } from "../store/library"
 import { usePlayer } from "../store/player"
 import { fmtCount } from "../utils/format"
 
@@ -35,6 +36,8 @@ export function ArtistPage() {
   const [coverIdx, setCoverIdx] = useState(0)
   const [avatarIdx, setAvatarIdx] = useState(0)
   const playContext = usePlayer((s) => s.playContext)
+  const followed = useLibrary((s) => Boolean(s.followed[artist?.id ?? ""]))
+  const toggleFollow = useLibrary((s) => s.toggleFollow)
 
   useEffect(() => {
     if (!id) return
@@ -197,14 +200,28 @@ export function ArtistPage() {
       </div>
 
       <div className="px-6 pt-5">
-        {tracks.length > 0 && (
+        <div className="mb-6 flex items-center gap-3">
+          {tracks.length > 0 && (
+            <button
+              onClick={() => playContext(tracks, 0)}
+              className="flex items-center gap-2 rounded-full bg-white px-8 py-3 text-sm font-bold text-black shadow-lg shadow-black/50 transition hover:scale-[1.03]"
+            >
+              <Play size={16} className="fill-current" /> Play
+            </button>
+          )}
           <button
-            onClick={() => playContext(tracks, 0)}
-            className="mb-6 flex items-center gap-2 rounded-full bg-white px-8 py-3 text-sm font-bold text-black shadow-lg shadow-black/50 transition hover:scale-[1.03]"
+            onClick={() => artist && toggleFollow(artist)}
+            aria-pressed={followed}
+            className={`flex items-center gap-2 rounded-full border px-6 py-3 text-sm font-bold text-ink transition ${
+              followed
+                ? "border-white/10 bg-white/10"
+                : "border-white/25 hover:border-white"
+            }`}
           >
-            <Play size={16} className="fill-current" /> Play
+            {followed ? <UserCheck size={16} /> : <UserPlus size={16} />}
+            {followed ? "Following" : "Follow"}
           </button>
-        )}
+        </div>
 
         <h2 className="mb-2 text-xl font-bold">Popular</h2>
         {tracksError ? (

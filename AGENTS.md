@@ -62,3 +62,5 @@ GitHub: **govu** (owner) — `https://github.com/govu/freebify`. Releases are ta
 ## Commits
 
 Never add tool/agent attribution (no "Generated with", no Co-Authored-By trailers) — commits read as the repo owner's own work.
+
+Side sessions leave changes uncommitted — the main Freebify project agent batches them into the next versioned release. Don't commit or push unless the user explicitly asks.

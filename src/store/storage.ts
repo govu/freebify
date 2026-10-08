@@ -1,4 +1,4 @@
-import type { Track } from "../api/types"
+import type { Track, User } from "../api/types"
 
 // ---- resilient localStorage for zustand persist ----
 // - skips redundant writes (persist serializes on EVERY setState — with
@@ -92,6 +92,15 @@ export function slimTrack(t: Track): Track {
     description: undefined,
     user: { ...t.user, bio: undefined, cover_photo: null },
   }
+}
+
+// Slim a User for persistence — same idea as slimTrack: bios and cover
+// photos are unbounded fields we don't need on disk.
+export function slimUser(u: User): User {
+  return { ...u, bio: null, cover_photo: null }
+}
+export function isValidUser(v: unknown): v is User {
+  return isObj(v) && typeof v.id === "string" && typeof v.name === "string" && Boolean(v.id)
 }
 
 export function sanitizeTrackList(v: unknown, cap: number): Track[] {

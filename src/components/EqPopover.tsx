@@ -16,18 +16,26 @@ const PRESETS: Record<string, number[]> = {
 
 const RANGE = 12 // ±12 dB
 
+const SLEEP_MINS = [null, 15, 30, 45, 60, 90] // null = Off
+
 export function EqPopover() {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const eq = usePlayer((s) => s.eq)
   const normOn = usePlayer((s) => s.normOn)
   const fadeSecs = usePlayer((s) => s.fadeSecs)
+  const sleepAt = usePlayer((s) => s.sleepAt)
   const setEqBand = usePlayer((s) => s.setEqBand)
   const setEq = usePlayer((s) => s.setEq)
   const setNormOn = usePlayer((s) => s.setNormOn)
   const setFadeSecs = usePlayer((s) => s.setFadeSecs)
+  const setSleepTimer = usePlayer((s) => s.setSleepTimer)
   const queueOpen = usePlayer((s) => s.queueOpen)
   const [readout, setReadout] = useState<number | null>(null)
+  // which preset armed the timer — sleepAt is a deadline, not a duration,
+  // so the picked chip would otherwise lose its highlight as time passes
+  const [sleepMins, setSleepMins] = useState<number | null>(null)
+  const [, force] = useState(0)
   // the queue owns the right 320px of the window whenever it's open (inline
   // at lg+, overlay below it) — the popover must dodge it either way; clamped
   // so a very narrow window never pushes it off the LEFT edge instead
@@ -48,6 +56,14 @@ export function EqPopover() {
     return () => window.removeEventListener("pointerdown", close)
   }, [open])
 
+  // re-render on a slow beat so the "in X min" readout counts down —
+  // armed timers outlive the popover, so only tick while it's open
+  useEffect(() => {
+    if (!open || sleepAt === null) return
+    const t = window.setInterval(() => force((n) => n + 1), 30000)
+    return () => window.clearInterval(t)
+  }, [open, sleepAt])
+
   const tuned = eq.some((v) => v !== 0)
   const custom = tuned && !Object.values(PRESETS).some((p) => p.every((v, i) => v === eq[i]))
   const activePreset = Object.entries(PRESETS).find(([, p]) => p.every((v, i) => v === eq[i]))?.[0]
@@ -61,10 +77,10 @@ export function EqPopover() {
         onClick={() => setOpen((o) => !o)}
         aria-label="Equalizer"
         aria-pressed={open}
-        className={`relative transition hover:text-ink ${open || tuned || fadeSecs > 0 || !normOn ? "text-ink" : "text-dim"}`}
+        className={`relative transition hover:text-ink ${open || tuned || fadeSecs > 0 || !normOn || sleepAt !== null ? "text-ink" : "text-dim"}`}
       >
         <SlidersHorizontal size={18} />
-        {tuned && <span className="absolute -right-1 -top-1 size-1.5 rounded-full bg-ink" />}
+        {(tuned || sleepAt !== null) && <span className="absolute -right-1 -top-1 size-1.5 rounded-full bg-ink" />}
       </button>
 
       <AnimatePresence>
@@ -161,6 +177,32 @@ export function EqPopover() {
                   <span className="text-[10px] tabular-nums text-faint">{fadeSecs === 0 ? "off" : `${fadeSecs}s`}</span>
                 </div>
                 <Slider value={fadeSecs} max={12} onScrub={(v) => setFadeSecs(v)} ariaLabel="Crossfade seconds" />
+              </div>
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-xs text-dim">Sleep timer</span>
+                  <span className="text-[10px] tabular-nums text-faint">
+                    {sleepAt === null ? "off" : `in ${Math.max(1, Math.ceil((sleepAt - Date.now()) / 60000))} min`}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1">
+                  {SLEEP_MINS.map((m) => (
+                    <button
+                      key={m ?? "off"}
+                      onClick={() => {
+                        setSleepMins(m)
+                        setSleepTimer(m)
+                      }}
+                      className={`whitespace-nowrap rounded-md px-2 py-1 text-[10px] font-semibold transition ${
+                        (m === null ? sleepAt === null : sleepAt !== null && sleepMins === m)
+                          ? "bg-white text-black"
+                          : "text-dim hover:bg-white/10 hover:text-ink"
+                      }`}
+                    >
+                      {m === null ? "Off" : m}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </motion.div>

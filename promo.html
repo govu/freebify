@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0a0a0a; --ink:#f2f2f2; --dim:#8f8f8f; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1920px; height:1032px; overflow:hidden; background:var(--bg); }
+  body { font-family:"Inter Tight","Inter",system-ui,sans-serif; color:var(--ink);
+         -webkit-font-smoothing:antialiased; position:relative; }
+  .scene { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+
+  #grainCv { position:absolute; inset:0; z-index:70; pointer-events:none;
+    opacity:.05; mix-blend-mode:overlay; }
+  .vig { position:absolute; inset:0; z-index:55; pointer-events:none;
+    background:radial-gradient(115% 95% at 50% 45%, transparent 62%, rgba(0,0,0,.55) 100%); }
+
+  /* ---------- A+B: the real mark ---------- */
+  #logoMain { position:absolute; left:50%; top:50%; width:340px; height:340px;
+    margin:-170px 0 0 -170px; z-index:2; will-change:transform,opacity; }
+  #logoMain path, #logoMain circle { stroke:#f2f2f2; }
+  #aArc { stroke-width:6.5; stroke-linecap:round; fill:none;
+          stroke-dasharray:100; stroke-dashoffset:100;
+          transform-origin:center; transform-box:view-box; }
+  #aRing { stroke-width:6.5; fill:none;
+           stroke-dasharray:100; stroke-dashoffset:100;
+           transform-origin:center; transform-box:view-box; }
+  #aDot { fill:#f2f2f2; stroke:none; transform-origin:center; transform-box:fill-box; }
+  #aPulse { position:absolute; left:50%; top:50%; width:120px; height:120px;
+    margin:-60px 0 0 -60px; border-radius:50%; border:2px solid rgba(255,255,255,.5);
+    z-index:1; opacity:0; }
+  #aHalo { position:absolute; left:50%; top:50%; width:560px; height:560px;
+    margin:-280px 0 0 -280px; border-radius:50%; z-index:1;
+    background:radial-gradient(circle, rgba(255,255,255,.07), transparent 62%); opacity:0; }
+
+  #bGroup { position:absolute; inset:0; z-index:3; opacity:0; }
+  #wordWrap { position:absolute; left:50%; top:0; bottom:0;
+    margin-left:-296px; display:flex; align-items:center; will-change:transform; }
+  .wordMask { overflow:hidden; padding:.1em .05em; }
+  #bWord { display:flex; }
+  #bWord span { display:block; font-size:172px; font-weight:900; letter-spacing:-.05em;
+    text-transform:uppercase; will-change:transform,filter; }
+
+  /* ---------- C: two beats ---------- */
+  #sC { z-index:5; }
+  #st1 { position:absolute; display:flex; overflow:hidden; padding:.1em .06em; }
+  #st1 span { display:block; font-size:150px; font-weight:900; letter-spacing:-.045em;
+    text-transform:uppercase; will-change:transform,filter; white-space:pre; }
+  #st2 { position:absolute; display:flex; align-items:baseline; gap:34px; }
+  #st2 .w { display:block; font-size:96px; font-weight:800; letter-spacing:-.03em;
+    text-transform:uppercase; color:var(--dim); opacity:0; filter:blur(10px);
+    will-change:transform,filter,opacity; }
+  #st2 .ads { font-size:190px; font-weight:900; letter-spacing:-.045em; color:var(--ink);
+    transform-origin:50% 80%; }
+
+  /* ---------- E: lyric macro ---------- */
+  #sE { z-index:6; flex-direction:column; gap:36px; }
+  #mac1 { font-size:128px; font-weight:900; letter-spacing:-.04em;
+    opacity:0; filter:blur(26px); transform:scale(.94); will-change:transform,filter,opacity; }
+  #mac2 { font-size:46px; font-weight:700; color:#333; letter-spacing:-.02em;
+    opacity:0; filter:blur(10px); will-change:transform,filter,opacity; }
+
+  /* ---------- F: end ---------- */
+  #sF { z-index:8; flex-direction:column; gap:44px; opacity:0; }
+  .fMark { display:flex; align-items:center; gap:38px; }
+  .fLogo { width:118px; height:118px; transform-origin:center; will-change:transform; }
+  #fWord { display:flex; }
+  #fWord span { display:block; font-size:104px; font-weight:900; letter-spacing:-.05em;
+    text-transform:uppercase; will-change:transform,filter; }
+  .fWordMask { overflow:hidden; padding:.1em .04em .06em; }
+  .fSub { font-size:27px; color:var(--dim); letter-spacing:.34em; text-transform:uppercase;
+    font-weight:600; }
+
+  #fadeBlack { position:absolute; inset:0; background:#000; z-index:75; opacity:0; pointer-events:none; }
+</style></head>
+<body>
+
+<div id="aHalo"></div>
+<div id="aPulse"></div>
+
+<svg id="logoMain" viewBox="0 0 64 64">
+  <path id="aArc" pathLength="100" d="M55.7 44.7A25.3 25.3 0 1 1 32 6.7"/>
+  <circle id="aRing" pathLength="100" cx="32" cy="32" r="13.3"/>
+  <circle id="aDot" cx="32" cy="32" r="4.5"/>
+</svg>
+
+<div id="bGroup">
+  <div id="wordWrap"><div class="wordMask"><div id="bWord"></div></div></div>
+</div>
+
+<div class="scene" id="sC">
+  <div id="st1"></div>
+  <div id="st2"><span class="w" id="w1">NONE</span><span class="w" id="w2">OF THE</span><span class="w ads" id="w3">ADS.</span></div>
+</div>
+
+<div class="scene" id="sE">
+  <div id="mac1">every line lights up</div>
+  <div id="mac2">right when it&rsquo;s sung</div>
+</div>
+
+<div class="scene" id="sF">
+  <div class="fMark">
+    <svg class="fLogo" id="fLogo" viewBox="0 0 64 64" fill="none">
+      <path d="M55.7 44.7A25.3 25.3 0 1 1 32 6.7" stroke="#f2f2f2" stroke-width="6.5" stroke-linecap="round"/>
+      <circle cx="32" cy="32" r="13.3" stroke="#f2f2f2" stroke-width="6.5"/>
+      <circle cx="32" cy="32" r="4.5" fill="#f2f2f2"/>
+    </svg>
+    <div class="fWordMask"><div id="fWord"></div></div>
+  </div>
+  <div class="fSub" id="fSub">Free forever</div>
+</div>
+
+<div class="vig"></div>
+<canvas id="grainCv" width="1920" height="1032"></canvas>
+<div id="fadeBlack"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.7/gsap.min.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+gsap.defaults({ ease: "expo.out" });
+
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const gcv = $("#grainCv"), gctx = gcv.getContext("2d");
+const TILE = 240;
+const gtile = document.createElement("canvas"); gtile.width = gtile.height = TILE;
+const gtx = gtile.getContext("2d");
+const gimg = gtx.createImageData(TILE, TILE);
+function grain(frame){
+  const rnd = mulberry32(frame * 7919 + 13);
+  const d = gimg.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const v = rnd() * 255;
+    d[i] = d[i+1] = d[i+2] = v; d[i+3] = 255;
+  }
+  gtx.putImageData(gimg, 0, 0);
+  gctx.clearRect(0, 0, 1920, 1032);
+  gctx.fillStyle = gctx.createPattern(gtile, "repeat");
+  gctx.fillRect(0, 0, 1920, 1032);
+}
+
+const splitIn = (el, txt) => txt.split("").forEach(ch => {
+  const s = document.createElement("span"); s.textContent = ch; el.appendChild(s);
+});
+splitIn($("#bWord"), "FREEBIFY");
+splitIn($("#st1"), "ALL THE MUSIC.");
+splitIn($("#fWord"), "FREEBIFY");
+gsap.set(["#bWord span", "#st1 span", "#fWord span"], { yPercent: 118, filter: "blur(8px)" });
+
+const lerp = (a, b, k) => a + (b - a) * k;
+const clamp01 = v => Math.min(1, Math.max(0, v));
+
+/* per-frame: grain only — everything else is timeline choreography */
+function ambient(t, frame) {
+  grain(frame);
+}
+
+/* ================= TIMELINE (18.6s) ================= */
+const tl = gsap.timeline({ paused: true });
+
+/* ---- A: the mark assembles — strokes draw in place, mark grows, dot lands ---- */
+tl.fromTo("#logoMain", { scale: .82, opacity: 0 },
+  { scale: 1, opacity: 1, duration: 1.25, ease: "back.out(1.45)" }, .35)
+  .to("#aRing", { strokeDashoffset: 0, duration: .85, ease: "power2.inOut" }, .5)
+  .to("#aArc", { strokeDashoffset: 0, duration: 1.0, ease: "power2.inOut" }, .9)
+  .fromTo("#aDot", { scale: 0 }, { scale: 1, duration: .5, ease: "back.out(2.6)" }, 1.95)
+  .fromTo("#aPulse", { opacity: .45, scale: .5 }, { opacity: 0, scale: 3.4, duration: 1.0, ease: "power2.out" }, 1.95)
+  .to("#aHalo", { opacity: 1, duration: .9 }, 2.3);
+
+/* ---- B: glide + cascade with overshoot, then slow drift ---- */
+tl.to("#logoMain", { x: -448, scale: .56, duration: 1.15, ease: "power4.inOut" }, 3.05)
+  .set("#bGroup", { opacity: 1 }, 3.05)
+  .to("#bWord span", { yPercent: 0, filter: "blur(0px)", duration: .85, stagger: .05, ease: "back.out(1.7)" }, 3.35)
+  .to("#bWord", { letterSpacing: "-.035em", duration: 1.25, ease: "sine.inOut" }, 4.0)
+  .to("#wordWrap", { x: 12, duration: 1.6, ease: "sine.inOut" }, 4.3)
+  .to("#logoMain", { x: -442, duration: 1.6, ease: "sine.inOut" }, 4.3);
+
+/* ---- exit overlapped with st1 entrance ---- */
+tl.to(["#logoMain", "#bGroup", "#aHalo"], { opacity: 0, filter: "blur(8px)", duration: .65, ease: "power2.inOut" }, 5.55)
+  .set(["#logoMain", "#bGroup", "#aHalo"], { display: "none" }, 6.2);
+
+/* ---- C: per-letter claim → counterclaim, ADS lands with weight ---- */
+tl.to("#st1 span", { yPercent: 0, filter: "blur(0px)", duration: .7, stagger: .028, ease: "back.out(1.6)" }, 5.95)
+  .to("#st1", { x: 10, duration: 1.5, ease: "sine.inOut" }, 6.9)
+  .to("#st1 span", { yPercent: -118, filter: "blur(7px)", duration: .5, stagger: .02, ease: "power2.in" }, 7.95);
+
+tl.to("#w1", { opacity: 1, filter: "blur(0px)", y: 0, duration: .55 }, 8.55)
+  .to("#w2", { opacity: 1, filter: "blur(0px)", duration: .55 }, 8.75)
+  .fromTo("#w3", { opacity: 0, scale: 1.5, filter: "blur(18px)" },
+    { opacity: 1, scale: 1, filter: "blur(0px)", duration: .6, ease: "back.out(1.9)" }, 9.0)
+  .to("#st2", { x: -8, duration: 1.3, ease: "sine.inOut" }, 9.5)
+  .to("#st2", { opacity: 0, filter: "blur(10px)", duration: .5, ease: "power2.in" }, 10.35)
+  .set("#sC", { display: "none" }, 10.9);
+
+/* ---- E: the feature, as pure type — rack-focus bloom ---- */
+tl.fromTo("#mac1", { opacity: 0, scale: .94, filter: "blur(26px)" },
+  { opacity: 1, scale: 1, filter: "blur(0px)", duration: 1.05, ease: "power2.out" }, 10.7)
+  .fromTo("#mac2", { opacity: 0, y: 14, filter: "blur(12px)" },
+    { opacity: 1, y: 0, filter: "blur(5px)", duration: .8, ease: "power2.out" }, 11.35)
+  .to(["#mac1", "#mac2"], { opacity: 0, y: -26, filter: "blur(12px)", duration: .55, ease: "power2.in" }, 13.15)
+  .set("#sE", { display: "none" }, 13.7);
+
+/* ---- F: mark springs in, name cascades, one line ---- */
+tl.to("#sF", { opacity: 1, duration: .4 }, 13.5)
+  .fromTo("#fLogo", { scale: .82, opacity: 0 }, { scale: 1, opacity: 1, duration: .8, ease: "back.out(1.55)" }, 13.6)
+  .to("#fWord span", { yPercent: 0, filter: "blur(0px)", duration: .7, stagger: .04, ease: "back.out(1.6)" }, 13.8)
+  .fromTo("#fSub", { opacity: 0, letterSpacing: ".6em" }, { opacity: 1, letterSpacing: ".34em", duration: 1.1, ease: "sine.inOut" }, 14.4)
+  .to("#fadeBlack", { opacity: 1, duration: 1.0, ease: "sine.inOut" }, 16.9);
+
+const TOTAL = 17.8;
+tl.to({}, { duration: .05 }, TOTAL);
+
+let __frame = 0;
+window.__seek = (t) => { tl.seek(Math.min(t, TOTAL), false); ambient(t, __frame++); };
+window.__seek(0);
+</script>
+</body></html>

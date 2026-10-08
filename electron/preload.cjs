@@ -82,5 +82,9 @@ contextBridge.exposeInMainWorld("freebify", {
     installUpdate: () => ipcRenderer.invoke("app:install-update"),
     updateStatus: () => ipcRenderer.invoke("app:update-status"),
     checkUpdate: () => ipcRenderer.invoke("app:check-update"),
+    login: {
+      get: () => ipcRenderer.invoke("app:get-login"),
+      set: (v) => ipcRenderer.invoke("app:set-login", v),
+    },
   },
 })

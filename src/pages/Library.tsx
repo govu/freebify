@@ -2,7 +2,7 @@ import { motion } from "motion/react"
 import { Heart, Play, Plus, Search } from "lucide-react"
 import { useShallow } from "zustand/react/shallow"
 import { Link, useNavigate } from "react-router-dom"
-import { LocalPlaylistCard, Section, TrackCard } from "../components/Cards"
+import { ArtistCard, LocalPlaylistCard, Section, TrackCard } from "../components/Cards"
 import { ImportPlaylist } from "../components/ImportPlaylist"
 import { TrackTable } from "../components/TrackTable"
 import { useLibrary } from "../store/library"
@@ -13,6 +13,9 @@ export function LibraryPage() {
   // page on ANY library write (recents update on every track play)
   const likedTracks = useLibrary(
     useShallow((s) => s.likedOrder.map((id) => s.liked[id]).filter(Boolean))
+  )
+  const followedArtists = useLibrary(
+    useShallow((s) => s.followedOrder.map((id) => s.followed[id]).filter(Boolean))
   )
   const recents = useLibrary((s) => s.recents)
   const playlists = useLibrary((s) => s.playlists)
@@ -101,6 +104,16 @@ export function LibraryPage() {
           </motion.div>
         )}
       </div>
+
+      {followedArtists.length > 0 && (
+        <div className="mt-10">
+          <Section title="Artists you follow">
+            {followedArtists.map((u) => (
+              <ArtistCard key={u.id} u={u} />
+            ))}
+          </Section>
+        </div>
+      )}
 
       {recents.length > 0 && (
         <div className="mt-10">

@@ -1,0 +1,46 @@
+name: CI
+
+# gate every change BEFORE it can reach a release tag — release.yml only
+# runs on v* pushes, so a broken commit used to land on main silently
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    name: Lint + typecheck + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+
+  # the bundled yt-dlp is a hard runtime dependency — a broken download or
+  # an upstream release that doesn't run would silently kill ALL playback.
+  # verify the binary actually executes on both unix flavors + windows
+  bins:
+    name: yt-dlp smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run fetch-bin
+      - name: Verify the binary runs
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then ./bin/yt-dlp.exe --version; else ./bin/yt-dlp --version; fi
+        shell: bash

@@ -1,8 +1,9 @@
 import { motion } from "motion/react"
-import { FolderOpen, Gamepad2, Heart, Infinity as InfinityIcon, Keyboard, Scale, Trash2 } from "lucide-react"
+import { Download, FolderOpen, Gamepad2, Heart, Infinity as InfinityIcon, Keyboard, Power, Scale, Trash2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useLibrary } from "../store/library"
 import { notify, usePlayer } from "../store/player"
+import { useStats } from "../store/stats"
 
 interface AppInfo {
   version: string
@@ -38,6 +39,7 @@ export function SettingsPage() {
     }
   })
   const [checking, setChecking] = useState(false)
+  const [loginItem, setLoginItem] = useState(false)
 
   const checkUpdates = async () => {
     const fn = window.freebify?.app?.checkUpdate
@@ -64,8 +66,16 @@ export function SettingsPage() {
     window.dispatchEvent(new CustomEvent("freebify:discord-toggle", { detail: next }))
   }
 
+  const toggleLogin = () => {
+    const next = !loginItem
+    void window.freebify?.app?.login?.set(next).then((ok) => {
+      if (ok) setLoginItem(next)
+    })
+  }
+
   useEffect(() => {
     window.freebify?.app?.info().then(setInfo).catch(() => {})
+    window.freebify?.app?.login?.get().then(setLoginItem).catch(() => {})
   }, [])
 
   const clearCache = () => {
@@ -80,6 +90,24 @@ export function SettingsPage() {
     } catch {
       notify("Couldn't clear the cache")
     }
+  }
+
+  const exportData = () => {
+    try {
+      const { liked, likedOrder, recents, playlists } = useLibrary.getState()
+      const { tracks, artists, days, months, totalMs, totalPlays } = useStats.getState()
+      const blob = new Blob([JSON.stringify({
+        app: "freebify", version: 1, exportedAt: new Date().toISOString(),
+        library: { liked, likedOrder, recents, playlists },
+        stats: { tracks, artists, days, months, totalMs, totalPlays },
+      }, null, 0)], { type: "application/json" })
+      const a = document.createElement("a")
+      a.href = URL.createObjectURL(blob)
+      a.download = `freebify-backup-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(a.href)
+      notify("Backup exported")
+    } catch { notify("Export failed") }
   }
 
   return (
@@ -126,6 +154,26 @@ export function SettingsPage() {
               />
             </span>
           </button>
+          {window.freebify?.app?.login && (
+            <button
+              onClick={toggleLogin}
+              aria-pressed={loginItem}
+              className="mt-3 flex w-full items-center gap-3 text-left"
+            >
+              <Power size={16} className={loginItem ? "text-ink" : "text-faint"} />
+              <span className="flex-1">
+                <span className="block text-sm font-medium">Open Freebify when you sign in</span>
+                <span className="block text-xs text-dim">Start with your desktop, ready in the background</span>
+              </span>
+              <span className={`relative h-5 w-9 rounded-full transition-colors ${loginItem ? "bg-ink" : "bg-hover"}`}>
+                <motion.span
+                  layout
+                  transition={{ type: "spring", stiffness: 500, damping: 34 }}
+                  className={`absolute top-1 size-3 rounded-full ${loginItem ? "left-5 bg-black" : "left-1 bg-dim"}`}
+                />
+              </span>
+            </button>
+          )}
         </section>
 
         {/* library */}
@@ -134,12 +182,20 @@ export function SettingsPage() {
           <p className="text-sm text-dim">
             {Object.keys(liked).length} liked songs · {playlists.length} playlists — stored locally on this device.
           </p>
-          <button
-            onClick={clearCache}
-            className="mt-4 flex items-center gap-2 rounded-full border border-line px-4 py-2 text-xs font-semibold text-dim transition hover:border-dim hover:text-ink"
-          >
-            <Trash2 size={13} /> Clear artwork & lyrics cache
-          </button>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              onClick={clearCache}
+              className="flex items-center gap-2 rounded-full border border-line px-4 py-2 text-xs font-semibold text-dim transition hover:border-dim hover:text-ink"
+            >
+              <Trash2 size={13} /> Clear artwork & lyrics cache
+            </button>
+            <button
+              onClick={exportData}
+              className="flex items-center gap-2 rounded-full border border-line px-4 py-2 text-xs font-semibold text-dim transition hover:border-dim hover:text-ink"
+            >
+              <Download size={13} /> Export library & stats
+            </button>
+          </div>
         </section>
 
         {/* shortcuts */}

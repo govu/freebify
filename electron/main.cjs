@@ -449,6 +449,14 @@ if (!gotLock) {
       // builds don't show a control that always fails
       canUpdate: app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR,
     }))
+    // launch at login — a no-op on Linux, but harmless there
+    ipcMain.handle("app:get-login", () => {
+      try { return app.getLoginItemSettings().openAtLogin } catch { return false }
+    })
+    ipcMain.handle("app:set-login", (_e, v) => {
+      try { app.setLoginItemSettings({ openAtLogin: Boolean(v) }); return true }
+      catch { return false }
+    })
     ipcMain.on("app:openLogs", () => {
       try {
         fs.mkdirSync(logsDir(), { recursive: true })

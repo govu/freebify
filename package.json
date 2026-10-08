@@ -11,6 +11,7 @@
     "dev:electron": "concurrently -k \"vite --port 5173 --strictPort\" \"wait-on http://127.0.0.1:5173 && electron . --dev\"",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test": "vitest run",
     "preview": "vite preview",
     "dist": "node scripts/sync-site-version.mjs && npm run build && electron-builder",
     "fetch-bin": "node scripts/fetch-bin.mjs",
@@ -33,6 +34,7 @@
     "concurrently": "^10.0.5",
     "electron": "^44.5.1",
     "electron-builder": "^26.15.3",
+    "happy-dom": "^20.14.5",
     "lucide-react": "^1.51.0",
     "motion": "^14.0.0",
     "oxlint": "^1.81.0",
@@ -42,6 +44,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
     "vite": "^8.3.0",
+    "vitest": "^5.0.3",
     "wait-on": "^9.5.1",
     "zustand": "^5.0.15"
   },

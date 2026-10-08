@@ -83,6 +83,10 @@ declare global {
         installUpdate: () => Promise<void>
         updateStatus: () => Promise<{ pending: string | null; manual?: boolean }>
         checkUpdate: () => Promise<{ pending?: string | null; latest?: string; update?: boolean; checking?: boolean; failed?: boolean }>
+        login?: {
+          get: () => Promise<boolean>
+          set: (v: boolean) => Promise<boolean>
+        }
       }
     }
   }

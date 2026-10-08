@@ -1,7 +1,7 @@
 import { create } from "zustand"
 import { createJSONStorage, persist } from "zustand/middleware"
-import type { Track } from "../api/types"
-import { isObj, isValidTrack, repairTrack, safeStorage, sanitizeTrackList, slimTrack } from "./storage"
+import type { Track, User } from "../api/types"
+import { isObj, isValidTrack, isValidUser, repairTrack, safeStorage, sanitizeTrackList, slimTrack, slimUser } from "./storage"
 
 export interface LocalPlaylist {
   id: string
@@ -15,8 +15,12 @@ interface LibraryState {
   likedOrder: string[]
   recents: Track[]
   playlists: LocalPlaylist[]
+  followed: Record<string, User>
+  followedOrder: string[]
   toggleLike: (t: Track) => void
   isLiked: (id: string) => boolean
+  toggleFollow: (u: User) => void
+  isFollowing: (id: string) => boolean
   addRecent: (t: Track) => void
   likedTracks: () => Track[]
   createPlaylist: (name?: string) => string
@@ -44,13 +48,14 @@ function nextPlaylistName(playlists: LocalPlaylist[]): string {
 }
 
 // shared by migrate + merge — corrupted blobs could carry duplicate ids,
-// and likedTracks() maps this straight into React keys
-function cleanOrder(v: unknown, liked: Record<string, Track>): string[] {
+// and likedTracks() maps this straight into React keys. Works for any id
+// map (liked tracks, followed artists).
+function cleanOrder(v: unknown, map: Record<string, unknown>): string[] {
   const out: string[] = []
   const seen = new Set<string>()
-  if (!Array.isArray(v)) return Object.keys(liked)
+  if (!Array.isArray(v)) return Object.keys(map)
   for (const id of v) {
-    if (typeof id === "string" && Boolean(liked[id]) && !seen.has(id)) {
+    if (typeof id === "string" && Boolean(map[id]) && !seen.has(id)) {
       seen.add(id)
       out.push(id)
     }
@@ -65,6 +70,8 @@ export const useLibrary = create<LibraryState>()(
       likedOrder: [],
       recents: [],
       playlists: [],
+      followed: {},
+      followedOrder: [],
 
       toggleLike: (t) =>
         set((s) => {
@@ -80,6 +87,24 @@ export const useLibrary = create<LibraryState>()(
         }),
 
       isLiked: (id) => Boolean(get().liked[id]),
+
+      toggleFollow: (u) =>
+        set((s) => {
+          if (s.followed[u.id]) {
+            const followed = { ...s.followed }
+            delete followed[u.id]
+            return { followed, followedOrder: s.followedOrder.filter((id) => id !== u.id) }
+          }
+          // hard cap — a runaway "follow everything" session shouldn't grow
+          // localStorage without bound
+          if (s.followedOrder.length >= 500) return s
+          return {
+            followed: { ...s.followed, [u.id]: u },
+            followedOrder: [u.id, ...s.followedOrder],
+          }
+        }),
+
+      isFollowing: (id) => Boolean(get().followed[id]),
 
       addRecent: (t) =>
         set((s) => ({
@@ -132,7 +157,14 @@ export const useLibrary = create<LibraryState>()(
           playlists: s.playlists.map((p) => {
             if (p.id !== id) return p
             const have = new Set(p.tracks.map((t) => t.id))
-            const add = tracks.filter((t) => !have.has(t.id))
+            // `have` doubles as the seen-set — the incoming array itself can
+            // carry duplicates (e.g. a queue with the same song twice), and
+            // each kept id must close the door behind it
+            const add = tracks.filter((t) => {
+              if (have.has(t.id)) return false
+              have.add(t.id)
+              return true
+            })
             return add.length ? { ...p, tracks: [...p.tracks, ...add] } : p
           }),
         })),
@@ -167,6 +199,8 @@ export const useLibrary = create<LibraryState>()(
         likedOrder: s.likedOrder,
         recents: s.recents.map(slimTrack),
         playlists: s.playlists.map((p) => ({ ...p, tracks: p.tracks.map(slimTrack) })),
+        followed: Object.fromEntries(Object.entries(s.followed).map(([k, u]) => [k, slimUser(u)])),
+        followedOrder: s.followedOrder,
       }),
       // v0 → v1: rebuild order if missing, drop invalid tracks
       migrate: (persisted) => {
@@ -176,6 +210,13 @@ export const useLibrary = create<LibraryState>()(
               Object.entries(s.liked)
                 .filter(([, v]) => isValidTrack(v))
                 .map(([k, t]) => [k, slimTrack(repairTrack(t as Track))]),
+            )
+          : {}
+        const followed = isObj(s.followed)
+          ? Object.fromEntries(
+              Object.entries(s.followed)
+                .filter(([, v]) => isValidUser(v))
+                .map(([k, u]) => [k, slimUser(u as User)]),
             )
           : {}
         return {
@@ -190,6 +231,8 @@ export const useLibrary = create<LibraryState>()(
               createdAt: typeof p.createdAt === "number" ? p.createdAt : Date.now(),
               tracks: sanitizeTrackList(p.tracks, 2000),
             })),
+          followed,
+          followedOrder: cleanOrder(s.followedOrder, followed),
         }
       },
       // every hydration (any version) — validate the shape, never trust it
@@ -204,6 +247,13 @@ export const useLibrary = create<LibraryState>()(
                 .map(([k, t]) => [k, repairTrack(t as Track)]),
             )
           : current.liked
+        const followed = isObj(persisted.followed)
+          ? Object.fromEntries(
+              Object.entries(persisted.followed)
+                .filter(([, v]) => isValidUser(v))
+                .map(([k, u]) => [k, slimUser(u as User)]),
+            )
+          : (current.followed ?? {})
         return {
           ...current,
           liked,
@@ -217,6 +267,8 @@ export const useLibrary = create<LibraryState>()(
               createdAt: typeof p.createdAt === "number" ? p.createdAt : Date.now(),
               tracks: sanitizeTrackList(p.tracks, 2000),
             })),
+          followed,
+          followedOrder: cleanOrder(persisted.followedOrder, followed),
         }
       },
       onRehydrateStorage: () => (_s, err) => {

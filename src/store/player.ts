@@ -118,6 +118,7 @@ interface PlayerState {
   eq: number[] // 7-band dB gains — flat when all zero
   normOn: boolean // loudness normalization (per-track measured gain)
   fadeSecs: number // crossfade seconds — 0 = off
+  sleepAt: number | null // sleep timer — unix ms when playback pauses, null = off
 
   playContext: (tracks: Track[], index: number) => void
   playTrack: (t: Track, context?: Track[]) => void
@@ -136,6 +137,7 @@ interface PlayerState {
   setEq: (gains: number[]) => void
   setNormOn: (v: boolean) => void
   setFadeSecs: (v: number) => void
+  setSleepTimer: (mins: number | null) => void
   enqueue: (t: Track) => void
   playNextUp: (t: Track) => void
   removeAt: (i: number) => void
@@ -648,6 +650,7 @@ export const usePlayer = create<PlayerState>()(
         eq: [0, 0, 0, 0, 0, 0, 0],
         normOn: true,
         fadeSecs: 4,
+        sleepAt: null,
         autoplay: true,
 
         playContext: (tracks, index) => {
@@ -1011,6 +1014,19 @@ export const usePlayer = create<PlayerState>()(
           })()
         },
         setAutoplay: (v) => set({ autoplay: v }),
+        setSleepTimer: (mins) => {
+          if (sleepTimer) {
+            clearTimeout(sleepTimer)
+            sleepTimer = null
+          }
+          if (mins === null || mins <= 0) {
+            set({ sleepAt: null })
+            return
+          }
+          const at = Date.now() + mins * 60000
+          set({ sleepAt: at })
+          sleepTimer = window.setTimeout(fireSleepTimer, at - Date.now())
+        },
       }
     },
 )
@@ -1613,6 +1629,19 @@ window.setInterval(() => {
   if (usePlayer.getState().isPlaying) saveResume()
 }, 8000)
 window.addEventListener("beforeunload", saveResume)
+
+// ---- sleep timer ----
+// session-only on purpose — persisting sleepAt would restore a stale
+// timestamp that pauses playback at some random moment later
+let sleepTimer: number | null = null
+
+function fireSleepTimer() {
+  sleepTimer = null
+  const s = usePlayer.getState()
+  usePlayer.setState({ sleepAt: null })
+  if (s.isPlaying) s.toggle()
+  notify("Sleep timer — playback paused")
+}
 
 // ---- OS media controls (Windows SMTC / hardware media keys) ----
 function updateMediaSession(track: Track) {

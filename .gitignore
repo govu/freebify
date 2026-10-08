@@ -30,3 +30,12 @@ out
 # Bundled binaries (fetch via: npm run fetch-bin)
 bin
 tmp-*
+
+# Agent/tool dirs + media artifacts (not source)
+agent/
+.agents/
+.claude/
+videos/
+shots-out/
+*.mp4
+skills-lock.json
