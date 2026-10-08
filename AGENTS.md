@@ -51,6 +51,15 @@ Two engines behind one store: singleton `<audio>` (Audius + yt-dlp streams) and 
 
 Strictly neutral (user request): blacks/grays only (`--color-*` tokens in index.css), white = the single accent (buttons, progress, active states). No decorative color, no gradients except subtle white glows and the Now Playing backdrop (dominant artwork color at low opacity via `src/utils/color.ts`).
 
+**Anti-slop rules (hard — user has rejected these on sight):**
+
+- **No decorative tracked-out micro-labels.** Tiny uppercase + wide `tracking-*` text floating in a corner ("SO FAR", "PREMIUM", "EST. 2026"-style filler) reads as AI slop. If a label carries no information, delete it — don't shrink it. Eyebrow labels are allowed ONLY where they name a real section/content relationship, and centered tracked text MUST carry `indent-[<tracking>]` to optically center.
+- **No generic iconography.** No Sparkles, Wand, Rocket, Zap, Star-as-brand, or template-clipart in badges/teasers. The brand mark (`components/Logo.tsx`) is the only decorative symbol.
+- **No spoilers.** Teaser cards never reveal the content they're teasing (no #1 artist/track/counts before the click).
+- **Compact lockups.** Mark + label sit tight (`mt-4`-ish), never floating with dead air. No `truncate` on text that animates in (clips mid-cascade). Stagger/cascade animates characters, not whole duplicated layers — no echo trails or duplicate blurred text.
+- **Type scale = hierarchy.** Big numbers/headlines carry the drama; body copy stays quiet. Don't stack three shouting sizes in one view.
+- **Motion is causal.** Elements enter/exit because something pushes them (displacement, focus-pull), not generic fades/slides pasted on.
+
 ## Shortcuts
 
 Space play/pause · ←/→ seek 10s · M mute · L like · N now-playing overlay.

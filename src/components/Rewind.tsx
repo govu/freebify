@@ -208,13 +208,10 @@ function RewindStory({ data, onClose }: { data: RewindData; onClose: () => void 
             </div>
           ))}
         </div>
-        <span className="ml-3 text-[10px] font-bold uppercase tracking-[0.3em] text-faint">
-          {data.partial ? t("rewind.tagPartial") : t("rewind.tag")}
-        </span>
         <button
           onClick={onClose}
           aria-label={t("rewind.close")}
-          className="ml-2 grid size-8 place-items-center rounded-full text-dim transition hover:bg-white/10 hover:text-ink"
+          className="ml-3 grid size-8 place-items-center rounded-full text-dim transition hover:bg-white/10 hover:text-ink"
         >
           <X size={16} />
         </button>

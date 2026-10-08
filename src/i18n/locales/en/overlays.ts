@@ -46,8 +46,7 @@ export default {
   "rewind.playsAcross": "{time} — {plays} plays across {tracks} tracks",
   "rewind.prev": "Previous",
   "rewind.prevSlide": "Previous slide",
-  "rewind.tag": "rewind",
-  "rewind.tagPartial": "so far",
+
   "rewind.thatWas": "that was",
   "rewind.title": "{month} Rewind",
   "rewind.topArtist": "your #1 artist",
