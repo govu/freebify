@@ -40,6 +40,9 @@ let thumbarPlaying = false
 // progress pushes arrive ~40x per track and flooding ITaskbarList3 makes
 // the OS drop repaints silently (icon frozen on the last painted state)
 let thumbarSig = ""
+let thumbarTitle = "" // last-pushed title — needed for the optimistic click flip
+let thumbarShowQueued = false // at most one deferred "show" repaint
+let taskbarHidden = false // tray-hide removes the taskbar button entirely
 let tray = null
 // set when an update finishes downloading — powers the explicit "restart to
 // update" affordance, since X hides to the tray and users never see a quit
@@ -73,6 +76,7 @@ const showWindow = () => {
     // undo the tray-hide (minimize+skipTaskbar) before restore/show —
     // the taskbar entry must exist again or the window stays invisible
     win.setSkipTaskbar(false)
+    taskbarHidden = false
     if (win.isMinimized()) win.restore()
     win.show()
     win.focus()
@@ -119,24 +123,48 @@ function refreshThumbar(win) {
   // Windows-only API — on macOS the icons aren't even shipped
   if (process.platform !== "win32" || !win || win.isDestroyed()) return
   const send = (cmd) => () => {
+    logLine("thumbar", `click → player:cmd ${cmd}`)
     if (!win.isDestroyed()) win.webContents.send("player:cmd", cmd)
   }
   // must only be called once the window has a real taskbar entry —
-  // setThumbarButtons on a not-yet-shown window silently no-ops
-  if (!win.isVisible()) {
-    win.once("show", () => refreshThumbar(win))
+  // setThumbarButtons on a not-yet-shown window silently no-ops, and on a
+  // tray-hidden window (skipTaskbar → no taskbar button at all) Windows
+  // rejects it outright: mark dirty, apply on the next real show
+  if (taskbarHidden || !win.isVisible()) {
+    // one deferred repaint only — a long tray session pushes dozens of
+    // refreshes and an unguarded once("show") per push piles listeners up
+    if (!thumbarShowQueued) {
+      thumbarShowQueued = true
+      win.once("show", () => {
+        thumbarShowQueued = false
+        refreshThumbar(win)
+      })
+    }
     return
   }
-  win.setThumbarButtons([
+  const ok = win.setThumbarButtons([
     { tooltip: "Save to Liked Songs", icon: thumbIcon("plus.png"), click: send("like") },
     { tooltip: "Previous", icon: thumbIcon("prev.png"), click: send("prev") },
     {
       tooltip: thumbarPlaying ? "Pause" : "Play",
       icon: thumbIcon(thumbarPlaying ? "pause.png" : "play.png"),
-      click: send("toggle"),
+      click: () => {
+        // optimistic flip — Windows dismisses the thumbnail flyout the
+        // moment a button is clicked, and the renderer roundtrip is async,
+        // so without this the next hover can still show the stale icon.
+        // The renderer's push corrects the state a tick later anyway.
+        // thumbarSig is updated too — otherwise a failed toggle's
+        // correcting push would dedup against the stale sig and the icon
+        // would stay wrong forever
+        thumbarPlaying = !thumbarPlaying
+        thumbarSig = `${thumbarPlaying}|${thumbarTitle}`
+        refreshThumbar(win)
+        send("toggle")()
+      },
     },
     { tooltip: "Next", icon: thumbIcon("next.png"), click: send("next") },
   ])
+  logLine("thumbar", `refresh playing=${thumbarPlaying} setThumbarButtons=${ok} visible=${win.isVisible()} minimized=${win.isMinimized()}`)
 }
 
 // ---- window bounds persistence ----
@@ -426,6 +454,7 @@ if (!gotLock) {
       const title = typeof s.title === "string" ? s.title.slice(0, 200) : ""
       const artist = typeof s.artist === "string" ? s.artist.slice(0, 200) : ""
       const sig = `${playing}|${title}`
+      thumbarTitle = title
       if (sig !== thumbarSig) {
         thumbarSig = sig
         thumbarPlaying = playing
@@ -594,6 +623,7 @@ function createWindow() {
         e.preventDefault()
         win.minimize()
         win.setSkipTaskbar(true)
+        taskbarHidden = true
       }
       // no tray (linux DEs without an applet, or icon failure): real close
       // → window-all-closed quits cleanly
