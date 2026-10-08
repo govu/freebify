@@ -4,17 +4,19 @@ import { Link, NavLink } from "react-router-dom"
 import { useLibrary } from "../store/library"
 import { useDownloads } from "../store/downloads"
 import { usePlayer } from "../store/player"
+import { useT } from "../i18n"
 import { ArtworkImg } from "./ArtworkImg"
 import { Logo } from "./Logo"
 
 const NAV = [
-  { to: "/", icon: House, label: "Home" },
-  { to: "/search", icon: Search, label: "Search" },
-  { to: "/library", icon: Library, label: "Library" },
-  { to: "/stats", icon: BarChart3, label: "Stats" },
+  { to: "/", icon: House, label: "nav.home" },
+  { to: "/search", icon: Search, label: "nav.search" },
+  { to: "/library", icon: Library, label: "nav.library" },
+  { to: "/stats", icon: BarChart3, label: "nav.stats" },
 ]
 
 export function Sidebar() {
+  const tt = useT()
   const recents = useLibrary((s) => s.recents)
   const playlists = useLibrary((s) => s.playlists)
   const likedCount = useLibrary((s) => s.likedOrder.length)
@@ -29,7 +31,7 @@ export function Sidebar() {
           the logo drags the window; only the link itself stays clickable.
           No wordmark: the mark alone reads cleaner in the chrome area */}
       <div className="drag-region px-4 pb-2 pt-5 lg:px-6">
-        <Link to="/" className="no-drag flex w-fit items-center gap-3" aria-label="Freebify home">
+        <Link to="/" className="no-drag flex w-fit items-center gap-3" aria-label={tt("nav.homeAria")}>
           <Logo size={26} className="shrink-0 text-white" />
         </Link>
       </div>
@@ -40,7 +42,7 @@ export function Sidebar() {
             key={to}
             to={to}
             end={to === "/"}
-            aria-label={label}
+            aria-label={tt(label)}
             className={({ isActive }) =>
               `relative flex items-center justify-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors lg:justify-start ${
                 isActive ? "text-ink" : "text-dim hover:bg-hover/60 hover:text-ink"
@@ -59,7 +61,7 @@ export function Sidebar() {
                   />
                 )}
                 <Icon size={19} className="relative" />
-                <span className="relative hidden lg:block">{label}</span>
+                <span className="relative hidden lg:block">{tt(label)}</span>
               </>
             )}
           </NavLink>
@@ -68,7 +70,7 @@ export function Sidebar() {
 
       <div className="scroller mt-5 min-h-0 flex-1 overflow-y-auto border-t border-line px-3 pt-4">
         <p className="mb-2 hidden px-3 text-xs font-semibold text-faint lg:block">
-          Your library
+          {tt("side.yourLibrary")}
         </p>
         <Link
           to="/library"
@@ -78,8 +80,8 @@ export function Sidebar() {
             <Heart size={15} className="fill-black text-black" />
           </span>
           <span className="hidden min-w-0 lg:block">
-            <span className="block truncate text-sm font-medium">Liked Songs</span>
-            <span className="block text-xs text-dim">{likedCount} tracks</span>
+            <span className="block truncate text-sm font-medium">{tt("side.liked")}</span>
+            <span className="block text-xs text-dim">{tt("side.tracks", { n: likedCount })}</span>
           </span>
         </Link>
 
@@ -92,8 +94,8 @@ export function Sidebar() {
               <Download size={15} className="text-ink" />
             </span>
             <span className="hidden min-w-0 lg:block">
-              <span className="block truncate text-sm font-medium">Downloads</span>
-              <span className="block text-xs text-dim">{dlCount} tracks</span>
+              <span className="block truncate text-sm font-medium">{tt("side.downloads")}</span>
+              <span className="block text-xs text-dim">{tt("side.tracks", { n: dlCount })}</span>
             </span>
           </Link>
         )}
@@ -109,7 +111,7 @@ export function Sidebar() {
                 <ListMusic size={16} className="shrink-0 text-dim" />
                 <span className="min-w-0">
                   <span className="block truncate text-sm">{p.name}</span>
-                  <span className="block text-xs text-dim">{p.tracks.length} tracks</span>
+                  <span className="block text-xs text-dim">{tt("side.tracks", { n: p.tracks.length })}</span>
                 </span>
               </Link>
             ))}
@@ -118,7 +120,7 @@ export function Sidebar() {
                 to="/library"
                 className="mt-1 block rounded-lg px-3 py-1.5 text-xs font-semibold text-dim transition-colors hover:bg-hover hover:text-ink"
               >
-                +{playlists.length - 6} more — see all
+                {tt("side.morePlaylists", { n: playlists.length - 6 })}
               </Link>
             )}
           </div>
@@ -127,7 +129,7 @@ export function Sidebar() {
         {recents.length > 0 && (
           <div className="mt-4 hidden lg:block">
             <p className="mb-1 px-3 text-xs font-semibold text-faint">
-              Recently played
+              {tt("side.recentlyPlayed")}
             </p>
             {recents.slice(0, 8).map((t) => (
               <button
@@ -153,7 +155,7 @@ export function Sidebar() {
 
       <NavLink
         to="/settings"
-        aria-label="Settings"
+        aria-label={tt("nav.settings")}
         className={({ isActive }) =>
           `mx-3 mb-3 flex items-center justify-center gap-3 rounded-lg border-t border-transparent px-3 py-2.5 text-sm font-semibold transition-colors lg:justify-start ${
             isActive ? "bg-hover text-ink" : "text-dim hover:bg-hover/60 hover:text-ink"
@@ -161,7 +163,7 @@ export function Sidebar() {
         }
       >
         <Settings size={18} />
-        <span className="hidden lg:block">Settings</span>
+        <span className="hidden lg:block">{tt("nav.settings")}</span>
       </NavLink>
     </aside>
   )

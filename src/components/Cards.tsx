@@ -6,12 +6,14 @@ import { Link } from "react-router-dom"
 import type { Playlist, Track, User } from "../api/types"
 import { prefetchStream, yt } from "../api/youtube"
 import { usePlayer } from "../store/player"
+import { useT } from "../i18n"
 import type { LocalPlaylist } from "../store/library"
 import { fmtCount } from "../utils/format"
 import { ArtworkImg } from "./ArtworkImg"
 import { Equalizer } from "./Equalizer"
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
+  const tt = useT()
   const rowRef = useRef<HTMLDivElement>(null)
   // scroll edge state drives arrow visibility — no point offering a right
   // arrow when the row is already at its end
@@ -59,7 +61,7 @@ export function Section({ title, children }: { title: string; children: ReactNod
         {!edges.start && (
           <button
             onClick={() => scrollBy(-1)}
-            aria-label="Scroll left"
+            aria-label={tt("card.scrollLeft")}
             className="absolute left-1 top-[40%] z-10 grid size-9 -translate-y-1/2 place-items-center rounded-full bg-panel/95 text-ink opacity-0 shadow-xl shadow-black/60 ring-1 ring-line backdrop-blur transition hover:scale-110 hover:bg-cardhover focus-visible:opacity-100 group-hover/sec:opacity-100"
           >
             <ChevronLeft size={20} />
@@ -68,7 +70,7 @@ export function Section({ title, children }: { title: string; children: ReactNod
         {!edges.end && (
           <button
             onClick={() => scrollBy(1)}
-            aria-label="Scroll right"
+            aria-label={tt("card.scrollRight")}
             className="absolute right-1 top-[40%] z-10 grid size-9 -translate-y-1/2 place-items-center rounded-full bg-panel/95 text-ink opacity-0 shadow-xl shadow-black/60 ring-1 ring-line backdrop-blur transition hover:scale-110 hover:bg-cardhover focus-visible:opacity-100 group-hover/sec:opacity-100"
           >
             <ChevronRight size={20} />
@@ -80,10 +82,11 @@ export function Section({ title, children }: { title: string; children: ReactNod
 }
 
 function PlayFAB({ onClick, playing }: { onClick: (e: React.MouseEvent) => void; playing?: boolean }) {
+  const tt = useT()
   return (
     <motion.button
       onClick={onClick}
-      aria-label="Play"
+      aria-label={tt("card.play")}
       initial={false}
       whileTap={{ scale: 0.9 }}
       className="absolute bottom-3 right-3 z-10 grid size-11 translate-y-2 place-items-center rounded-full bg-white text-black opacity-0 shadow-xl shadow-black/40 transition-all duration-200 hover:scale-105 group-hover:translate-y-0 group-hover:opacity-100"
@@ -201,6 +204,7 @@ function CollageCover({ p, alt }: { p: Playlist; alt: string }) {
 }
 
 export function PlaylistCard({ p }: { p: Playlist }) {
+  const tt = useT()
   // yt editorial playlists carry NO artwork — the collage fetches track
   // thumbs for them. Items that already ship a real cover (album rows,
   // new releases, Audius) go straight to ArtworkImg: no extra browse call.
@@ -217,7 +221,7 @@ export function PlaylistCard({ p }: { p: Playlist }) {
         </div>
         <p className="mt-3 truncate text-sm font-semibold">{p.playlist_name}</p>
         <p className="mt-0.5 truncate text-xs text-dim">
-          {p.is_album ? "Album" : "Playlist"} · {p.total_play_count ? `${fmtCount(p.total_play_count)} plays` : p.user.name}
+          {p.is_album ? tt("card.album") : tt("card.playlist")} · {p.total_play_count ? tt("card.plays", { n: fmtCount(p.total_play_count) }) : p.user.name}
         </p>
       </Link>
     </motion.div>
@@ -260,18 +264,20 @@ export function PlaylistCover({
 }
 
 export function LocalPlaylistCard({ p }: { p: LocalPlaylist }) {
+  const tt = useT()
   return (
     <motion.div whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 400, damping: 26 }}>
       <Link to={`/playlist/${encodeURIComponent(p.id)}`} className={`block ${cardCls}`}>
         <PlaylistCover tracks={p.tracks} className="rounded-lg" />
         <p className="mt-3 truncate text-sm font-semibold">{p.name}</p>
-        <p className="mt-0.5 truncate text-xs text-dim">Playlist · {p.tracks.length} tracks</p>
+        <p className="mt-0.5 truncate text-xs text-dim">{tt("card.playlist")} · {tt("card.tracks", { n: p.tracks.length })}</p>
       </Link>
     </motion.div>
   )
 }
 
 export function ArtistCard({ u }: { u: User }) {
+  const tt = useT()
   return (
     <motion.div whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 400, damping: 26 }}>
       <Link to={`/artist/${encodeURIComponent(u.id)}?n=${encodeURIComponent(u.name)}`} className={`block ${cardCls}`}>
@@ -285,7 +291,7 @@ export function ArtistCard({ u }: { u: User }) {
           <span className="truncate">{u.name}</span>
           {u.is_verified && <BadgeCheck size={14} className="shrink-0 text-dim" />}
         </p>
-        <p className="mt-0.5 truncate text-xs text-dim">Artist · {fmtCount(u.follower_count)} followers</p>
+        <p className="mt-0.5 truncate text-xs text-dim">{tt("card.artist")} · {tt("card.followers", { n: fmtCount(u.follower_count) })}</p>
       </Link>
     </motion.div>
   )

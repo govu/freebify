@@ -11,6 +11,7 @@ import { yt, ytBridge } from "../api/youtube"
 import { hasArtistPage } from "../api/types"
 import { dominantColor, rgb } from "../utils/color"
 import { fmtDuration } from "../utils/format"
+import { useT } from "../i18n"
 import { ArtworkImg } from "./ArtworkImg"
 import { Marquee } from "./Marquee"
 import { Slider } from "./Slider"
@@ -581,11 +582,12 @@ const LineRow = memo(function LineRow({
   past: boolean
   onTap: (e: MouseEvent<HTMLButtonElement>, l: LrcLine) => void
 }) {
+  const tt = useT()
   return (
     <button
       data-l={i}
       onClick={(e) => onTap(e, l)}
-      title="Click to jump · Shift+click to sync this line to now"
+      title={tt("np.lineHint")}
       className={`block w-full cursor-pointer px-4 py-2.5 text-2xl font-bold leading-snug transition-colors duration-150 ease-out md:text-3xl ${
         active ? "text-ink" : past ? "text-ink/45 hover:text-ink/70" : "text-ink/25 hover:text-ink/50"
       }`}
@@ -808,6 +810,7 @@ export function NowPlaying() {
 
   const liked = useLibrary((s) => (current ? Boolean(s.liked[current.id]) : false))
   const toggleLike = useLibrary((s) => s.toggleLike)
+  const tt = useT()
 
   // drag-to-close from the header only — attaching the gesture to the whole
   // sheet would fight the seek slider's pointer drags
@@ -1814,7 +1817,7 @@ export function NowPlaying() {
       ref={dlgRef}
       role="dialog"
       aria-modal="true"
-      aria-label="Now playing"
+      aria-label={tt("np.title")}
       tabIndex={-1}
       initial={{ y: "100%" }}
       animate={{ y: 0 }}
@@ -1862,16 +1865,16 @@ export function NowPlaying() {
         >
           <button
             onClick={() => setNpOpen(false)}
-            aria-label="Close"
+            aria-label={tt("np.close")}
             className="grid size-10 place-items-center rounded-full text-ink/80 transition hover:bg-white/10 hover:text-ink"
           >
             <ChevronDown size={22} />
           </button>
           <div className="flex-1 text-center">
-            <p className="text-xs font-semibold text-ink/50">Now playing</p>
+            <p className="text-xs font-semibold text-ink/50">{tt("np.title")}</p>
             {showLyrics && lyrics != null && (
               <p className="mt-0.5 text-[13px] font-medium tracking-wide text-ink/60">
-                Lyrics may not be accurate for some songs
+                {tt("np.accuracyNote")}
               </p>
             )}
           </div>
@@ -1880,7 +1883,7 @@ export function NowPlaying() {
               setQueueOpen(true)
               setNpOpen(false)
             }}
-            aria-label="Queue"
+            aria-label={tt("np.queue")}
             className="grid size-10 place-items-center rounded-full text-ink/80 transition hover:bg-white/10 hover:text-ink"
           >
             <ListMusic size={19} />
@@ -1921,7 +1924,7 @@ export function NowPlaying() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-ink/50">No lyrics found for this track.</p>
+                  <p className="text-sm text-ink/50">{tt("np.noLyrics")}</p>
                 )}
               </motion.div>
             ) : (
@@ -1992,7 +1995,7 @@ export function NowPlaying() {
               {hasLyrics && (
                 <button
                   onClick={() => setShowLyrics((v) => !v)}
-                  aria-label="Lyrics"
+                  aria-label={tt("np.lyrics")}
                   aria-pressed={showLyrics}
                   className={`transition ${showLyrics ? "text-ink" : "text-ink/60 hover:text-ink"}`}
                 >
@@ -2002,7 +2005,7 @@ export function NowPlaying() {
               <motion.button
                 whileTap={{ scale: 1.3 }}
                 onClick={() => toggleLike(current)}
-                aria-label={liked ? "Remove from Liked Songs" : "Save to Liked Songs"}
+                aria-label={liked ? tt("np.unlike") : tt("np.like")}
                 aria-pressed={liked}
                 className={`transition ${liked ? "text-ink" : "text-ink/60 hover:text-ink"}`}
               >
@@ -2018,20 +2021,20 @@ export function NowPlaying() {
           <div className="relative mt-4 flex items-center justify-center gap-8">
             <button
               onClick={toggleShuffle}
-              aria-label="Shuffle"
+              aria-label={tt("np.shuffle")}
               aria-pressed={shuffle}
               className={`relative transition ${shuffle ? "text-ink" : "text-ink/60 hover:text-ink"}`}
             >
               <Shuffle size={20} />
               {shuffle && <span className="absolute -bottom-2 left-1/2 size-1 -translate-x-1/2 rounded-full bg-ink" />}
             </button>
-            <button onClick={() => prev()} aria-label="Previous" className="text-ink/80 transition hover:text-ink">
+            <button onClick={() => prev()} aria-label={tt("np.prev")} className="text-ink/80 transition hover:text-ink">
               <SkipBack size={26} className="fill-current" />
             </button>
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={toggle}
-              aria-label={isPlaying ? "Pause" : "Play"}
+              aria-label={tt(isPlaying ? "np.pause" : "np.play")}
               className="grid size-16 place-items-center rounded-full bg-white text-black shadow-xl transition hover:scale-105"
             >
               {buffering ? (
@@ -2042,12 +2045,12 @@ export function NowPlaying() {
                 <Play size={26} className="ml-1 fill-current" />
               )}
             </motion.button>
-            <button onClick={() => next()} aria-label="Next" className="text-ink/80 transition hover:text-ink">
+            <button onClick={() => next()} aria-label={tt("np.next")} className="text-ink/80 transition hover:text-ink">
               <SkipForward size={26} className="fill-current" />
             </button>
             <button
               onClick={cycleRepeat}
-              aria-label={repeat === "one" ? "Repeat: one" : repeat === "all" ? "Repeat: all" : "Repeat: off"}
+              aria-label={tt(repeat === "one" ? "np.repeatOne" : repeat === "all" ? "np.repeatAll" : "np.repeatOff")}
               aria-pressed={repeat !== "off"}
               className={`relative transition ${repeat !== "off" ? "text-ink" : "text-ink/60 hover:text-ink"}`}
             >
@@ -2057,7 +2060,7 @@ export function NowPlaying() {
               )}
             </button>
             <div className="absolute right-0 flex items-center gap-2">
-              <button onClick={toggleMute} aria-label={muted ? "Unmute" : "Mute"} aria-pressed={muted} className="text-ink/60 transition hover:text-ink">
+              <button onClick={toggleMute} aria-label={tt(muted ? "np.unmute" : "np.mute")} aria-pressed={muted} className="text-ink/60 transition hover:text-ink">
                 <VolumeIcon size={20} />
               </button>
               <Slider
@@ -2066,7 +2069,7 @@ export function NowPlaying() {
                 onScrub={applyVolume}
                 onCommit={(v) => setVolume(v)}
                 className="w-24"
-                ariaLabel="Volume"
+                ariaLabel={tt("np.volume")}
               />
             </div>
           </div>
@@ -2080,10 +2083,11 @@ function NpSeekBar({ trackDuration }: { trackDuration?: number }) {
   const currentTime = usePlayer((s) => s.currentTime)
   const duration = usePlayer((s) => s.duration)
   const seek = usePlayer((s) => s.seek)
+  const tt = useT()
   const dur = duration || trackDuration || 0
   return (
     <div className="mt-5">
-      <Slider value={currentTime} max={dur} onCommit={(v) => seek(v)} smooth ariaLabel="Seek" />
+      <Slider value={currentTime} max={dur} onCommit={(v) => seek(v)} smooth ariaLabel={tt("np.seek")} />
       <div className="mt-1 flex justify-between text-[11px] tabular-nums text-ink/50">
         <span>{fmtDuration(currentTime)}</span>
         <span>{fmtDuration(dur)}</span>

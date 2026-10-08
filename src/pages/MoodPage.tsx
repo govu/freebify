@@ -4,11 +4,13 @@ import { yt } from "../api/youtube"
 import type { Playlist, Track } from "../api/types"
 import { PlaylistCard, Section, TrackCard } from "../components/Cards"
 import { CardsRowSkeleton } from "../components/Skeletons"
+import { t, useT } from "../i18n"
 import { moodNames } from "./Search"
 
 // YouTube Music mood/genre category page — the browse token lives in the
 // URL; display name arrives via router state or the cached lookup.
 export function MoodPage() {
+  const tt = useT()
   const { params } = useParams<{ params: string }>()
   const location = useLocation()
   // React Router already decodes params — a second decodeURIComponent
@@ -16,7 +18,7 @@ export function MoodPage() {
   const [name, setName] = useState(
     (location.state as { name?: string } | null)?.name ??
       (params ? moodNames.get(params) : undefined) ??
-      "Mixes"
+      t("mood.mixes")
   )
   const [playlists, setPlaylists] = useState<Playlist[]>([])
   const [tracks, setTracks] = useState<Track[]>([])
@@ -34,7 +36,7 @@ export function MoodPage() {
     setPlaylists([])
     setTracks([])
     setName(
-      (location.state as { name?: string } | null)?.name ?? moodNames.get(params) ?? "Mixes",
+      (location.state as { name?: string } | null)?.name ?? moodNames.get(params) ?? t("mood.mixes"),
     )
     void yt
       .mood(params)
@@ -75,12 +77,12 @@ export function MoodPage() {
 
       {failed && (
         <div className="mx-6 mb-6 rounded-xl border border-line bg-card px-5 py-4">
-          <p className="text-sm font-semibold">Couldn't load this mood</p>
+          <p className="text-sm font-semibold">{tt("mood.loadError")}</p>
           <button
             onClick={() => setRun((r) => r + 1)}
             className="mt-3 rounded-full bg-ink px-4 py-1.5 text-xs font-semibold text-black transition hover:scale-105"
           >
-            Retry
+            {tt("mood.retry")}
           </button>
         </div>
       )}
@@ -93,7 +95,7 @@ export function MoodPage() {
       )}
 
       {playlists.length > 0 && (
-        <Section title={`${name} playlists`}>
+        <Section title={tt("mood.playlists", { name })}>
           {playlists.map((p) => (
             <PlaylistCard key={p.id} p={p} />
           ))}
@@ -101,7 +103,7 @@ export function MoodPage() {
       )}
 
       {tracks.length > 0 && (
-        <Section title="Top tracks">
+        <Section title={tt("mood.topTracks")}>
           {tracks.map((t) => (
             <TrackCard key={t.id} t={t} context={tracks} />
           ))}

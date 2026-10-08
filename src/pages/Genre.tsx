@@ -7,15 +7,17 @@ import { prefetchStream, yt, ytAvailable } from "../api/youtube"
 import type { Track, TrendTime } from "../api/types"
 import { RowsSkeleton } from "../components/Skeletons"
 import { TrackTable } from "../components/TrackTable"
+import { useT } from "../i18n"
 import { usePlayer } from "../store/player"
 
-const TIMES: { id: TrendTime; label: string }[] = [
-  { id: "week", label: "This week" },
-  { id: "month", label: "This month" },
-  { id: "allTime", label: "All time" },
+const TIMES: { id: TrendTime; labelKey: string }[] = [
+  { id: "week", labelKey: "genre.time.week" },
+  { id: "month", labelKey: "genre.time.month" },
+  { id: "allTime", labelKey: "genre.time.allTime" },
 ]
 
 export function GenrePage() {
+  const tt = useT()
   const { name = "" } = useParams<{ name: string }>()
   // useParams already decodes — decoding AGAIN throws URIError on names
   // containing a literal % (e.g. "/genre/100%")
@@ -74,7 +76,7 @@ export function GenrePage() {
       >
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
           <p className="text-xs font-semibold text-ink/70">
-            Genre {source === "audius" ? "· trending" : ""}
+            {tt("genre.kicker")} {source === "audius" ? tt("genre.trending") : ""}
           </p>
           <h1 className="mt-2 text-4xl font-black tracking-tight drop-shadow-lg sm:text-6xl">
             {genre}
@@ -89,7 +91,7 @@ export function GenrePage() {
               source === "yt" ? "bg-white text-black" : "bg-white/10 text-dim hover:bg-white/15 hover:text-ink"
             }`}
           >
-            Top hits
+            {tt("genre.topHits")}
           </button>
           {TIMES.map((t) => (
             <button
@@ -105,7 +107,7 @@ export function GenrePage() {
                   : "bg-white/10 text-dim hover:bg-white/15 hover:text-ink"
               }`}
             >
-              {t.label}
+              {tt(t.labelKey)}
             </button>
           ))}
         </div>
@@ -117,19 +119,19 @@ export function GenrePage() {
             onClick={() => playContext(tracks, 0)}
             className="mb-6 flex items-center gap-2 rounded-full bg-white px-8 py-3 text-sm font-bold text-black shadow-lg shadow-black/50 transition hover:scale-[1.03]"
           >
-            <Play size={16} className="fill-current" /> Play
+            <Play size={16} className="fill-current" /> {tt("genre.play")}
           </button>
         )}
         {loading ? (
           <RowsSkeleton count={12} />
         ) : error ? (
           <div className="py-10 text-sm text-dim">
-            <p>Couldn't load this genre right now.</p>
+            <p>{tt("genre.loadError")}</p>
             <button
               onClick={() => setRun((r) => r + 1)}
               className="mt-3 rounded-full border border-line px-5 py-1.5 text-xs font-semibold transition hover:border-white/30"
             >
-              Retry
+              {tt("genre.retry")}
             </button>
           </div>
         ) : (

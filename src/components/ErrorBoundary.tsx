@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react"
+import { t } from "../i18n"
 
 interface Props {
   children: ReactNode
@@ -35,9 +36,9 @@ export class ErrorBoundary extends Component<Props, State> {
     return (
       <div className="grid min-h-[60vh] place-items-center p-10 text-center">
         <div>
-          <p className="text-lg font-bold">Something went wrong</p>
+          <p className="text-lg font-bold">{t("error.title")}</p>
           <p className="mt-2 text-sm text-dim">
-            This view crashed. Your music and playlists are safe — try again.
+            {t("error.body")}
           </p>
           <button
             onClick={() => {
@@ -53,7 +54,7 @@ export class ErrorBoundary extends Component<Props, State> {
             }}
             className="mt-5 rounded-full bg-ink px-5 py-2 text-sm font-semibold text-black transition hover:scale-105"
           >
-            Reload Freebify
+            {t("error.reload")}
           </button>
         </div>
       </div>

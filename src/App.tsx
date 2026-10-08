@@ -14,6 +14,7 @@ import { TopBar } from "./components/TopBar"
 import { Home } from "./pages/Home"
 import { SearchPage } from "./pages/Search"
 import { useLibrary } from "./store/library"
+import { useT } from "./i18n"
 import { applyVolume, usePlayer } from "./store/player"
 import { isRewindSeen, latestRewind, useRewind } from "./store/rewind"
 
@@ -136,6 +137,7 @@ function useShortcuts() {
 // global offline indicator — page-level retry cards can't explain a dead
 // network mid-session; this pins a banner the moment connectivity drops
 function OfflineBanner() {
+  const tt = useT()
   const [offline, setOffline] = useState(!navigator.onLine)
   useEffect(() => {
     const off = () => setOffline(true)
@@ -156,7 +158,7 @@ function OfflineBanner() {
           exit={{ opacity: 0, y: -8 }}
           className="pointer-events-none fixed left-1/2 top-14 z-[60] -translate-x-1/2 rounded-full bg-panel/90 px-4 py-1.5 text-xs font-semibold text-ink ring-1 ring-line backdrop-blur"
         >
-          You're offline — playback may stop until the connection returns
+          {tt("app.offline")}
         </motion.div>
       )}
     </AnimatePresence>
@@ -288,6 +290,7 @@ export default function App() {
 // already happened in the background (autoDownload); a transient toast was
 // too easy to miss and the tray item is one menu too deep.
 function UpdateBanner() {
+  const tt = useT()
   const [upd, setUpd] = useState<{ version: string; manual: boolean } | null>(null)
   const [dismissed, setDismissed] = useState(false)
   useEffect(() => {
@@ -315,18 +318,18 @@ function UpdateBanner() {
         >
           <ArrowDownToLine size={15} className="shrink-0 text-ink" />
           <div className="min-w-0">
-            <p className="text-[13px] font-semibold leading-tight text-ink">v{upd.version} {upd.manual ? "available" : "ready"}</p>
-            <p className="text-[11px] leading-tight text-dim">{upd.manual ? "Download the new dmg" : "Restart to update"}</p>
+            <p className="text-[13px] font-semibold leading-tight text-ink">{upd.manual ? tt("app.updateAvail", { version: upd.version }) : tt("app.updateReady", { version: upd.version })}</p>
+            <p className="text-[11px] leading-tight text-dim">{upd.manual ? tt("app.updateManualHint") : tt("app.updateRestartHint")}</p>
           </div>
           <button
             onClick={() => void window.freebify?.app?.installUpdate?.()}
             className="ml-1 shrink-0 rounded-full bg-white px-3.5 py-1.5 text-xs font-bold text-black transition hover:scale-[1.04]"
           >
-            {upd.manual ? "Download" : "Restart"}
+            {upd.manual ? tt("app.download") : tt("app.restart")}
           </button>
           <button
             onClick={() => setDismissed(true)}
-            aria-label="Dismiss update"
+            aria-label={tt("app.dismissUpdate")}
             className="grid size-6 shrink-0 place-items-center rounded-full text-faint transition hover:bg-white/10 hover:text-ink"
           >
             <X size={12} />

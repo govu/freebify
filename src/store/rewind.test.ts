@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from "vitest"
 import type { Track } from "../api/types"
+import { dateLocale } from "../i18n"
 import { availableRewind, buildRewind, currentRewind, latestRewind } from "./rewind"
 import { monthKey, useStats } from "./stats"
 
@@ -77,10 +78,10 @@ describe("buildRewind", () => {
     expect(r?.artists.map((a) => a.name)).toEqual(["Artist"])
     expect(r?.trackCount).toBe(6)
     expect(r?.artistCount).toBe(1)
-    // localized labels derive from the key, not the wall clock
+    // localized labels derive from the key + app locale, not the wall clock
     const d = new Date(2020, 8, 1)
-    expect(r?.label).toBe(d.toLocaleDateString(undefined, { month: "long" }))
-    expect(r?.full).toBe(d.toLocaleDateString(undefined, { month: "long", year: "numeric" }))
+    expect(r?.label).toBe(d.toLocaleDateString(dateLocale(), { month: "long" }))
+    expect(r?.full).toBe(d.toLocaleDateString(dateLocale(), { month: "long", year: "numeric" }))
   })
 
   it("returns null below the closed-edition thresholds", () => {

@@ -2,16 +2,19 @@ import { useEffect, useRef, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { RotateCcw, SlidersHorizontal } from "lucide-react"
 import { usePlayer } from "../store/player"
+import { useT } from "../i18n"
 import { Slider } from "./Slider"
 
 const BAND_LABELS = ["60", "250", "500", "1K", "4K", "8K", "14K"]
 
+// keys are locale keys (eq.preset.<id>), not display names — chips and the
+// readout translate through useT
 const PRESETS: Record<string, number[]> = {
-  Flat: [0, 0, 0, 0, 0, 0, 0],
-  Bass: [6, 4, 1, 0, 0, 1, 2],
-  Vocal: [-2, 0, 3, 5, 4, 2, 0],
-  Bright: [-1, 0, 1, 2, 4, 6, 7],
-  "V-shape": [6, 3, 0, -1, 0, 3, 6],
+  flat: [0, 0, 0, 0, 0, 0, 0],
+  bass: [6, 4, 1, 0, 0, 1, 2],
+  vocal: [-2, 0, 3, 5, 4, 2, 0],
+  bright: [-1, 0, 1, 2, 4, 6, 7],
+  vshape: [6, 3, 0, -1, 0, 3, 6],
 }
 
 const RANGE = 12 // ±12 dB
@@ -19,6 +22,7 @@ const RANGE = 12 // ±12 dB
 const SLEEP_MINS = [null, 15, 30, 45, 60, 90] // null = Off
 
 export function EqPopover() {
+  const tt = useT()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const eq = usePlayer((s) => s.eq)
@@ -75,7 +79,7 @@ export function EqPopover() {
     <div ref={ref} className="relative flex items-center">
       <button
         onClick={() => setOpen((o) => !o)}
-        aria-label="Equalizer"
+        aria-label={tt("eq.title")}
         aria-pressed={open}
         className={`relative transition hover:text-ink ${open || tuned || fadeSecs > 0 || !normOn || sleepAt !== null ? "text-ink" : "text-dim"}`}
       >
@@ -100,12 +104,12 @@ export function EqPopover() {
                 used to overflow the panel's right edge) */}
             <div className="mb-4">
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-semibold text-dim">Equalizer</span>
+                <span className="text-xs font-semibold text-dim">{tt("eq.title")}</span>
                 {custom && (
                   <button
-                    onClick={() => setEq(PRESETS.Flat)}
-                    title="Reset to flat"
-                    aria-label="Reset equalizer"
+                    onClick={() => setEq(PRESETS.flat)}
+                    title={tt("eq.resetTitle")}
+                    aria-label={tt("eq.resetAria")}
                     className="grid size-6 place-items-center rounded-md text-dim transition hover:bg-white/10 hover:text-ink"
                   >
                     <RotateCcw size={12} />
@@ -121,7 +125,7 @@ export function EqPopover() {
                       activePreset === name ? "bg-white text-black" : "text-dim hover:bg-white/10 hover:text-ink"
                     }`}
                   >
-                    {name}
+                    {tt(`eq.preset.${name}`)}
                   </button>
                 ))}
               </div>
@@ -147,8 +151,10 @@ export function EqPopover() {
               {readout !== null
                 ? `${BAND_LABELS[readout]} Hz · ${(eq[readout] ?? 0) > 0 ? "+" : ""}${(eq[readout] ?? 0).toFixed(1)} dB`
                 : custom
-                  ? "Custom"
-                  : activePreset ?? ""}
+                  ? tt("eq.custom")
+                  : activePreset
+                    ? tt(`eq.preset.${activePreset}`)
+                    : ""}
             </div>
 
             <div className="space-y-3 border-t border-line pt-3">
@@ -158,7 +164,7 @@ export function EqPopover() {
                 onClick={() => setNormOn(!normOn)}
                 className="flex w-full cursor-pointer items-center justify-between"
               >
-                <span className="text-xs text-dim">Normalize volume</span>
+                <span className="text-xs text-dim">{tt("eq.normalize")}</span>
                 <span
                   className={`relative h-[18px] w-8 rounded-full border transition-colors ${
                     normOn ? "border-white bg-white" : "border-white/20 bg-white/10"
@@ -173,16 +179,16 @@ export function EqPopover() {
               </button>
               <div>
                 <div className="mb-1 flex items-center justify-between">
-                  <span className="text-xs text-dim">Crossfade</span>
-                  <span className="text-[10px] tabular-nums text-faint">{fadeSecs === 0 ? "off" : `${fadeSecs}s`}</span>
+                  <span className="text-xs text-dim">{tt("eq.crossfade")}</span>
+                  <span className="text-[10px] tabular-nums text-faint">{fadeSecs === 0 ? tt("eq.off") : `${fadeSecs}s`}</span>
                 </div>
-                <Slider value={fadeSecs} max={12} onScrub={(v) => setFadeSecs(v)} ariaLabel="Crossfade seconds" />
+                <Slider value={fadeSecs} max={12} onScrub={(v) => setFadeSecs(v)} ariaLabel={tt("eq.crossfadeSeconds")} />
               </div>
               <div>
                 <div className="mb-1 flex items-center justify-between">
-                  <span className="text-xs text-dim">Sleep timer</span>
+                  <span className="text-xs text-dim">{tt("eq.sleepTimer")}</span>
                   <span className="text-[10px] tabular-nums text-faint">
-                    {sleepAt === null ? "off" : `in ${Math.max(1, Math.ceil((sleepAt - Date.now()) / 60000))} min`}
+                    {sleepAt === null ? tt("eq.off") : tt("eq.sleepIn", { n: Math.max(1, Math.ceil((sleepAt - Date.now()) / 60000)) })}
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-1">
@@ -199,7 +205,7 @@ export function EqPopover() {
                           : "text-dim hover:bg-white/10 hover:text-ink"
                       }`}
                     >
-                      {m === null ? "Off" : m}
+                      {m === null ? tt("eq.sleepOff") : m}
                     </button>
                   ))}
                 </div>

@@ -9,6 +9,7 @@ import { prefetchStream, yt } from "../api/youtube"
 import { useLibrary } from "../store/library"
 import { useDownloads } from "../store/downloads"
 import { notify, usePlayer } from "../store/player"
+import { useT } from "../i18n"
 import { fmtCount, fmtDuration } from "../utils/format"
 import { ArtworkImg } from "./ArtworkImg"
 import { Equalizer } from "./Equalizer"
@@ -74,6 +75,7 @@ function useWindowed(total: number, enabled: boolean) {
 }
 
 export function TrackTable({ tracks, context, showHeader = true, showPlays: wantPlays = true, numbered = true, numberOffset = 0, onRemove, removeLabel }: TrackTableProps) {
+  const tt = useT()
   const playContext = usePlayer((s) => s.playContext)
   // auto-hide the Plays column when NO row carries a count — a column of
   // "—" is worse than none (yt playlists lack view data; Audius has it)
@@ -141,10 +143,10 @@ export function TrackTable({ tracks, context, showHeader = true, showPlays: want
       {showHeader && (
         <div className={`grid h-9 grid-cols-[1.75rem_minmax(0,1fr)_6rem] items-center gap-x-4 border-b border-line px-3 text-xs font-medium text-faint ${lgCols}`}>
           <span>#</span>
-          <span>Title</span>
-          <span className="hidden lg:block">Artist</span>
-          {showPlays && <span className="hidden text-right lg:block">Plays</span>}
-          <span className="text-right">Time</span>
+          <span>{tt("table.colTitle")}</span>
+          <span className="hidden lg:block">{tt("table.colArtist")}</span>
+          {showPlays && <span className="hidden text-right lg:block">{tt("table.colPlays")}</span>}
+          <span className="text-right">{tt("table.colTime")}</span>
         </div>
       )}
       <div className="mt-1 flex flex-col" ref={wrapRef}>
@@ -180,7 +182,7 @@ export function TrackTable({ tracks, context, showHeader = true, showPlays: want
           <div aria-hidden style={{ height: (tracks.length - end) * ROW_H }} />
         )}
         {tracks.length === 0 && (
-          <p className="px-3 py-10 text-center text-sm text-dim">Nothing here yet.</p>
+          <p className="px-3 py-10 text-center text-sm text-dim">{tt("table.empty")}</p>
         )}
       </div>
       {/* outside-click catcher — sits above rows (z-20) but below the
@@ -220,6 +222,7 @@ interface RowProps {
 }
 
 function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuOpen, onMenu, closeMenu, onPlay, goArtist, onRemove, removeLabel, animateEntrance = true }: RowProps) {
+  const tt = useT()
   const isCurrent = usePlayer((s) => s.current?.id === t.id)
   // combined selector — plain s.isPlaying would re-render every row in the
   // table on each pause/play; this only flips for the current row
@@ -288,7 +291,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
       }}
       role="button"
       tabIndex={0}
-      aria-label={`Play ${t.title}`}
+      aria-label={tt("table.playTrack", { title: t.title })}
       onKeyDown={(e) => {
         if (e.key === "Enter") onPlay()
       }}
@@ -329,7 +332,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
             {t.title}
             {(isNonOriginal(t) || isLongForm(t)) && (
               <span className="ml-1.5 rounded border border-line px-1 align-middle text-[9px] font-semibold text-faint">
-                {isLongForm(t) ? "Set" : "Edit"}
+                {isLongForm(t) ? tt("table.badgeSet") : tt("table.badgeEdit")}
               </span>
             )}
           </span>
@@ -369,7 +372,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
             e.stopPropagation()
             toggleLike(t)
           }}
-          aria-label={liked ? "Remove from Liked Songs" : "Save to Liked Songs"}
+          aria-label={liked ? tt("table.unlike") : tt("table.like")}
           aria-pressed={liked}
           className={`transition ${liked ? "text-ink" : "text-dim opacity-0 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"}`}
         >
@@ -378,7 +381,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
         <span className="w-9 text-right text-sm tabular-nums text-dim">{fmtDuration(t.duration)}</span>
         <button
           onClick={openMenu}
-          aria-label="More options"
+          aria-label={tt("table.more")}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
           className={`text-dim transition hover:text-ink focus-visible:opacity-100 ${menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"}`}
@@ -398,7 +401,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
           }`}
         >
           <MenuItem
-            label="Play next"
+            label={tt("table.playNext")}
             icon={<ListEnd size={15} />}
             onClick={(e) => {
               e.stopPropagation()
@@ -407,7 +410,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
             }}
           />
           <MenuItem
-            label="Add to queue"
+            label={tt("table.addQueue")}
             icon={<ListPlus size={15} />}
             onClick={(e) => {
               e.stopPropagation()
@@ -430,7 +433,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
               className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-ink transition hover:bg-white/10"
             >
               <ListMusic size={15} />
-              <span className="flex-1">Add to playlist</span>
+              <span className="flex-1">{tt("table.addPlaylist")}</span>
               <ChevronLeft size={14} className="text-faint" />
             </button>
             <div
@@ -446,12 +449,12 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
                     e.stopPropagation()
                     const pid = createPlaylist()
                     addToPlaylist(pid, t)
-                    notify("Added to new playlist")
+                    notify(tt("table.addedNewPlaylist"))
                     closeMenu()
                   }}
                   className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold text-ink transition hover:bg-white/10"
                 >
-                  <ListPlus size={15} /> New playlist
+                  <ListPlus size={15} /> {tt("table.newPlaylist")}
                 </button>
                 {playlists.length > 0 && <div className="mx-3 my-1 border-t border-line" />}
                 <div className="scroller max-h-44 overflow-y-auto">
@@ -467,10 +470,10 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
                           // the check mark reads as toggleable — make it true
                           if (has) {
                             removeFromPlaylist(p.id, t.id)
-                            notify(`Removed from "${p.name}"`)
+                            notify(tt("table.removedFromPlaylist", { name: p.name }))
                           } else {
                             addToPlaylist(p.id, t)
-                            notify(`Added to "${p.name}"`)
+                            notify(tt("table.addedToPlaylist", { name: p.name }))
                           }
                           closeMenu()
                         }}
@@ -489,10 +492,10 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
             <MenuItem
               label={
                 dlState === "done"
-                  ? "Remove download"
+                  ? tt("table.removeDownload")
                   : dlState === "busy"
-                    ? `Downloading… ${dlPct}%`
-                    : "Download"
+                    ? tt("table.downloading", { pct: dlPct })
+                    : tt("table.download")
               }
               icon={dlState === "done" ? <Check size={15} /> : <Download size={15} />}
               onClick={(e) => {
@@ -505,21 +508,21 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
           )}
           {t.source === "yt" && t.streamId && (
             <MenuItem
-              label="Start radio"
+              label={tt("table.startRadio")}
               icon={<Radio size={15} />}
               onClick={(e) => {
                 e.stopPropagation()
                 closeMenu()
                 void yt.upNext(t.streamId!).then((tracks) => {
                   if (tracks.length) playContext(tracks, 0)
-                  else notify("Couldn't start a radio for this track")
+                  else notify(tt("table.radioFail"))
                 })
               }}
             />
           )}
           {artistOk && (
             <MenuItem
-              label="Go to artist"
+              label={tt("table.goArtist")}
               icon={<UserIcon size={15} />}
               onClick={(e) => {
                 e.stopPropagation()
@@ -530,7 +533,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
           )}
           {t.album?.id && (
             <MenuItem
-              label="Go to album"
+              label={tt("table.goAlbum")}
               icon={<Disc3 size={15} />}
               onClick={(e) => {
                 e.stopPropagation()
@@ -548,7 +551,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
           )}
           {t.permalink && (
             <MenuItem
-              label={copied ? "Copied" : "Copy link"}
+              label={copied ? tt("table.copied") : tt("table.copyLink")}
               icon={copied ? <Check size={15} /> : <Link2 size={15} />}
               onClick={(e) => {
                 e.stopPropagation()
@@ -558,7 +561,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
                   ?.writeText(t.permalink!)
                   .then(() => {
                     setCopied(true)
-                    notify("Link copied")
+                    notify(tt("table.linkCopied"))
                   })
                   .catch(() => {})
                 closeMenu()
@@ -567,7 +570,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
           )}
           {onRemove && (
             <MenuItem
-              label={removeLabel ?? "Remove from playlist"}
+              label={removeLabel ?? tt("table.removeFrom")}
               icon={<Trash2 size={15} />}
               onClick={(e) => {
                 e.stopPropagation()

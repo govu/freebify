@@ -10,6 +10,7 @@ import { ArtworkImg } from "../components/ArtworkImg"
 import { PlaylistCover } from "../components/Cards"
 import { HeroSkeleton, RowsSkeleton } from "../components/Skeletons"
 import { TrackTable } from "../components/TrackTable"
+import { t, useT } from "../i18n"
 import { useLibrary } from "../store/library"
 import { useDownloads } from "../store/downloads"
 import { notify, usePlayer } from "../store/player"
@@ -37,6 +38,7 @@ function RemotePlaylistView({ id }: { id: string }) {
   const addTracksToPlaylist = useLibrary((s) => s.addTracksToPlaylist)
   const startAll = useDownloads((s) => s.startAll)
   const navigate = useNavigate()
+  const tt = useT()
 
   useEffect(() => {
     if (!id) {
@@ -96,13 +98,13 @@ function RemotePlaylistView({ id }: { id: string }) {
     return (
       <div className="grid place-items-center py-32 text-center">
         <div>
-          <p className="text-lg font-semibold">Playlist not found</p>
-          <p className="mt-1 text-sm text-dim">It may have been removed or the network hiccuped.</p>
+          <p className="text-lg font-semibold">{tt("playlist.notFound")}</p>
+          <p className="mt-1 text-sm text-dim">{tt("playlist.notFound.sub")}</p>
           <button
             onClick={() => setRetry((r) => r + 1)}
             className="mt-5 rounded-full border border-line px-6 py-2 text-sm font-semibold transition hover:scale-[1.03] hover:border-white/30"
           >
-            Retry
+            {tt("playlist.retry")}
           </button>
         </div>
       </div>
@@ -158,7 +160,7 @@ function RemotePlaylistView({ id }: { id: string }) {
           className="min-w-0 sm:flex-1"
         >
           <p className="text-xs font-semibold text-ink/70">
-            {playlist.is_album ? "Album" : "Playlist"}
+            {playlist.is_album ? tt("playlist.album") : tt("playlist.playlist")}
           </p>
           <h1 title={playlist.playlist_name} className="mt-2 line-clamp-3 break-words text-3xl font-black tracking-tight sm:text-5xl">{playlist.playlist_name}</h1>
           {playlist.description && (
@@ -173,12 +175,12 @@ function RemotePlaylistView({ id }: { id: string }) {
                 {playlist.user.name}
               </Link>
             ) : (
-              <span className="font-semibold text-ink">{playlist.user?.name ?? "Unknown"}</span>
+              <span className="font-semibold text-ink">{playlist.user?.name ?? tt("playlist.unknown")}</span>
             )}
             {" · "}
-            {playlist.track_count || tracks.length} tracks
+            {tt("playlist.trackCount", { n: playlist.track_count || tracks.length })}
             {totalSec > 0 && ` · ${fmtDuration(totalSec)}`}
-            {playlist.total_play_count ? ` · ${fmtCount(playlist.total_play_count)} plays` : ""}
+            {playlist.total_play_count ? ` · ${tt("playlist.plays", { n: fmtCount(playlist.total_play_count) })}` : ""}
           </p>
         </motion.div>
       </div>
@@ -190,7 +192,7 @@ function RemotePlaylistView({ id }: { id: string }) {
               onClick={() => playContext(tracks, 0)}
               className="flex items-center gap-2 rounded-full bg-white px-8 py-3 text-sm font-bold text-black shadow-lg shadow-black/50 transition hover:scale-[1.03]"
             >
-              <Play size={16} className="fill-current" /> Play
+              <Play size={16} className="fill-current" /> {tt("playlist.play")}
             </button>
           )}
           {tracks.length > 0 && (
@@ -202,16 +204,16 @@ function RemotePlaylistView({ id }: { id: string }) {
               }}
               className="flex items-center gap-2 rounded-full border border-line px-5 py-2.5 text-sm font-semibold text-dim transition hover:border-dim hover:text-ink"
             >
-              <Plus size={15} /> Save to Library
+              <Plus size={15} /> {tt("playlist.saveToLibrary")}
             </button>
           )}
           {tracks.length > 0 && (
             <button
-              onClick={() => void startAll(tracks).then((n) => notify(n > 0 ? `Downloading ${n} tracks` : "Already downloaded"))}
-              title="Download all tracks for offline playback"
+              onClick={() => void startAll(tracks).then((n) => notify(n > 0 ? t("playlist.downloading", { n }) : t("playlist.alreadyDownloaded")))}
+              title={tt("playlist.downloadAllTitle")}
               className="flex items-center gap-2 rounded-full border border-line px-5 py-2.5 text-sm font-semibold text-dim transition hover:border-dim hover:text-ink"
             >
-              <Download size={15} /> Download all
+              <Download size={15} /> {tt("playlist.downloadAll")}
             </button>
           )}
           {playlist.permalink && (
@@ -223,8 +225,8 @@ function RemotePlaylistView({ id }: { id: string }) {
                   .catch(() => {})
                 setTimeout(() => setCopied(false), 1500)
               }}
-              title="Copy link"
-              aria-label="Copy playlist link"
+              title={tt("playlist.copyLink")}
+              aria-label={tt("playlist.copyLinkAria")}
               className="grid size-10 place-items-center rounded-full border border-line text-dim transition hover:border-dim hover:text-ink"
             >
               {copied ? <Check size={15} /> : <Link2 size={15} />}
@@ -237,7 +239,7 @@ function RemotePlaylistView({ id }: { id: string }) {
                 type="text"
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
-                placeholder="Find in playlist"
+                placeholder={tt("playlist.findInPlaylist")}
                 className="w-32 bg-transparent placeholder:text-faint focus-visible:shadow-none"
               />
             </label>
@@ -245,20 +247,20 @@ function RemotePlaylistView({ id }: { id: string }) {
         </div>
         {tracksError ? (
           <div className="py-10 text-sm text-dim">
-            <p>Couldn't load the tracks — the playlist itself is fine.</p>
+            <p>{tt("playlist.tracksError")}</p>
             <button
               onClick={() => setRetry((r) => r + 1)}
               className="mt-3 rounded-full border border-line px-5 py-1.5 text-xs font-semibold transition hover:border-white/30"
             >
-              Retry
+              {tt("playlist.retry")}
             </button>
           </div>
         ) : shown.length > 0 ? (
           <TrackTable tracks={shown} />
         ) : tracks.length > 0 ? (
-          <p className="py-10 text-sm text-dim">No tracks match “{filter}”.</p>
+          <p className="py-10 text-sm text-dim">{tt("playlist.noMatch", { q: filter })}</p>
         ) : (
-          <p className="py-10 text-sm text-dim">This playlist is empty.</p>
+          <p className="py-10 text-sm text-dim">{tt("playlist.empty")}</p>
         )}
       </div>
     </div>
@@ -277,13 +279,14 @@ function LocalPlaylistView({ id }: { id: string }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState("")
   const [confirmDel, setConfirmDel] = useState(false)
+  const tt = useT()
 
   if (!playlist) {
     return (
       <div className="grid place-items-center py-32 text-center">
         <div>
-          <p className="text-lg font-semibold">Playlist not found</p>
-          <p className="mt-1 text-sm text-dim">It may have been deleted.</p>
+          <p className="text-lg font-semibold">{tt("playlist.notFound")}</p>
+          <p className="mt-1 text-sm text-dim">{tt("playlist.notFound.localSub")}</p>
         </div>
       </div>
     )
@@ -319,7 +322,7 @@ function LocalPlaylistView({ id }: { id: string }) {
           transition={{ duration: 0.4, delay: 0.08 }}
           className="min-w-0 flex-1"
         >
-          <p className="text-xs font-semibold text-ink/70">Playlist</p>
+          <p className="text-xs font-semibold text-ink/70">{tt("playlist.playlist")}</p>
           {editing ? (
             <input
               autoFocus
@@ -339,15 +342,15 @@ function LocalPlaylistView({ id }: { id: string }) {
                 setEditing(true)
               }}
               className="group mt-2 flex max-w-full items-center gap-3 text-left"
-              title="Rename"
-              aria-label="Rename playlist"
+              title={tt("playlist.rename")}
+              aria-label={tt("playlist.renameAria")}
             >
               <h1 title={playlist.name} className="line-clamp-3 break-words text-3xl font-black tracking-tight sm:text-5xl">{playlist.name}</h1>
               <Pencil size={20} className="shrink-0 text-faint opacity-0 transition group-hover:opacity-100" />
             </button>
           )}
           <p className="mt-3 text-sm text-dim">
-            {tracks.length} tracks{totalSec > 0 && ` · ${fmtDuration(totalSec)}`}
+            {tt("playlist.trackCount", { n: tracks.length })}{totalSec > 0 && ` · ${fmtDuration(totalSec)}`}
           </p>
         </motion.div>
       </div>
@@ -358,16 +361,16 @@ function LocalPlaylistView({ id }: { id: string }) {
             onClick={() => playContext(tracks, 0)}
             className="flex items-center gap-2 rounded-full bg-white px-8 py-3 text-sm font-bold text-black shadow-lg shadow-black/50 transition hover:scale-[1.03]"
           >
-            <Play size={16} className="fill-current" /> Play
+            <Play size={16} className="fill-current" /> {tt("playlist.play")}
           </button>
         )}
         {tracks.length > 0 && (
           <button
-            onClick={() => void startAll(tracks).then((n) => notify(n > 0 ? `Downloading ${n} tracks` : "Already downloaded"))}
-            title="Download all tracks for offline playback"
+            onClick={() => void startAll(tracks).then((n) => notify(n > 0 ? t("playlist.downloading", { n }) : t("playlist.alreadyDownloaded")))}
+            title={tt("playlist.downloadAllTitle")}
             className="flex items-center gap-2 rounded-full border border-line px-5 py-2.5 text-sm font-semibold text-dim transition hover:border-dim hover:text-ink"
           >
-            <Download size={15} /> Download all
+            <Download size={15} /> {tt("playlist.downloadAll")}
           </button>
         )}
         <button
@@ -382,7 +385,7 @@ function LocalPlaylistView({ id }: { id: string }) {
             confirmDel ? "border-white bg-white text-black" : "border-line text-dim hover:border-dim hover:text-ink"
           }`}
         >
-          <Trash2 size={15} /> {confirmDel ? "Delete?" : "Delete"}
+          <Trash2 size={15} /> {confirmDel ? tt("playlist.deleteConfirm") : tt("playlist.delete")}
         </button>
       </div>
 
@@ -391,18 +394,18 @@ function LocalPlaylistView({ id }: { id: string }) {
           <TrackTable
             tracks={tracks}
             onRemove={(t) => removeFromPlaylist(id, t.id)}
-            removeLabel="Remove from playlist"
+            removeLabel={tt("playlist.removeLabel")}
           />
         ) : (
           <div className="flex flex-col items-center rounded-2xl border border-dashed border-line py-20 text-center">
             <ListMusic size={44} className="text-faint" />
-            <p className="mt-4 text-lg font-semibold">Songs you add will live here</p>
-            <p className="mt-1 text-sm text-dim">Use the ··· menu on any track.</p>
+            <p className="mt-4 text-lg font-semibold">{tt("playlist.emptyLocal.title")}</p>
+            <p className="mt-1 text-sm text-dim">{tt("playlist.emptyLocal.sub")}</p>
             <Link
               to="/search"
               className="mt-6 flex items-center gap-2 rounded-full bg-white px-6 py-2.5 text-sm font-bold text-black transition hover:scale-105"
             >
-              <Plus size={15} /> Find songs
+              <Plus size={15} /> {tt("playlist.findSongs")}
             </Link>
           </div>
         )}

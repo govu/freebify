@@ -3,6 +3,7 @@ import { FileSpreadsheet, Link2, Loader2, X } from "lucide-react"
 import { useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { yt } from "../api/youtube"
+import { t, useT } from "../i18n"
 import { notify } from "../store/player"
 import { useLibrary } from "../store/library"
 
@@ -66,12 +67,13 @@ export function ImportPlaylist() {
   const deletePlaylist = useLibrary((s) => s.deletePlaylist)
   const fileRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
+  const tt = useT()
 
   const finish = (pid: string, n: number) => {
     setBusy(false)
     setProgress(null)
     setOpen(false)
-    notify(`Imported ${n} tracks`)
+    notify(t("import.imported", { n }))
     navigate(`/playlist/${pid}`)
   }
 
@@ -103,7 +105,7 @@ export function ImportPlaylist() {
     if (found === 0) {
       // every row failed to match — an empty playlist is worse than none
       deletePlaylist(pid)
-      notify("No tracks matched")
+      notify(t("import.noMatches"))
       setBusy(false)
       setProgress(null)
       return
@@ -117,14 +119,14 @@ export function ImportPlaylist() {
     if (spotifyId) return importSpotify(spotifyId)
     const id = YT_LIST.exec(u)?.[1]
     if (!id) {
-      notify("Paste a Spotify or YouTube Music playlist link")
+      notify(t("import.pasteLink"))
       return
     }
     setBusy(true)
     try {
       const res = await yt.playlist(id.replace(/^VL/, ""))
       if (!res || res.tracks.length === 0) {
-        notify("Playlist not found. Check it isn't private")
+        notify(t("import.notFound"))
         setBusy(false)
         return
       }
@@ -132,7 +134,7 @@ export function ImportPlaylist() {
       addTracksToPlaylist(pid, res.tracks)
       finish(pid, res.tracks.length)
     } catch {
-      notify("Import failed. Try again")
+      notify(t("import.failed"))
       setBusy(false)
     }
   }
@@ -142,13 +144,13 @@ export function ImportPlaylist() {
     try {
       const res = await yt.spotifyList(id)
       if (!res) {
-        notify("Couldn't read that playlist. Check it's public")
+        notify(t("import.unreadable"))
         setBusy(false)
         return
       }
       await matchEntries(res.name, res.tracks)
     } catch {
-      notify("Import failed. Try again")
+      notify(t("import.failed"))
       setBusy(false)
       setProgress(null)
     }
@@ -166,7 +168,7 @@ export function ImportPlaylist() {
         .map((r) => ({ title: r[ti]?.trim() ?? "", artist: r[ai]?.trim() ?? "" }))
       await matchEntries(file.name.replace(/\.[^.]+$/, ""), entries)
     } catch {
-      notify("Couldn't read that CSV")
+      notify(t("import.badCsv"))
       setBusy(false)
       setProgress(null)
     }
@@ -178,7 +180,7 @@ export function ImportPlaylist() {
         onClick={() => setOpen(true)}
         className="flex items-center gap-2 rounded-full border border-line px-4 py-2 text-sm font-semibold text-dim transition hover:border-dim hover:text-ink"
       >
-        <FileSpreadsheet size={15} /> Import
+        <FileSpreadsheet size={15} /> {tt("import.button")}
       </button>
 
       <AnimatePresence>
@@ -199,11 +201,11 @@ export function ImportPlaylist() {
               className="w-full max-w-md rounded-2xl border border-line bg-panel p-6 shadow-2xl shadow-black/60"
             >
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-bold">Import a playlist</h3>
+                <h3 className="text-lg font-bold">{tt("import.title")}</h3>
                 <button
                   onClick={() => !busy && setOpen(false)}
                   className="grid size-8 place-items-center rounded-full text-dim transition hover:bg-hover hover:text-ink"
-                  aria-label="Close"
+                  aria-label={tt("import.close")}
                 >
                   <X size={16} />
                 </button>
@@ -211,7 +213,7 @@ export function ImportPlaylist() {
 
               <div className="mt-5">
                 <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-dim">
-                  <Link2 size={12} /> Spotify or YouTube Music link
+                  <Link2 size={12} /> {tt("import.linkLabel")}
                 </p>
                 <input
                   value={url}
@@ -221,7 +223,7 @@ export function ImportPlaylist() {
                   className="w-full rounded-lg border border-line bg-card px-3 py-2.5 text-sm outline-none transition placeholder:text-faint focus:border-white/40"
                 />
                 <p className="mt-2 text-xs text-faint">
-                  Spotify: public playlists, first 50 tracks. YouTube Music: full list, no matching needed.
+                  {tt("import.linkHint")}
                 </p>
                 <button
                   onClick={() => void importUrl()}
@@ -231,19 +233,19 @@ export function ImportPlaylist() {
                   {busy && !progress ? (
                     <Loader2 size={15} className="mx-auto animate-spin" />
                   ) : progress ? (
-                    `Matching ${progress.done}/${progress.total}…`
+                    tt("import.matching", { done: progress.done, total: progress.total })
                   ) : (
-                    "Import playlist"
+                    tt("import.submit")
                   )}
                 </button>
               </div>
 
               <div className="mt-6 border-t border-line pt-5">
                 <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-dim">
-                  <FileSpreadsheet size={12} /> CSV export
+                  <FileSpreadsheet size={12} /> {tt("import.csvLabel")}
                 </p>
                 <p className="mb-3 text-xs text-faint">
-                  For longer or private playlists. Title + artist columns are detected automatically. Max 500.
+                  {tt("import.csvHint")}
                 </p>
                 <input
                   ref={fileRef}
@@ -262,8 +264,8 @@ export function ImportPlaylist() {
                   className="w-full rounded-full border border-line py-2.5 text-sm font-semibold text-dim transition enabled:hover:border-dim enabled:hover:text-ink disabled:opacity-40"
                 >
                   {progress
-                    ? `Matching ${progress.done}/${progress.total}…`
-                    : "Choose .csv file"}
+                    ? tt("import.matching", { done: progress.done, total: progress.total })
+                    : tt("import.chooseCsv")}
                 </button>
               </div>
             </motion.div>

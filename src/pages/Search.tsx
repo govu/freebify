@@ -9,6 +9,7 @@ import { ArtworkImg } from "../components/ArtworkImg"
 import { ArtistCard, PlaylistCard, Section } from "../components/Cards"
 import { RowsSkeleton } from "../components/Skeletons"
 import { TrackTable } from "../components/TrackTable"
+import { useT } from "../i18n"
 import { usePlayer } from "../store/player"
 
 // shared params→name lookup — the MoodPage route only carries the browse
@@ -16,6 +17,7 @@ import { usePlayer } from "../store/player"
 export const moodNames = new Map<string, string>()
 
 export function SearchPage() {
+  const tt = useT()
   const [query, setQuery] = useState("")
   const [debounced, setDebounced] = useState("")
   const [tracks, setTracks] = useState<Track[]>([])
@@ -145,7 +147,7 @@ export function SearchPage() {
               ref={inputRef}
               id="search-input"
               type="text"
-              aria-label="Search"
+              aria-label={tt("search.aria")}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -156,7 +158,7 @@ export function SearchPage() {
                   setQuery("")
                 }
               }}
-              placeholder="Songs, artists, playlists…"
+              placeholder={tt("search.placeholder")}
               className="w-full bg-transparent text-[15px] font-medium placeholder:font-normal placeholder:text-faint/70 focus-visible:shadow-none"
             />
             <AnimatePresence>
@@ -170,7 +172,7 @@ export function SearchPage() {
                     setQuery("")
                     inputRef.current?.focus()
                   }}
-                  aria-label="Clear"
+                  aria-label={tt("search.clear")}
                   className="grid size-6 shrink-0 place-items-center rounded-full bg-hover text-dim transition hover:bg-white/15 hover:text-ink"
                 >
                   <X size={13} />
@@ -206,7 +208,7 @@ export function SearchPage() {
               richer than the flat genre list */}
           {moods.length > 0 && (
             <>
-              <h2 className="mb-4 text-xl font-bold">Moods & moments</h2>
+              <h2 className="mb-4 text-xl font-bold">{tt("search.moods")}</h2>
               <div className="mb-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
                 {moods.slice(0, 18).map((m, i) => (
                   <motion.button
@@ -224,7 +226,7 @@ export function SearchPage() {
               </div>
             </>
           )}
-          <h2 className="mb-4 text-xl font-bold">Browse genres</h2>
+          <h2 className="mb-4 text-xl font-bold">{tt("search.browseGenres")}</h2>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
             {GENRES.map((g, i) => (
               <motion.button
@@ -247,13 +249,13 @@ export function SearchPage() {
 
       {debounced && !loading && failed && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="py-24 text-center">
-          <p className="text-lg font-semibold">Search failed</p>
-          <p className="mt-2 text-sm text-dim">Both catalogs are unreachable right now. Check your connection.</p>
+          <p className="text-lg font-semibold">{tt("search.failed")}</p>
+          <p className="mt-2 text-sm text-dim">{tt("search.failedHint")}</p>
           <button
             onClick={() => setRetryTick((n) => n + 1)}
             className="mt-5 rounded-full bg-white px-5 py-2 text-sm font-bold text-black transition hover:scale-[1.04]"
           >
-            Retry
+            {tt("search.retry")}
           </button>
         </motion.div>
       )}
@@ -265,7 +267,7 @@ export function SearchPage() {
               <div className="mb-10 grid gap-6 lg:grid-cols-[22rem_1fr]">
                 {top && (
                   <div>
-                    <h2 className="mb-4 text-xl font-bold">Top result</h2>
+                    <h2 className="mb-4 text-xl font-bold">{tt("search.topResult")}</h2>
                     <button
                       onClick={() => playTrack(top, tracks)}
                       onMouseEnter={() => prefetchStream(top)}
@@ -284,7 +286,7 @@ export function SearchPage() {
                         <ArtworkImg art={top.artwork} alt={top.title} className="size-28 rounded-xl shadow-lg" />
                         <p className="mt-4 truncate text-2xl font-bold">{top.title}</p>
                         <p className="mt-1 truncate text-sm text-dim">
-                          Song · {top.user.name}
+                          {tt("search.song")} · {top.user.name}
                         </p>
                       </div>
                       <span className="absolute bottom-5 right-5 grid size-12 translate-y-2 place-items-center rounded-full bg-white text-black opacity-0 shadow-xl transition-all group-hover:translate-y-0 group-hover:opacity-100">
@@ -294,7 +296,7 @@ export function SearchPage() {
                   </div>
                 )}
                 <div>
-                  <h2 className="mb-4 text-xl font-bold">Songs</h2>
+                  <h2 className="mb-4 text-xl font-bold">{tt("search.songs")}</h2>
                   {/* full result set as context — queue continues past the
                       visible slice instead of stopping at row 6 */}
                   <TrackTable tracks={tracks.slice(0, 6)} context={tracks} showHeader={false} showPlays={false} />
@@ -302,7 +304,7 @@ export function SearchPage() {
               </div>
 
               {artists.length > 0 && (
-                <Section title="Artists">
+                <Section title={tt("search.artists")}>
                   {artists.map((u) => (
                     <ArtistCard key={u.id} u={u} />
                   ))}
@@ -310,7 +312,7 @@ export function SearchPage() {
               )}
 
               {playlists.length > 0 && (
-                <Section title="Playlists & albums">
+                <Section title={tt("search.playlistsAlbums")}>
                   {playlists.map((p) => (
                     <PlaylistCard key={p.id} p={p} />
                   ))}
@@ -319,15 +321,15 @@ export function SearchPage() {
 
               {tracks.length > 6 && (
                 <div className="mt-4">
-                  <h2 className="mb-4 px-0 text-xl font-bold">More tracks</h2>
+                  <h2 className="mb-4 px-0 text-xl font-bold">{tt("search.moreTracks")}</h2>
                   <TrackTable tracks={tracks.slice(6)} context={tracks} showHeader={false} numberOffset={6} />
                 </div>
               )}
             </>
           ) : (
             <div className="py-24 text-center">
-              <p className="text-lg font-semibold">No results for “{debounced}”</p>
-              <p className="mt-2 text-sm text-dim">Try different keywords or check the spelling.</p>
+              <p className="text-lg font-semibold">{tt("search.noResults", { q: debounced })}</p>
+              <p className="mt-2 text-sm text-dim">{tt("search.noResultsHint")}</p>
             </div>
           )}
         </motion.div>

@@ -1,7 +1,9 @@
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useLocation, useNavigate } from "react-router-dom"
+import { useT } from "../i18n"
 
 export function TopBar() {
+  const t = useT()
   const navigate = useNavigate()
   const location = useLocation()
   // react-router tracks the history stack index — back is a no-op at 0
@@ -24,7 +26,7 @@ export function TopBar() {
         <button
           onClick={() => canBack && navigate(-1)}
           disabled={!canBack}
-          aria-label="Back"
+          aria-label={t("top.back")}
           className="grid size-8 place-items-center rounded-full border border-line bg-panel/80 text-dim backdrop-blur transition enabled:hover:bg-hover enabled:hover:text-ink disabled:opacity-35"
         >
           <ChevronLeft size={18} />
@@ -32,7 +34,7 @@ export function TopBar() {
         <button
           onClick={() => canFwd && navigate(1)}
           disabled={!canFwd}
-          aria-label="Forward"
+          aria-label={t("top.forward")}
           className="grid size-8 place-items-center rounded-full border border-line bg-panel/80 text-dim backdrop-blur transition enabled:hover:bg-hover enabled:hover:text-ink disabled:opacity-35"
         >
           <ChevronRight size={18} />

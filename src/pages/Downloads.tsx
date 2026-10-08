@@ -4,10 +4,12 @@ import { useMemo } from "react"
 import { Link } from "react-router-dom"
 import { ArtworkImg } from "../components/ArtworkImg"
 import { TrackTable } from "../components/TrackTable"
+import { useT } from "../i18n"
 import { useDownloads } from "../store/downloads"
 import { usePlayer } from "../store/player"
 
 export function DownloadsPage() {
+  const tt = useT()
   const items = useDownloads((s) => s.items)
   const progress = useDownloads((s) => s.progress)
   const pendingTracks = useDownloads((s) => s.pendingTracks)
@@ -38,10 +40,10 @@ export function DownloadsPage() {
       {/* compact section header — a storage view, not a playlist cover */}
       <div className="flex items-center justify-between gap-4 px-6 pb-6 pt-20">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
-          <p className="text-xs font-semibold text-faint">Offline</p>
-          <h1 className="mt-1.5 text-3xl font-black tracking-tight">Downloads</h1>
+          <p className="text-xs font-semibold text-faint">{tt("downloads.kicker")}</p>
+          <h1 className="mt-1.5 text-3xl font-black tracking-tight">{tt("downloads.title")}</h1>
           <p className="mt-2 text-sm text-dim">
-            {tracks.length} tracks — stored on this device, playable offline
+            {tt("downloads.subtitle", { n: tracks.length })}
           </p>
         </motion.div>
         {canDl && (
@@ -52,7 +54,7 @@ export function DownloadsPage() {
             onClick={() => window.freebify!.dl!.openDir()}
             className="flex shrink-0 items-center gap-2 rounded-full border border-line px-4 py-2 text-xs font-semibold text-dim transition hover:border-dim hover:text-ink"
           >
-            <FolderOpen size={13} /> Open folder
+            <FolderOpen size={13} /> {tt("downloads.openFolder")}
           </motion.button>
         )}
       </div>
@@ -77,7 +79,7 @@ export function DownloadsPage() {
                     a pill + percent reads cleaner and matches the table */}
                 {isQueued ? (
                   <span className="rounded-full border border-line px-2.5 py-0.5 text-[10px] font-semibold text-faint">
-                    Queued
+                    {tt("downloads.queued")}
                   </span>
                 ) : (
                   <span className="flex items-center gap-1.5 text-xs tabular-nums text-dim">
@@ -87,7 +89,7 @@ export function DownloadsPage() {
                 )}
                 <button
                   onClick={() => void remove(id)}
-                  aria-label="Cancel download"
+                  aria-label={tt("downloads.cancel")}
                   className="grid size-7 shrink-0 place-items-center rounded-full text-faint transition hover:bg-white/10 hover:text-ink"
                 >
                   <X size={13} />
@@ -103,12 +105,12 @@ export function DownloadsPage() {
               onClick={() => playContext(tracks, 0)}
               className="mb-6 flex items-center gap-2 rounded-full bg-white px-8 py-3 text-sm font-bold text-black shadow-lg shadow-black/50 transition hover:scale-[1.03]"
             >
-              <Play size={16} className="fill-current" /> Play all
+              <Play size={16} className="fill-current" /> {tt("downloads.playAll")}
             </button>
             <TrackTable
               tracks={tracks}
               onRemove={(t) => void remove(t.id)}
-              removeLabel="Delete download"
+              removeLabel={tt("downloads.removeLabel")}
             />
           </>
         ) : (
@@ -118,18 +120,18 @@ export function DownloadsPage() {
             className="flex flex-col items-center rounded-2xl border border-dashed border-line py-20 text-center"
           >
             <Download size={44} className="text-faint" />
-            <p className="mt-4 text-lg font-semibold">Nothing downloaded yet</p>
+            <p className="mt-4 text-lg font-semibold">{tt("downloads.emptyTitle")}</p>
             <p className="mt-1 max-w-sm text-sm text-dim">
               {canDl
-                ? "Open the ··· menu on any track and choose Download. It plays instantly, even offline."
-                : "Downloads need the desktop app."}
+                ? tt("downloads.emptyHint")
+                : tt("downloads.emptyNeedDesktop")}
             </p>
             {canDl && (
               <Link
                 to="/search"
                 className="mt-6 flex items-center gap-2 rounded-full bg-white px-6 py-2.5 text-sm font-bold text-black transition hover:scale-105"
               >
-                <Search size={15} /> Find something to keep
+                <Search size={15} /> {tt("downloads.emptyCta")}
               </Link>
             )}
           </motion.div>

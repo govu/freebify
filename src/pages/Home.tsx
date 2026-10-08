@@ -13,7 +13,7 @@ import { useLibrary } from "../store/library"
 import { usePlayer } from "../store/player"
 import { availableRewind, useRewind } from "../store/rewind"
 import { useStats } from "../store/stats"
-import { greeting } from "../utils/format"
+import { useT } from "../i18n"
 
 const fadeUp = {
   initial: { opacity: 0, y: 18 },
@@ -36,6 +36,7 @@ function moodForNow() {
 }
 
 export function Home() {
+  const tt = useT()
   const [chartTracks, setChartTracks] = useState<Track[]>([])
   const [chartArtists, setChartArtists] = useState<User[]>([])
   const [releases, setReleases] = useState<Playlist[]>([])
@@ -190,6 +191,10 @@ export function Home() {
   const hits = chartTracks.slice(0, 8)
   const quickPool = recentPicks.length >= 4 ? recentPicks : hits
 
+  const h = new Date().getHours()
+  const greetKey =
+    h < 5 ? "home.greeting.late" : h < 12 ? "home.greeting.morning" : h < 18 ? "home.greeting.afternoon" : "home.greeting.evening"
+
   return (
     <div className="-mt-12 pb-10">
       {/* hero */}
@@ -202,7 +207,7 @@ export function Home() {
           }}
         />
         <motion.div {...fadeUp} transition={{ duration: 0.5 }} className="relative">
-          <h1 className="text-3xl font-black tracking-tight sm:text-4xl">{greeting()}</h1>
+          <h1 className="text-3xl font-black tracking-tight sm:text-4xl">{tt(greetKey)}</h1>
         </motion.div>
 
         {/* quick picks */}
@@ -236,12 +241,12 @@ export function Home() {
               </span>
               <span className="relative min-w-0 flex-1">
                 <p className="truncate text-[15px] font-bold">
-                  Your {rewind.partial ? `${rewind.label} so far` : `${rewind.label} Rewind`} is ready
+                  {tt(rewind.partial ? "home.rewind.partialReady" : "home.rewind.ready", { label: rewind.label })}
                 </p>
-                <p className="truncate text-xs text-dim">Every play, counted on this device.</p>
+                <p className="truncate text-xs text-dim">{tt("home.rewind.sub")}</p>
               </span>
               <span className="relative shrink-0 rounded-full bg-white/10 px-4 py-2 text-xs font-bold transition group-hover:bg-ink group-hover:text-black">
-                Watch
+                {tt("home.rewind.watch")}
               </span>
             </button>
           </section>
@@ -249,13 +254,13 @@ export function Home() {
 
         {failed && (
           <div className="mx-6 mb-6 rounded-xl border border-line bg-card px-5 py-4">
-            <p className="text-sm font-semibold">Couldn't load your music</p>
-            <p className="mt-1 text-xs text-dim">Check your connection. Both catalogs are unreachable.</p>
+            <p className="text-sm font-semibold">{tt("home.loadError")}</p>
+            <p className="mt-1 text-xs text-dim">{tt("home.loadErrorHint")}</p>
             <button
               onClick={() => setRun((r) => r + 1)}
               className="mt-3 rounded-full bg-ink px-4 py-1.5 text-xs font-semibold text-black transition hover:scale-105"
             >
-              Retry
+              {tt("home.retry")}
             </button>
           </div>
         )}
@@ -265,8 +270,8 @@ export function Home() {
         {(loading || chartTracks.length > 0) && (
           <section className="mb-10">
             <div className="mb-4 flex items-baseline justify-between px-6">
-              <h2 className="text-xl font-bold tracking-tight">Top songs this week</h2>
-              <span className="text-xs font-semibold text-faint">Chart</span>
+              <h2 className="text-xl font-bold tracking-tight">{tt("home.topSongs")}</h2>
+              <span className="text-xs font-semibold text-faint">{tt("home.chart")}</span>
             </div>
             {loading && chartTracks.length === 0 ? (
               <div className="px-6">
@@ -282,7 +287,7 @@ export function Home() {
 
         {/* top artists — the chart's artist cards */}
         {chartArtists.length > 0 && (
-          <Section title="Top artists">
+          <Section title={tt("home.topArtists")}>
             {chartArtists.map((u) => (
               <ArtistCard key={u.id} u={u} />
             ))}
@@ -291,7 +296,7 @@ export function Home() {
 
         {/* new releases — fresh albums & singles, OLAK/MPRE routed correctly */}
         {(loading || releases.length > 0) && (
-          <Section title="New releases">
+          <Section title={tt("home.newReleases")}>
             {loading && releases.length === 0 ? (
               <CardsRowSkeleton />
             ) : (
@@ -302,7 +307,7 @@ export function Home() {
 
         {/* personalized radio — seeded by the most recent listen */}
         {forYou.length > 0 && (
-          <Section title={`Because you listened to ${forYouName}`}>
+          <Section title={tt("home.becauseListened", { name: forYouName })}>
             {forYou.map((t) => (
               <TrackCard key={t.id} t={t} context={forYou} />
             ))}
@@ -311,7 +316,7 @@ export function Home() {
 
         {/* time-aware mood shelf — Workout mornings, Chill nights… */}
         {moodPls.length > 0 && (
-          <Section title={`${moodName} mixes`}>
+          <Section title={tt("home.moodMixes", { name: moodName })}>
             {moodPls.map((p) => (
               <PlaylistCard key={p.id} p={p} />
             ))}
@@ -319,7 +324,7 @@ export function Home() {
         )}
 
         {(loading || playlists.length > 0) && (
-          <Section title="Hot playlists">
+          <Section title={tt("home.hotPlaylists")}>
             {loading && playlists.length === 0 ? (
               <CardsRowSkeleton />
             ) : (
@@ -330,7 +335,7 @@ export function Home() {
 
         {/* Audius path — only when YouTube is down entirely */}
         {audiusTrend.length > 0 && (
-          <Section title="Trending this week">
+          <Section title={tt("home.trending")}>
             {audiusTrend.map((t) => (
               <TrackCard key={t.id} t={t} context={audiusTrend} />
             ))}

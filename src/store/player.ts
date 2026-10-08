@@ -1,4 +1,5 @@
 import { create } from "zustand"
+import { t as tt } from "../i18n"
 import { rotateHost, streamUrl } from "../api/audius"
 import { prefetchStream, yt } from "../api/youtube"
 import { ytEngine } from "../api/ytplayer"
@@ -188,7 +189,7 @@ function failAdvance() {
     audio.pause()
     usePlayer.setState({ buffering: false, isPlaying: false })
     if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused"
-    notify("Couldn't play — check your connection and try again")
+    notify(tt("core.noConnection"))
     return
   }
   // advance past the dead track directly — next(true) would honor
@@ -656,7 +657,7 @@ export const usePlayer = create<PlayerState>()(
         playContext: (tracks, index) => {
           const playable = tracks.filter(isPlayable)
           if (!playable.length) {
-            notify("Nothing playable in this list")
+            notify(tt("core.nothingPlayable"))
             return
           }
           const target = tracks[index]
@@ -668,7 +669,7 @@ export const usePlayer = create<PlayerState>()(
               : playable.findIndex((t) => t.id === target?.id)
           // clicked a gated/unavailable row — play nothing, don't hijack #1
           if (i < 0) {
-            notify("That track isn't available for streaming")
+            notify(tt("core.unavailable"))
             return
           }
           autoFailStreak = 0
@@ -681,7 +682,7 @@ export const usePlayer = create<PlayerState>()(
 
         playTrack: (t, context) => {
           if (!isPlayable(t)) {
-            notify("That track isn't available for streaming")
+            notify(tt("core.unavailable"))
             return
           }
           autoFailStreak = 0
@@ -920,7 +921,7 @@ export const usePlayer = create<PlayerState>()(
 
         enqueue: (t) => {
           if (!isPlayable(t)) {
-            notify("That track isn't available for streaming")
+            notify(tt("core.unavailable"))
             return
           }
           // idle player — start the queued track instead of silently piling up
@@ -935,16 +936,16 @@ export const usePlayer = create<PlayerState>()(
           // old entries would rebase every stored position — refuse instead.
           set((s) => {
             if (s.queue.length >= 500) {
-              notify("Queue is full")
+              notify(tt("core.queueFull"))
               return s
             }
             return { queue: [...s.queue, t] }
           })
-          notify("Added to queue")
+          notify(tt("core.addedQueue"))
         },
         playNextUp: (t) => {
           if (!isPlayable(t)) {
-            notify("That track isn't available for streaming")
+            notify(tt("core.unavailable"))
             return
           }
           if (get().index === -1 || get().queue.length === 0) {
@@ -960,7 +961,7 @@ export const usePlayer = create<PlayerState>()(
             // shifted by one
             return { queue: q, history: s.history.map((h) => (h > s.index ? h + 1 : h)) }
           })
-          notify("Will play next")
+          notify(tt("core.playNext"))
         },
         removeAt: (i) => {
           const { queue, index, history } = get()
@@ -1010,7 +1011,7 @@ export const usePlayer = create<PlayerState>()(
             // a radio REPLACES what follows (same as Spotify); history stays
             radioFilledFor = { id: current.id, tail: mix.slice(0, 4).map((t) => t.id).join(",") }
             set({ queue: [...s.queue.slice(0, s.index + 1), ...mix] })
-            notify("Radio started — similar songs queued")
+            notify(tt("core.radioStarted"))
           })()
         },
         setAutoplay: (v) => set({ autoplay: v }),
@@ -1640,7 +1641,7 @@ function fireSleepTimer() {
   const s = usePlayer.getState()
   usePlayer.setState({ sleepAt: null })
   if (s.isPlaying) s.toggle()
-  notify("Sleep timer — playback paused")
+  notify(tt("core.sleepPaused"))
 }
 
 // ---- OS media controls (Windows SMTC / hardware media keys) ----

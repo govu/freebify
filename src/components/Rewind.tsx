@@ -5,12 +5,13 @@ import type { Artwork } from "../api/types"
 import type { RewindData } from "../store/rewind"
 import { useRewind } from "../store/rewind"
 import { usePlayer } from "../store/player"
+import { dateLocale, t as tt, useT } from "../i18n"
 import { ArtworkImg } from "./ArtworkImg"
 
 const hm = (ms: number) => {
   const h = Math.floor(ms / 3_600_000)
   const m = Math.round((ms % 3_600_000) / 60_000)
-  return h ? `${h}h ${m}m` : `${m}m`
+  return h ? tt("rewind.durHm", { h, m }) : tt("rewind.durM", { m })
 }
 
 // per-slide auto-advance pacing — the outro stays until dismissed
@@ -99,7 +100,7 @@ function Eyebrow({ children, delay = 0, className = "" }: { children: React.Reac
 
 function CountUp({ to, className }: { to: number; className?: string }) {
   const mv = useMotionValue(0)
-  const rounded = useTransform(mv, (v) => Math.round(v).toLocaleString())
+  const rounded = useTransform(mv, (v) => Math.round(v).toLocaleString(dateLocale()))
   useEffect(() => {
     const c = animate(mv, to, { duration: 1.9, ease: [0.16, 1, 0.3, 1], delay: 0.35 })
     return () => c.stop()
@@ -132,6 +133,7 @@ export function RewindOverlay() {
 function RewindStory({ data, onClose }: { data: RewindData; onClose: () => void }) {
   const [idx, setIdx] = useState(0)
   const playContext = usePlayer((s) => s.playContext)
+  const t = useT()
 
   const slides = useMemo(() => {
     const list: React.ReactNode[] = [
@@ -169,7 +171,7 @@ function RewindStory({ data, onClose }: { data: RewindData; onClose: () => void 
       className="fixed inset-0 z-[80] overflow-hidden bg-[#030303] outline-none"
       role="dialog"
       aria-modal="true"
-      aria-label={`${data.full} Rewind`}
+      aria-label={t("rewind.title", { month: data.full })}
     >
       {/* ambient — two slow-drifting glows, nothing else moves behind the type */}
       <motion.div
@@ -207,11 +209,11 @@ function RewindStory({ data, onClose }: { data: RewindData; onClose: () => void 
           ))}
         </div>
         <span className="ml-3 text-[10px] font-bold uppercase tracking-[0.3em] text-faint">
-          {data.partial ? "so far" : "rewind"}
+          {data.partial ? t("rewind.tagPartial") : t("rewind.tag")}
         </span>
         <button
           onClick={onClose}
-          aria-label="Close rewind"
+          aria-label={t("rewind.close")}
           className="ml-2 grid size-8 place-items-center rounded-full text-dim transition hover:bg-white/10 hover:text-ink"
         >
           <X size={16} />
@@ -220,16 +222,16 @@ function RewindStory({ data, onClose }: { data: RewindData; onClose: () => void 
 
       {/* tap zones — left third back, right two-thirds forward */}
       <div className="absolute inset-0 z-10 flex">
-        <button className="h-full w-[32%] cursor-w-resize" onClick={prev} aria-label="Previous slide" />
-        <button className="h-full flex-1 cursor-e-resize" onClick={next} aria-label="Next slide" />
+        <button className="h-full w-[32%] cursor-w-resize" onClick={prev} aria-label={t("rewind.prevSlide")} />
+        <button className="h-full flex-1 cursor-e-resize" onClick={next} aria-label={t("rewind.nextSlide")} />
       </div>
       <div className="pointer-events-none absolute inset-y-0 left-0 z-20 hidden items-center pl-4 md:flex">
-        <button onClick={prev} aria-label="Previous" className="pointer-events-auto grid size-10 place-items-center rounded-full text-faint transition hover:bg-white/10 hover:text-ink">
+        <button onClick={prev} aria-label={t("rewind.prev")} className="pointer-events-auto grid size-10 place-items-center rounded-full text-faint transition hover:bg-white/10 hover:text-ink">
           <ChevronLeft size={20} />
         </button>
       </div>
       <div className="pointer-events-none absolute inset-y-0 right-0 z-20 hidden items-center pr-4 md:flex">
-        <button onClick={next} aria-label="Next" className="pointer-events-auto grid size-10 place-items-center rounded-full text-faint transition hover:bg-white/10 hover:text-ink">
+        <button onClick={next} aria-label={t("rewind.next")} className="pointer-events-auto grid size-10 place-items-center rounded-full text-faint transition hover:bg-white/10 hover:text-ink">
           <ChevronRight size={20} />
         </button>
       </div>
@@ -256,11 +258,12 @@ function RewindStory({ data, onClose }: { data: RewindData; onClose: () => void 
 /* ---------------- slides ---------------- */
 
 function IntroSlide({ data }: { data: RewindData }) {
+  const t = useT()
   return (
     <div className="flex flex-col items-center text-center">
       <RewindMark />
       <Eyebrow delay={1.15} className="mt-4 indent-[0.32em]">
-        {data.partial ? "Freebify · still counting" : "Freebify · monthly"}
+        {data.partial ? t("rewind.introTagPartial") : t("rewind.introTag")}
       </Eyebrow>
       <Cascade
         text={data.label.toUpperCase()}
@@ -278,18 +281,18 @@ function IntroSlide({ data }: { data: RewindData }) {
         transition={{ duration: 0.5, ease: EASE, delay: 2.0 }}
         className="mt-6 text-sm text-dim"
       >
-        {data.partial ? "Your month so far — " : "A month of yours — "}
-        every play, counted on this device.
+        {data.partial ? t("rewind.introLinePartial") : t("rewind.introLine")}
       </motion.p>
     </div>
   )
 }
 
 function MinutesSlide({ data }: { data: RewindData }) {
+  const t = useT()
   const minutes = Math.round(data.ms / 60_000)
   return (
     <div className="flex flex-col items-center text-center">
-      <Eyebrow delay={0.1} className="indent-[0.32em]">you listened for</Eyebrow>
+      <Eyebrow delay={0.1} className="indent-[0.32em]">{t("rewind.listenedFor")}</Eyebrow>
       <div className="mt-4 flex items-baseline gap-3">
         <CountUp to={minutes} className="text-[26vw] font-black leading-none tabular-nums tracking-[-0.05em] text-ink sm:text-[11rem]" />
         <motion.span
@@ -298,7 +301,7 @@ function MinutesSlide({ data }: { data: RewindData }) {
           transition={{ duration: 0.5, ease: EASE, delay: 0.9 }}
           className="text-2xl font-bold text-dim sm:text-4xl"
         >
-          min
+          {t("rewind.min")}
         </motion.span>
       </div>
       <motion.p
@@ -307,23 +310,24 @@ function MinutesSlide({ data }: { data: RewindData }) {
         transition={{ duration: 0.5, ease: EASE, delay: 1.1 }}
         className="mt-3 text-base text-dim"
       >
-        {hm(data.ms)} — {data.plays.toLocaleString()} plays across {data.trackCount} tracks
+        {t("rewind.playsAcross", { time: hm(data.ms), plays: data.plays.toLocaleString(dateLocale()), tracks: data.trackCount })}
       </motion.p>
       <div className="mt-7 flex flex-wrap justify-center gap-2">
-        <Chip icon={<Disc3 size={12} />} delay={1.35}>{data.trackCount} tracks</Chip>
-        <Chip icon={<Users size={12} />} delay={1.45}>{data.artistCount} artists</Chip>
-        <Chip icon={<Clock3 size={12} />} delay={1.55}>{hm(data.ms)} total</Chip>
+        <Chip icon={<Disc3 size={12} />} delay={1.35}>{t("rewind.chipTracks", { n: data.trackCount })}</Chip>
+        <Chip icon={<Users size={12} />} delay={1.45}>{t("rewind.chipArtists", { n: data.artistCount })}</Chip>
+        <Chip icon={<Clock3 size={12} />} delay={1.55}>{t("rewind.chipTotal", { time: hm(data.ms) })}</Chip>
       </div>
     </div>
   )
 }
 
 function ArtistSlide({ data }: { data: RewindData }) {
+  const t = useT()
   const a = data.artists[0]
   const art: Artwork | null = a.art ? { "480x480": a.art } : null
   return (
     <div className="flex flex-col items-center text-center">
-      <Eyebrow delay={0.1} className="indent-[0.32em]">your #1 artist</Eyebrow>
+      <Eyebrow delay={0.1} className="indent-[0.32em]">{t("rewind.topArtist")}</Eyebrow>
       <motion.div
         initial={{ opacity: 0, scale: 0.86, y: 30 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -359,23 +363,24 @@ function ArtistSlide({ data }: { data: RewindData }) {
         transition={{ duration: 0.5, ease: EASE, delay: 1.15 }}
         className="mt-3 text-sm text-dim"
       >
-        {a.plays.toLocaleString()} plays · {hm(a.ms)} this month
+        {t("rewind.artistStats", { plays: a.plays.toLocaleString(dateLocale()), time: hm(a.ms) })}
       </motion.p>
     </div>
   )
 }
 
 function TracksSlide({ data, onPlay }: { data: RewindData; onPlay: () => void }) {
+  const tt = useT()
   return (
     <div>
-      <Eyebrow delay={0.05}>on repeat</Eyebrow>
+      <Eyebrow delay={0.05}>{tt("rewind.onRepeat")}</Eyebrow>
       <motion.h2
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.55, ease: EASE, delay: 0.18 }}
         className="mt-2 text-4xl font-black tracking-tight text-ink sm:text-5xl"
       >
-        The songs you couldn't stop
+        {tt("rewind.tracksTitle")}
       </motion.h2>
       <div className="mt-8 space-y-2">
         {data.tracks.map((t, i) => (
@@ -409,18 +414,19 @@ function TracksSlide({ data, onPlay }: { data: RewindData; onPlay: () => void })
         className="pointer-events-auto mt-7 inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-bold text-black transition hover:scale-[1.03]"
       >
         <Play size={14} className="fill-current" />
-        Play your top tracks
+        {tt("rewind.playTop")}
       </motion.button>
     </div>
   )
 }
 
 function OutroSlide({ data, onClose, onPlay }: { data: RewindData; onClose: () => void; onPlay: () => void }) {
+  const t = useT()
   const topA = data.artists[0]
   const topT = data.tracks[0]
   return (
     <div className="flex flex-col items-center text-center">
-      <Eyebrow delay={0.05} className="indent-[0.32em]">that was</Eyebrow>
+      <Eyebrow delay={0.05} className="indent-[0.32em]">{t("rewind.thatWas")}</Eyebrow>
       <Cascade
         text={`${data.label}.`}
         delay={0.18}
@@ -451,8 +457,8 @@ function OutroSlide({ data, onClose, onPlay }: { data: RewindData; onClose: () =
         </div>
         <div className="mt-4 flex justify-center gap-2">
           <Chip icon={<Clock3 size={11} />} delay={0.85}>{hm(data.ms)}</Chip>
-          <Chip icon={<Disc3 size={11} />} delay={0.93}>{data.plays.toLocaleString()} plays</Chip>
-          <Chip icon={<Sparkles size={11} />} delay={1.01}>{data.artistCount} artists</Chip>
+          <Chip icon={<Disc3 size={11} />} delay={0.93}>{t("rewind.chipPlays", { n: data.plays.toLocaleString(dateLocale()) })}</Chip>
+          <Chip icon={<Sparkles size={11} />} delay={1.01}>{t("rewind.chipArtists", { n: data.artistCount })}</Chip>
         </div>
       </motion.div>
       <div className="mt-8 flex items-center justify-center gap-3">
@@ -464,7 +470,7 @@ function OutroSlide({ data, onClose, onPlay }: { data: RewindData; onClose: () =
           className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-ink px-6 py-2.5 text-sm font-bold text-black transition hover:scale-[1.03]"
         >
           <Play size={14} className="fill-current" />
-          Play it again
+          {t("rewind.playAgain")}
         </motion.button>
         <motion.button
           initial={{ opacity: 0, y: 16 }}
@@ -473,17 +479,9 @@ function OutroSlide({ data, onClose, onPlay }: { data: RewindData; onClose: () =
           onClick={onClose}
           className="pointer-events-auto rounded-full border border-line px-6 py-2.5 text-sm font-semibold text-dim transition hover:border-white/30 hover:text-ink"
         >
-          Keep listening
+          {t("rewind.keepListening")}
         </motion.button>
       </div>
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.8, delay: 1.6 }}
-        className="mt-10 text-[11px] font-semibold uppercase tracking-[0.3em] indent-[0.3em] text-faint"
-      >
-        Free forever.
-      </motion.p>
     </div>
   )
 }

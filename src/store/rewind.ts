@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import type { Track } from "../api/types"
+import { dateLocale } from "../i18n"
 import { monthKey, useStats } from "./stats"
 import { safeStorage } from "./storage"
 
@@ -51,8 +52,8 @@ export function buildRewind(key: string, partial = false): RewindData | null {
     partial,
     ms: m.ms,
     plays: m.plays,
-    label: d.toLocaleDateString(undefined, { month: "long" }),
-    full: d.toLocaleDateString(undefined, { month: "long", year: "numeric" }),
+    label: d.toLocaleDateString(dateLocale(), { month: "long" }),
+    full: d.toLocaleDateString(dateLocale(), { month: "long", year: "numeric" }),
     tracks,
     artists,
     trackCount: Object.keys(m.tracks).length,

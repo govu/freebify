@@ -6,6 +6,7 @@ import { Logo } from "../components/Logo"
 import { usePlayer } from "../store/player"
 import { availableRewind, useRewind } from "../store/rewind"
 import { dayKey, useStats } from "../store/stats"
+import { dateLocale, useT } from "../i18n"
 import { fmtCount, fmtDuration } from "../utils/format"
 
 const hours = (ms: number) => (ms / 3_600_000).toFixed(1)
@@ -16,6 +17,7 @@ const hm = (ms: number) => {
 }
 
 export function StatsPage() {
+  const tt = useT()
   const tracks = useStats((s) => s.tracks)
   const artists = useStats((s) => s.artists)
   const days = useStats((s) => s.days)
@@ -48,9 +50,9 @@ export function StatsPage() {
   return (
     <div className="px-6 pb-16 pt-6">
       <motion.h1 initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="text-3xl font-black tracking-tight">
-        Your stats
+        {tt("stats.title")}
       </motion.h1>
-      <p className="mt-1 text-sm text-dim">Counted on this device. Never uploaded.</p>
+      <p className="mt-1 text-sm text-dim">{tt("stats.subtitle")}</p>
 
       {rewind && (
         <motion.button
@@ -61,30 +63,30 @@ export function StatsPage() {
           className="mt-4 inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-bold text-black transition hover:scale-[1.03]"
         >
           <Logo size={15} />
-          Watch your {rewind.partial ? `${rewind.label} so far` : `${rewind.label} Rewind`}
+          {tt(rewind.partial ? "stats.rewind.partial" : "stats.rewind.full", { label: rewind.label })}
         </motion.button>
       )}
 
       {empty ? (
         <div className="mt-16 flex flex-col items-center rounded-2xl border border-dashed border-line py-20 text-center">
           <BarChart3 size={44} className="text-faint" />
-          <p className="mt-4 text-lg font-semibold">Play some music first</p>
-          <p className="mt-1 text-sm text-dim">Listening time and plays show up here.</p>
+          <p className="mt-4 text-lg font-semibold">{tt("stats.emptyTitle")}</p>
+          <p className="mt-1 text-sm text-dim">{tt("stats.emptyHint")}</p>
         </div>
       ) : (
         <>
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatCard icon={<Clock3 size={16} />} label="This week" value={`${hours(weekMs)}h`} />
-            <StatCard icon={<Disc3 size={16} />} label="Total plays" value={fmtCount(totalPlays)} />
-            <StatCard icon={<BarChart3 size={16} />} label="Tracks played" value={fmtCount(Object.keys(tracks).length)} />
-            <StatCard icon={<Users size={16} />} label="Artists heard" value={fmtCount(Object.keys(artists).length)} />
+            <StatCard icon={<Clock3 size={16} />} label={tt("stats.thisWeek")} value={`${hours(weekMs)}h`} />
+            <StatCard icon={<Disc3 size={16} />} label={tt("stats.totalPlays")} value={fmtCount(totalPlays)} />
+            <StatCard icon={<BarChart3 size={16} />} label={tt("stats.tracksPlayed")} value={fmtCount(Object.keys(tracks).length)} />
+            <StatCard icon={<Users size={16} />} label={tt("stats.artistsHeard")} value={fmtCount(Object.keys(artists).length)} />
           </div>
 
           {/* 7-day strip */}
           <div className="mt-6 rounded-2xl border border-line bg-panel p-5">
             <div className="mb-4 flex items-baseline justify-between">
-              <span className="text-xs font-semibold text-dim">Listening time</span>
-              <span className="text-xs tabular-nums text-faint">{hm(weekMs)} this week</span>
+              <span className="text-xs font-semibold text-dim">{tt("stats.listeningTime")}</span>
+              <span className="text-xs tabular-nums text-faint">{tt("stats.weekTotal", { t: hm(weekMs) })}</span>
             </div>
             <div className="flex h-24 items-end gap-2 border-b border-line/60 pb-px">
               {week.map((d) => {
@@ -94,7 +96,7 @@ export function StatsPage() {
                   <div
                     key={d.day}
                     className="group flex flex-1 flex-col items-center gap-1.5"
-                    title={`${date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })} · ${d.ms ? hm(d.ms) : "no listening"}`}
+                    title={`${date.toLocaleDateString(dateLocale(), { weekday: "long", month: "short", day: "numeric" })} · ${d.ms ? hm(d.ms) : tt("stats.noListening")}`}
                   >
                     <motion.div
                       initial={{ scaleY: 0 }}
@@ -106,7 +108,7 @@ export function StatsPage() {
                       } group-hover:bg-white`}
                     />
                     <span className={`text-[9px] uppercase ${isToday ? "font-semibold text-dim" : "text-faint"}`}>
-                      {date.toLocaleDateString(undefined, { weekday: "narrow" })}
+                      {date.toLocaleDateString(dateLocale(), { weekday: "narrow" })}
                     </span>
                   </div>
                 )
@@ -116,7 +118,7 @@ export function StatsPage() {
 
           <div className="mt-8 grid gap-8 lg:grid-cols-2">
             <div>
-              <h2 className="mb-3 text-sm font-semibold text-dim">Top tracks</h2>
+              <h2 className="mb-3 text-sm font-semibold text-dim">{tt("stats.topTracks")}</h2>
               <div className="space-y-1">
                 {topTracks.map((t, i) => (
                   <button
@@ -140,7 +142,7 @@ export function StatsPage() {
             </div>
 
             <div>
-              <h2 className="mb-3 text-sm font-semibold text-dim">Top artists</h2>
+              <h2 className="mb-3 text-sm font-semibold text-dim">{tt("stats.topArtists")}</h2>
               <div className="space-y-1">
                 {topArtists.map((a, i) => (
                   <div key={a.name} className="flex items-center gap-3 rounded-lg px-2 py-1.5">

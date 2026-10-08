@@ -8,6 +8,7 @@ import type { Playlist, Track, User } from "../api/types"
 import { PlaylistCard, Section } from "../components/Cards"
 import { HeroSkeleton, RowsSkeleton } from "../components/Skeletons"
 import { TrackTable } from "../components/TrackTable"
+import { useT } from "../i18n"
 import { useLibrary } from "../store/library"
 import { usePlayer } from "../store/player"
 import { fmtCount } from "../utils/format"
@@ -38,6 +39,7 @@ export function ArtistPage() {
   const playContext = usePlayer((s) => s.playContext)
   const followed = useLibrary((s) => Boolean(s.followed[artist?.id ?? ""]))
   const toggleFollow = useLibrary((s) => s.toggleFollow)
+  const tt = useT()
 
   useEffect(() => {
     if (!id) return
@@ -109,15 +111,15 @@ export function ArtistPage() {
           <div className="grid size-14 place-items-center rounded-full bg-hover">
             <UserX size={22} className="text-faint" />
           </div>
-          <p className="mt-4 text-lg font-semibold">Artist not found</p>
+          <p className="mt-4 text-lg font-semibold">{tt("artist.notFound")}</p>
           <p className="mt-1 max-w-64 text-sm leading-5 text-dim">
-            {nameHint ? `Couldn't load ${nameHint}'s page. It may have moved or the network hiccuped.` : "They may have moved or the network hiccuped."}
+            {nameHint ? tt("artist.notFound.named", { name: nameHint }) : tt("artist.notFound.sub")}
           </p>
           <button
             onClick={() => setRetry((r) => r + 1)}
             className="mt-5 rounded-full border border-line px-6 py-2 text-sm font-semibold transition hover:scale-[1.03] hover:border-white/30"
           >
-            Retry
+            {tt("artist.retry")}
           </button>
         </motion.div>
       </div>
@@ -185,14 +187,14 @@ export function ArtistPage() {
           <div className="min-w-0">
           {artist.is_verified && (
             <p className="flex items-center gap-1.5 text-xs font-semibold text-ink">
-              <BadgeCheck size={15} /> Verified artist
+              <BadgeCheck size={15} /> {tt("artist.verified")}
             </p>
           )}
           <h1 className="mt-1 text-4xl font-black tracking-tight drop-shadow-lg sm:text-6xl">{artist.name}</h1>
           <p className="mt-2 text-sm text-ink/80">
             {artist.id.startsWith("yt-")
-              ? `${fmtCount(artist.follower_count)} monthly listeners`
-              : `${fmtCount(artist.follower_count)} followers · ${artist.track_count} tracks`}
+              ? tt("artist.monthlyListeners", { n: fmtCount(artist.follower_count) })
+              : tt("artist.stats", { followers: fmtCount(artist.follower_count), tracks: artist.track_count })}
             {artist.location ? ` · ${artist.location}` : ""}
           </p>
           </div>
@@ -206,7 +208,7 @@ export function ArtistPage() {
               onClick={() => playContext(tracks, 0)}
               className="flex items-center gap-2 rounded-full bg-white px-8 py-3 text-sm font-bold text-black shadow-lg shadow-black/50 transition hover:scale-[1.03]"
             >
-              <Play size={16} className="fill-current" /> Play
+              <Play size={16} className="fill-current" /> {tt("artist.play")}
             </button>
           )}
           <button
@@ -219,19 +221,19 @@ export function ArtistPage() {
             }`}
           >
             {followed ? <UserCheck size={16} /> : <UserPlus size={16} />}
-            {followed ? "Following" : "Follow"}
+            {followed ? tt("artist.following") : tt("artist.follow")}
           </button>
         </div>
 
-        <h2 className="mb-2 text-xl font-bold">Popular</h2>
+        <h2 className="mb-2 text-xl font-bold">{tt("artist.popular")}</h2>
         {tracksError ? (
           <div className="py-10 text-sm text-dim">
-            <p>Couldn't load the tracks — the artist page itself is fine.</p>
+            <p>{tt("artist.tracksError")}</p>
             <button
               onClick={() => setRetry((r) => r + 1)}
               className="mt-3 rounded-full border border-line px-5 py-1.5 text-xs font-semibold transition hover:border-white/30"
             >
-              Retry
+              {tt("artist.retry")}
             </button>
           </div>
         ) : tracks.length > 0 ? (
@@ -245,29 +247,29 @@ export function ArtistPage() {
                 onClick={() => setAllTracks((v) => !v)}
                 className="mt-2 rounded-full px-3 py-1.5 text-xs font-semibold text-dim transition hover:bg-hover hover:text-ink"
               >
-                {allTracks ? "Show less" : `Show all ${tracks.length}`}
+                {allTracks ? tt("artist.showLess") : tt("artist.showAll", { n: tracks.length })}
               </button>
             )}
           </>
         ) : (
-          <p className="py-10 text-sm text-dim">This artist hasn't uploaded tracks yet.</p>
+          <p className="py-10 text-sm text-dim">{tt("artist.noTracks")}</p>
         )}
       </div>
 
       {albums.length > 0 && (
         <div className="mt-4">
-          <Section title="Albums">{albums.map((p) => <PlaylistCard key={p.id} p={p} />)}</Section>
+          <Section title={tt("artist.albums")}>{albums.map((p) => <PlaylistCard key={p.id} p={p} />)}</Section>
         </div>
       )}
       {singles.length > 0 && (
         <div className={albums.length > 0 ? "" : "mt-4"}>
-          <Section title="Singles & EPs">{singles.map((p) => <PlaylistCard key={p.id} p={p} />)}</Section>
+          <Section title={tt("artist.singles")}>{singles.map((p) => <PlaylistCard key={p.id} p={p} />)}</Section>
         </div>
       )}
 
       {artist.bio && (
         <div className="mt-10 max-w-2xl px-6">
-          <h2 className="mb-2 text-xl font-bold">About</h2>
+          <h2 className="mb-2 text-xl font-bold">{tt("artist.about")}</h2>
           <p className="whitespace-pre-line text-sm leading-6 text-dim">{artist.bio}</p>
         </div>
       )}

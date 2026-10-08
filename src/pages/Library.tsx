@@ -5,6 +5,7 @@ import { Link, useNavigate } from "react-router-dom"
 import { ArtistCard, LocalPlaylistCard, Section, TrackCard } from "../components/Cards"
 import { ImportPlaylist } from "../components/ImportPlaylist"
 import { TrackTable } from "../components/TrackTable"
+import { useT } from "../i18n"
 import { useLibrary } from "../store/library"
 import { usePlayer } from "../store/player"
 
@@ -22,6 +23,7 @@ export function LibraryPage() {
   const createPlaylist = useLibrary((s) => s.createPlaylist)
   const playContext = usePlayer((s) => s.playContext)
   const navigate = useNavigate()
+  const t = useT()
 
   return (
     <div className="-mt-12 pb-10">
@@ -42,23 +44,23 @@ export function LibraryPage() {
           <Heart size={72} className="fill-black text-black" />
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.08 }}>
-          <p className="text-xs font-semibold text-ink/70">Playlist</p>
-          <h1 className="mt-2 text-4xl font-black tracking-tight sm:text-6xl">Liked Songs</h1>
-          <p className="mt-3 text-sm text-dim">{likedTracks.length} tracks</p>
+          <p className="text-xs font-semibold text-ink/70">{t("library.playlistLabel")}</p>
+          <h1 className="mt-2 text-4xl font-black tracking-tight sm:text-6xl">{t("library.likedSongs")}</h1>
+          <p className="mt-3 text-sm text-dim">{t("library.trackCount", { n: likedTracks.length })}</p>
         </motion.div>
       </div>
 
       {/* user playlists */}
       <div className="px-6 pb-2">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold tracking-tight">Your playlists</h2>
+          <h2 className="text-xl font-bold tracking-tight">{t("library.yourPlaylists")}</h2>
           <div className="flex items-center gap-2">
             <ImportPlaylist />
             <button
               onClick={() => navigate(`/playlist/${createPlaylist()}`)}
               className="flex items-center gap-2 rounded-full border border-line px-4 py-2 text-sm font-semibold text-dim transition hover:border-dim hover:text-ink"
             >
-              <Plus size={15} /> New playlist
+              <Plus size={15} /> {t("library.newPlaylist")}
             </button>
           </div>
         </div>
@@ -70,7 +72,7 @@ export function LibraryPage() {
           </div>
         ) : (
           <p className="text-sm text-dim">
-            Create a playlist and add songs from the ··· menu on any track.
+            {t("library.emptyPlaylists")}
           </p>
         )}
       </div>
@@ -82,7 +84,7 @@ export function LibraryPage() {
               onClick={() => playContext(likedTracks, 0)}
               className="mb-6 flex items-center gap-2 rounded-full bg-white px-8 py-3 text-sm font-bold text-black shadow-lg shadow-black/50 transition hover:scale-[1.03]"
             >
-              <Play size={16} className="fill-current" /> Play all
+              <Play size={16} className="fill-current" /> {t("library.playAll")}
             </button>
             <TrackTable tracks={likedTracks} />
           </>
@@ -93,13 +95,13 @@ export function LibraryPage() {
             className="flex flex-col items-center rounded-2xl border border-dashed border-line py-20 text-center"
           >
             <Heart size={44} className="text-faint" />
-            <p className="mt-4 text-lg font-semibold">Songs you like will live here</p>
-            <p className="mt-1 text-sm text-dim">Tap the heart on any track to save it.</p>
+            <p className="mt-4 text-lg font-semibold">{t("library.emptyLiked.title")}</p>
+            <p className="mt-1 text-sm text-dim">{t("library.emptyLiked.sub")}</p>
             <Link
               to="/search"
               className="mt-6 flex items-center gap-2 rounded-full bg-white px-6 py-2.5 text-sm font-bold text-black transition hover:scale-105"
             >
-              <Search size={15} /> Find something to love
+              <Search size={15} /> {t("library.emptyLiked.cta")}
             </Link>
           </motion.div>
         )}
@@ -107,7 +109,7 @@ export function LibraryPage() {
 
       {followedArtists.length > 0 && (
         <div className="mt-10">
-          <Section title="Artists you follow">
+          <Section title={t("library.followed")}>
             {followedArtists.map((u) => (
               <ArtistCard key={u.id} u={u} />
             ))}
@@ -117,7 +119,7 @@ export function LibraryPage() {
 
       {recents.length > 0 && (
         <div className="mt-10">
-          <Section title="Recently played">
+          <Section title={t("library.recents")}>
             {recents.slice(0, 12).map((t) => (
               <TrackCard key={t.id} t={t} context={recents} />
             ))}

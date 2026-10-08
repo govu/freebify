@@ -8,6 +8,7 @@ import { Link } from "react-router-dom"
 import { useLibrary } from "../store/library"
 import { usePlayer, applyVolume } from "../store/player"
 import { hasArtistPage } from "../api/types"
+import { useT } from "../i18n"
 import { fmtDuration } from "../utils/format"
 import { ArtworkImg } from "./ArtworkImg"
 import { EqPopover } from "./EqPopover"
@@ -16,6 +17,7 @@ import { Marquee } from "./Marquee"
 import { Slider } from "./Slider"
 
 export function PlayerBar() {
+  const t = useT()
   const current = usePlayer((s) => s.current)
   const isPlaying = usePlayer((s) => s.isPlaying)
   const buffering = usePlayer((s) => s.buffering)
@@ -58,7 +60,7 @@ export function PlayerBar() {
             <motion.button
               layoutId="np-art"
               onClick={() => setNpOpen(true)}
-              aria-label="Open Now Playing"
+              aria-label={t("player.openNowPlaying")}
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.97 }}
               className="relative size-14 shrink-0 overflow-hidden rounded-lg"
@@ -102,7 +104,7 @@ export function PlayerBar() {
                 if (!liked) setPop((p) => p + 1)
                 toggleLike(current)
               }}
-              aria-label={liked ? "Remove from Liked Songs" : "Save to Liked Songs"}
+              aria-label={liked ? t("player.unlike") : t("player.like")}
               aria-pressed={liked}
               className={`ml-1 shrink-0 transition ${liked ? "text-ink" : "text-dim hover:text-ink"}`}
             >
@@ -122,7 +124,7 @@ export function PlayerBar() {
             <div className="grid size-14 shrink-0 place-items-center rounded-lg bg-card text-faint">
               <Play size={20} />
             </div>
-            <p className="truncate text-sm text-dim">Pick something to play</p>
+            <p className="truncate text-sm text-dim">{t("player.pick")}</p>
           </>
         )}
       </div>
@@ -130,17 +132,17 @@ export function PlayerBar() {
       {/* transport + progress */}
       <div className="flex min-w-0 flex-col items-center gap-1.5">
         <div className="flex items-center gap-5">
-          <CtlBtn onClick={toggleShuffle} disabled={disabled} label="Shuffle" active={shuffle} pressed={shuffle}>
+          <CtlBtn onClick={toggleShuffle} disabled={disabled} label={t("player.shuffle")} active={shuffle} pressed={shuffle}>
             <Shuffle size={16} />
           </CtlBtn>
-          <CtlBtn onClick={() => prev()} disabled={disabled} label="Previous">
+          <CtlBtn onClick={() => prev()} disabled={disabled} label={t("player.prev")}>
             <SkipBack size={18} className="fill-current" />
           </CtlBtn>
           <motion.button
             whileTap={{ scale: 0.92 }}
             onClick={toggle}
             disabled={disabled}
-            aria-label={buffering && !isPlaying ? "Cancel loading" : isPlaying ? "Pause" : "Play"}
+            aria-label={buffering && !isPlaying ? t("player.cancelLoading") : isPlaying ? t("player.pause") : t("player.play")}
             className="grid size-10 place-items-center overflow-hidden rounded-full bg-white text-black shadow-lg transition enabled:hover:scale-105 disabled:opacity-40"
           >
             {/* transport icon morphs play ↔ pause ↔ spinner */}
@@ -163,13 +165,13 @@ export function PlayerBar() {
               </motion.span>
             </AnimatePresence>
           </motion.button>
-          <CtlBtn onClick={() => next()} disabled={disabled} label="Next">
+          <CtlBtn onClick={() => next()} disabled={disabled} label={t("player.next")}>
             <SkipForward size={18} className="fill-current" />
           </CtlBtn>
           <CtlBtn
             onClick={cycleRepeat}
             disabled={disabled}
-            label={repeat === "one" ? "Repeat: one" : repeat === "all" ? "Repeat: all" : "Repeat: off"}
+            label={repeat === "one" ? t("player.repeatOne") : repeat === "all" ? t("player.repeatAll") : t("player.repeatOff")}
             active={repeat !== "off"}
             pressed={repeat !== "off"}
           >
@@ -185,14 +187,14 @@ export function PlayerBar() {
       <div className="flex items-center justify-end gap-3">
         <button
           onClick={() => setQueueOpen(!queueOpen)}
-          aria-label="Queue"
+          aria-label={t("player.queue")}
           aria-pressed={queueOpen}
           className={`transition hover:text-ink ${queueOpen ? "text-ink" : "text-dim"}`}
         >
           <ListMusic size={18} />
         </button>
         <EqPopover />
-        <button onClick={toggleMute} aria-label={muted ? "Unmute" : "Mute"} aria-pressed={muted} className="text-dim transition hover:text-ink">
+        <button onClick={toggleMute} aria-label={muted ? t("player.unmute") : t("player.mute")} aria-pressed={muted} className="text-dim transition hover:text-ink">
           <VolumeIcon size={18} />
         </button>
         {/* value stays the real volume while muted — keyboard arrows then
@@ -204,12 +206,12 @@ export function PlayerBar() {
           onScrub={applyVolume}
           onCommit={(v) => setVolume(v)}
           className="w-24"
-          ariaLabel="Volume"
+          ariaLabel={t("player.volume")}
         />
         <button
           onClick={() => setNpOpen(true)}
           disabled={disabled}
-          aria-label="Now playing"
+          aria-label={t("player.nowPlaying")}
           className="text-dim transition enabled:hover:text-ink disabled:opacity-40"
         >
           <Maximize2 size={16} />
@@ -220,6 +222,7 @@ export function PlayerBar() {
 }
 
 function SeekBar() {
+  const t = useT()
   const currentTime = usePlayer((s) => s.currentTime)
   const duration = usePlayer((s) => s.duration)
   const trackDur = usePlayer((s) => s.current?.duration ?? 0)
@@ -229,7 +232,7 @@ function SeekBar() {
   return (
     <div className="flex w-full max-w-xl items-center gap-2">
       <span className="min-w-10 text-right text-[11px] tabular-nums text-dim">{fmtDuration(currentTime)}</span>
-      <Slider value={currentTime} max={dur} className="flex-1" onCommit={(v) => seek(v)} smooth ariaLabel="Seek" disabled={!hasTrack} />
+      <Slider value={currentTime} max={dur} className="flex-1" onCommit={(v) => seek(v)} smooth ariaLabel={t("player.seek")} disabled={!hasTrack} />
       <span className="min-w-10 text-[11px] tabular-nums text-dim">{fmtDuration(dur)}</span>
     </div>
   )

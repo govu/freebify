@@ -3,11 +3,13 @@ import { GripVertical, Infinity as InfinityIcon, ListPlus, Radio, Trash2, X } fr
 import { useEffect, useRef, useState } from "react"
 import { useLibrary } from "../store/library"
 import { notify, usePlayer } from "../store/player"
+import { useT } from "../i18n"
 import { fmtDuration } from "../utils/format"
 import { ArtworkImg } from "./ArtworkImg"
 import { Equalizer } from "./Equalizer"
 
 export function QueuePanel() {
+  const tt = useT()
   const queue = usePlayer((s) => s.queue)
   const index = usePlayer((s) => s.index)
   const isPlaying = usePlayer((s) => s.isPlaying)
@@ -40,7 +42,7 @@ export function QueuePanel() {
     // the per-track loop serialized the store on every call.
     addTracksToPlaylist(pid, queue.slice(Math.max(0, index)))
     setSaved(true)
-    notify("Saved queue as playlist")
+    notify(tt("queue.savedAsPlaylist"))
     setTimeout(() => setSaved(false), 1500)
   }
 
@@ -63,7 +65,7 @@ export function QueuePanel() {
           aside already provides the clearance) */}
       <div className="flex h-full w-80 flex-col lg:pt-11">
         <div className="flex items-center justify-between px-5 py-4">
-          <h3 className="font-bold">Queue</h3>
+          <h3 className="font-bold">{tt("queue.title")}</h3>
           <div className="flex items-center gap-1">
             {queue.length > 1 && (
               <button
@@ -79,20 +81,20 @@ export function QueuePanel() {
                   }
                 }}
                 onMouseLeave={() => setArmClear(false)}
-                title={armClear ? "Click again to clear the queue" : "Clear queue"}
-                aria-label={armClear ? "Confirm: clear queue" : "Clear queue"}
+                title={armClear ? tt("queue.clearConfirmTitle") : tt("queue.clear")}
+                aria-label={armClear ? tt("queue.clearConfirmAria") : tt("queue.clear")}
                 className={`grid h-7 place-items-center rounded-full transition hover:bg-hover hover:text-ink ${
                   armClear ? "w-auto px-2.5 text-[11px] font-semibold text-ink" : "size-7 text-dim"
                 }`}
               >
-                {armClear ? "Clear?" : <Trash2 size={14} />}
+                {armClear ? tt("queue.clearQuestion") : <Trash2 size={14} />}
               </button>
             )}
             {queue.length > 0 && (
               <button
                 onClick={saveAsPlaylist}
-                title="Save queue as playlist"
-                aria-label="Save queue as playlist"
+                title={tt("queue.saveAs")}
+                aria-label={tt("queue.saveAs")}
                 className={`grid size-7 place-items-center rounded-full transition hover:bg-hover ${
                   saved ? "text-ink" : "text-dim hover:text-ink"
                 }`}
@@ -102,7 +104,7 @@ export function QueuePanel() {
             )}
             <button
               onClick={() => setQueueOpen(false)}
-              aria-label="Close queue"
+              aria-label={tt("queue.close")}
               className="grid size-7 place-items-center rounded-full text-dim transition hover:bg-hover hover:text-ink"
             >
               <X size={15} />
@@ -118,7 +120,7 @@ export function QueuePanel() {
         >
           <InfinityIcon size={15} className={autoplay ? "text-ink" : "text-faint"} />
           <span className={`flex-1 text-xs font-medium ${autoplay ? "text-ink" : "text-dim"}`}>
-            Autoplay similar songs
+            {tt("queue.autoplay")}
           </span>
           <span
             className={`relative h-4 w-7 rounded-full transition-colors ${autoplay ? "bg-ink" : "bg-hover"}`}
@@ -139,14 +141,14 @@ export function QueuePanel() {
             className="mx-3 mb-2 flex items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-colors hover:bg-hover"
           >
             <Radio size={15} className="text-faint" />
-            <span className="flex-1 text-xs font-medium text-dim">Start radio from this song</span>
+            <span className="flex-1 text-xs font-medium text-dim">{tt("queue.radio")}</span>
           </button>
         )}
 
         <div className="scroller min-h-0 flex-1 overflow-y-auto px-2 pb-4">
           {queue[index] && (
             <>
-              <p className="px-3 pb-1 text-xs font-semibold text-faint">Now playing</p>
+              <p className="px-3 pb-1 text-xs font-semibold text-faint">{tt("queue.nowPlaying")}</p>
               {/* tapping the live row toggles instead of restarting */}
               <QueueRow track={queue[index]} active playing={isPlaying} onClick={toggle} />
             </>
@@ -154,7 +156,7 @@ export function QueuePanel() {
           {upNext.length > 0 && (
             <>
               <p className="px-3 pb-1 pt-4 text-xs font-semibold text-faint">
-                Next up
+                {tt("queue.nextUp")}
               </p>
               <AnimatePresence initial={false}>
                 {upNext.map((t, k) => {
@@ -196,11 +198,11 @@ export function QueuePanel() {
             </>
           )}
           {queue.length === 0 && (
-            <p className="px-4 py-10 text-center text-sm text-dim">Your queue is empty.</p>
+            <p className="px-4 py-10 text-center text-sm text-dim">{tt("queue.empty")}</p>
           )}
           {queue.length > 0 && upNext.length === 0 && !autoplay && (
             <p className="px-4 py-6 text-center text-xs text-dim">
-              End of queue — enable autoplay to keep the music going.
+              {tt("queue.endHint")}
             </p>
           )}
         </div>
@@ -233,6 +235,7 @@ function QueueRow({
   dragging?: boolean
   dropAbove?: boolean
 }) {
+  const tt = useT()
   const rowRef = useRef<HTMLDivElement>(null)
   // HTML5 drag handlers can't go through motion.div's props — motion
   // consumes onDrag*/draggable as its own gesture API. Bind them
@@ -294,7 +297,7 @@ function QueueRow({
             e.stopPropagation()
             onRemove()
           }}
-          aria-label={`Remove ${t.title} from queue`}
+          aria-label={tt("queue.removeTrack", { title: t.title })}
           className="grid size-6 shrink-0 place-items-center rounded-full text-faint opacity-0 transition hover:text-ink focus-visible:opacity-100 group-hover/row:opacity-100"
         >
           <X size={13} />
