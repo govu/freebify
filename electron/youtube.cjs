@@ -1,7 +1,7 @@
 // YouTube Music service running in the Electron main process.
 // - Metadata (search, artists, albums, trending) via youtubei.js (Innertube)
 // - Stream URLs via bundled yt-dlp binary (signed googlevideo URLs)
-const { execFile } = require("child_process")
+const { execFile, spawn } = require("child_process")
 const path = require("path")
 const fs = require("fs")
 const { app } = require("electron")
@@ -96,13 +96,45 @@ function ensureExecutable() {
   return dequarantineP
 }
 
-function runYtdlp(args, timeout = 18000) {
+// spawn (not execFile) so a caller can kill the process mid-flight — a lost
+// fast-host race or a stale lyrics probe must not burn a Python extractor to
+// completion for a result nobody reads
+function runYtdlp(args, timeout = 18000, signal) {
   return new Promise((resolve, reject) => {
     ensureExecutable().then(
       () => {
-        execFile(binPath(), args, { timeout, maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => {
-          if (err) reject(err)
-          else resolve(stdout)
+        const CAP = 4 * 1024 * 1024
+        const child = spawn(binPath(), args, { windowsHide: true })
+        let out = ""
+        let tail = ""
+        const timer = setTimeout(() => {
+          try { child.kill() } catch {}
+        }, timeout)
+        const onAbort = () => {
+          try { child.kill() } catch {}
+        }
+        signal?.addEventListener("abort", onAbort, { once: true })
+        child.stdout.on("data", (d) => {
+          out += d
+          if (out.length > CAP) {
+            try { child.kill() } catch {}
+          }
+        })
+        child.stderr.on("data", (d) => {
+          tail = (tail + d).slice(-400)
+        })
+        const settle = () => {
+          clearTimeout(timer)
+          signal?.removeEventListener("abort", onAbort)
+        }
+        child.on("error", (e) => {
+          settle()
+          reject(e)
+        })
+        child.on("close", (code, sig) => {
+          settle()
+          if (code === 0) resolve(out)
+          else reject(new Error(`yt-dlp ${code != null ? `exited ${code}` : `killed ${sig}`}${tail ? `: ${tail}` : ""}`))
         })
       },
       reject,
@@ -316,10 +348,14 @@ async function resolveStreamUrl(videoId, prefetch = false) {
 
   const job = (async () => {
     try {
-      const dlpResolve = () =>
+      // the optional signal kills the spawn the moment a fast host wins the
+      // race — without it every lucky <1s probe still left a full ~5s Python
+      // extraction running to completion in the background
+      const dlpResolve = (signal) =>
         withDlpSlot(
           () => {
             inflightStarted.add(key)
+            if (signal?.aborted) return ""
             return runYtdlp([
               "-f", "bestaudio[ext=m4a]/bestaudio",
               "-g",
@@ -331,10 +367,11 @@ async function resolveStreamUrl(videoId, prefetch = false) {
               "--socket-timeout", "10",
               "--retries", "2",
               `https://music.youtube.com/watch?v=${videoId}`,
-            ])
+            ], 18000, signal)
           },
           prefetch
         ).then((out) => {
+          if (!out) return null // queue-drop or aborted mid-flight
           const url = out.trim().split(/\r?\n/)[0].trim()
           return url.startsWith("http") ? url : null
         })
@@ -351,7 +388,7 @@ async function resolveStreamUrl(videoId, prefetch = false) {
               try {
                 return await firstNonNull([
                   ...FAST_HOSTS.map((h) => probeHost(h, videoId, raceCtl.signal)),
-                  dlpResolve(),
+                  dlpResolve(raceCtl.signal),
                 ])
               } finally {
                 raceCtl.abort()
@@ -1632,14 +1669,22 @@ async function captions(videoId) {
       return result
     }
     try {
-      const out = await runYtdlp(
-        [
-          "-J", "--no-playlist", "--no-warnings",
-          "--socket-timeout", "10", "--retries", "2",
-          `https://www.youtube.com/watch?v=${videoId}`,
-        ],
-        30000
+      // -J is the heaviest yt-dlp call (full player response + subs manifest
+      // walk) — route it through the background lane so a lyrics twin-walk
+      // can never stack Python processes over a real playback click
+      const out = await withDlpSlot(
+        () =>
+          runYtdlp(
+            [
+              "-J", "--no-playlist", "--no-warnings",
+              "--socket-timeout", "10", "--retries", "2",
+              `https://www.youtube.com/watch?v=${videoId}`,
+            ],
+            30000
+          ),
+        true
       )
+      if (!out) return null // dropped from the prefetch queue
       const info = JSON.parse(out)
       const sub = pickCaptionFmt(info.subtitles)
       const asr = pickCaptionFmt(info.automatic_captions)
@@ -2139,7 +2184,9 @@ function register(ipcMain) {
     if (typeof q !== "string" || !q.trim()) return []
     const count = Math.min(20, Math.max(1, typeof n === "number" ? n : 10))
     return withTimeout(
-      runYtdlp(["--flat-playlist", "-J", `ytsearch${count}:${q}`], 25000)
+      // lyrics-twin search — background work, never allowed to queue ahead
+      // of or beside real playback spawns
+      withDlpSlot(() => runYtdlp(["--flat-playlist", "-J", `ytsearch${count}:${q}`], 25000), true)
         .then((out) => {
           const j = JSON.parse(out)
           return (j.entries ?? [])
@@ -2218,7 +2265,7 @@ function register(ipcMain) {
         fs.writeFileSync(stamp, String(Date.now()))
       } catch {}
       setTimeout(() => {
-        runYtdlp(["-U"], 30000).catch(() => {})
+        withDlpSlot(() => runYtdlp(["-U"], 30000), true).catch(() => {})
       }, 15000)
     }
   }

@@ -29,7 +29,10 @@ let dirty = false
 const inFlight = new Map() // id -> { kill: () => void, base?: string }
 // batch downloads (album/playlist "download all") queue here — spawning a
 // yt-dlp per track unthrottled would torch CPU + rate limits
-const MAX_PARALLEL = 3
+// each download is a full Python extractor + file fetch held for minutes —
+// two lanes keep disk I/O moving without stacking yt-dlp.exe processes on
+// top of whatever the player is already spawning
+const MAX_PARALLEL = 2
 const pending = [] // [{id, start}] FIFO
 // ids the user removed while a job was still running — a killed job's
 // completion path must not re-commit it into the manifest
