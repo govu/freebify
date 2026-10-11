@@ -239,6 +239,123 @@
   .swap.out { transform: translateY(-112%); opacity: 0; }
   .swap.pre { transition: none; transform: translateY(112%); opacity: 0; }
 
+  /* ── demo ── */
+  .demo{padding:clamp(80px,10vw,130px) 24px;}
+  .demo-inner{max-width:1120px;margin:0 auto;}
+  .demo-head{max-width:640px;margin:0 auto 44px;text-align:center;}
+  .demo-head h2{font-size:clamp(32px,4vw,48px);font-weight:800;letter-spacing:-0.025em;margin-bottom:12px;}
+  .demo-head p{color:var(--dim);font-size:16px;}
+  .demo-win{border-radius:18px;border:1px solid var(--line);background:var(--bg);overflow:hidden;box-shadow:0 30px 80px -20px rgb(0 0 0/.8),0 0 0 1px rgb(255 255 255/.04);text-align:left;user-select:none;}
+  .demo-tb{height:38px;background:#0d0d0d;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 14px;gap:14px;position:relative;}
+  .demo-dots{display:flex;gap:7px;}
+  .demo-dots i{width:10px;height:10px;border-radius:50%;background:#3a3a3a;}
+  .demo-tb-label{position:absolute;left:50%;transform:translateX(-50%);font-size:11px;font-weight:600;color:var(--faint);letter-spacing:.06em;white-space:nowrap;}
+  .demo-body{display:grid;grid-template-columns:196px 1fr;min-height:380px;max-height:520px;}
+  .demo-side{background:#0e0e0e;border-right:1px solid var(--line);padding:14px 10px;display:flex;flex-direction:column;gap:2px;overflow:hidden auto;overscroll-behavior:contain;}
+  .demo-nav{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;color:var(--dim);font-size:13px;font-weight:600;cursor:pointer;transition:background .2s ease,color .2s ease;}
+  .demo-nav svg{width:16px;height:16px;flex:none;}
+  .demo-nav:hover{color:var(--ink);}
+  .demo-nav.on{background:var(--card);color:var(--ink);}
+  .demo-side-sep{height:1px;background:var(--line);margin:10px 4px;}
+  .demo-side-t{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);padding:2px 10px 6px;}
+  .demo-pl{font-size:12px;color:var(--dim);padding:6px 10px;border-radius:6px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background .2s ease,color .2s ease;}
+  .demo-pl:hover{color:var(--ink);background:rgb(255 255 255/.03);}
+  .demo-main{display:flex;flex-direction:column;overflow:hidden auto;overscroll-behavior:contain;position:relative;}
+  .demo-view{padding:22px 24px 20px;display:flex;flex-direction:column;gap:18px;min-height:0;}
+  .demo-greet{font-size:21px;font-weight:800;letter-spacing:-0.02em;}
+  .demo-tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .demo-tile{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px 8px 8px;cursor:pointer;transition:background .2s ease;min-width:0;}
+  .demo-tile:hover{background:var(--cardh);}
+  .demo-tile-t{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .demo-sec{font-size:15px;font-weight:700;letter-spacing:-0.01em;margin-top:2px;}
+  .demo-rows{display:flex;flex-direction:column;}
+  .demo-row{display:grid;grid-template-columns:34px 1fr auto;align-items:center;gap:12px;padding:6px 10px;border-radius:8px;cursor:pointer;transition:background .2s ease;}
+  .demo-row:hover{background:rgb(255 255 255/.04);}
+  .demo-row.on{background:rgb(255 255 255/.07);}
+  .demo-num{font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums;display:flex;align-items:center;height:32px;}
+  .demo-row.on .demo-num,.demo-row:hover .demo-num{color:var(--dim);}
+  .demo-tmeta{min-width:0;display:flex;align-items:center;gap:11px;}
+  .demo-tt{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .demo-row.on .demo-tt{color:var(--ink);}
+  .demo-ta{font-size:11px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .demo-dur{font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums;}
+  .demo-art{width:34px;height:34px;border-radius:5px;flex:none;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;position:relative;overflow:hidden;outline:1px solid rgb(255 255 255/.08);outline-offset:-1px;}
+  .demo-tile .demo-art{width:36px;height:36px;}
+  .demo-eq{display:none;position:absolute;inset:0;background:rgb(0 0 0/.55);align-items:flex-end;justify-content:center;gap:2px;padding-bottom:7px;}
+  .demo-eq i{width:3px;background:#fff;border-radius:1px;height:30%;animation:eqvar 1s ease-in-out infinite;}
+  .demo-eq i:nth-child(2){animation-duration:.72s;animation-delay:-.2s}
+  .demo-eq i:nth-child(3){animation-duration:.9s;animation-delay:-.45s}
+  .demo-eq i:nth-child(4){animation-duration:.64s;animation-delay:-.1s}
+  @keyframes eqvar{0%,100%{height:22%}50%{height:88%}}
+  .demo-art.live .demo-eq{display:flex;}
+  .demo-art.live.pause .demo-eq i{animation-play-state:paused;}
+  .demo-like{margin-left:8px;color:var(--faint);flex:none;display:flex;transition:color .2s ease,transform .15s ease;}
+  .demo-like:hover{color:var(--dim);}
+  .demo-like.on{color:#fff;}
+  .demo-like.on svg{fill:#fff;}
+  .demo-like svg{width:13px;height:13px;}
+  .demo-empty{padding:34px 0;text-align:center;color:var(--faint);font-size:13px;}
+  .demo-search{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:99px;padding:10px 16px;transition:border-color .2s ease;}
+  .demo-search:focus-within{border-color:rgb(255 255 255/.3);}
+  .demo-search svg{width:15px;height:15px;color:var(--faint);flex:none;}
+  .demo-search input{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--ink);font:600 14px var(--f);}
+  .demo-search input::placeholder{color:var(--faint);}
+  .demo-chips{display:flex;gap:8px;flex-wrap:wrap;}
+  .demo-chip{font-size:12px;font-weight:600;padding:7px 14px;border-radius:99px;background:var(--card);border:1px solid var(--line);color:var(--dim);cursor:pointer;transition:all .2s ease;}
+  .demo-chip:hover{color:var(--ink);border-color:rgb(255 255 255/.25);}
+  .demo-chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink);}
+  /* player bar */
+  .demo-bar{border-top:1px solid var(--line);background:#0e0e0e;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;padding:10px 14px;position:relative;}
+  .demo-prog{position:absolute;top:-1px;left:0;right:0;height:4px;cursor:pointer;}
+  .demo-prog-bg{position:absolute;inset:0;background:rgb(255 255 255/.1);}
+  .demo-prog-fg{position:absolute;top:0;bottom:0;left:0;background:#fff;width:0;transition:width .5s linear;}
+  .demo-now{display:flex;align-items:center;gap:10px;min-width:0;}
+  .demo-now .demo-art{width:42px;height:42px;border-radius:6px;}
+  .demo-now-t{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .demo-now-a{font-size:11px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .demo-transport{display:flex;align-items:center;gap:16px;}
+  .demo-tb2{color:var(--faint);display:flex;cursor:pointer;transition:color .15s ease,transform .15s ease;background:none;border:0;padding:4px;}
+  .demo-tb2:hover{color:var(--ink);}
+  .demo-tb2:active{transform:scale(.96);}
+  .demo-tb2 svg{width:15px;height:15px;}
+  .demo-tb2.on{color:var(--ink);}
+  .demo-tb2.on::after{content:"";position:absolute;bottom:-3px;left:50%;transform:translateX(-50%);width:3px;height:3px;border-radius:50%;background:#fff;}
+  .demo-tb2{position:relative;}
+  .demo-play{width:34px;height:34px;border-radius:50%;background:#fff;color:#000;border:0;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .15s ease;}
+  .demo-play:hover{transform:scale(1.05);}
+  .demo-play:active{transform:scale(.96);}
+  .demo-play svg{width:14px;height:14px;}
+  .demo-right{display:flex;align-items:center;gap:14px;justify-self:end;}
+  .demo-vol{display:flex;align-items:center;gap:8px;color:var(--faint);}
+  .demo-vol svg{width:14px;height:14px;}
+  .demo-vol-track{width:70px;height:4px;border-radius:2px;background:rgb(255 255 255/.14);cursor:pointer;position:relative;}
+  .demo-vol-fg{position:absolute;top:0;bottom:0;left:0;background:rgb(255 255 255/.6);border-radius:2px;width:70%;}
+  .demo-time{display:flex;justify-content:center;gap:5px;font-size:10px;color:var(--faint);font-variant-numeric:tabular-nums;margin-top:5px;}
+  .demo-center{display:flex;flex-direction:column;align-items:center;min-width:220px;}
+  /* promo video */
+  .demo-video{margin-top:34px;display:grid;grid-template-columns:1fr 1.6fr;gap:34px;align-items:center;}
+  .demo-video-copy h3{font-size:clamp(22px,3vw,30px);font-weight:800;letter-spacing:-0.02em;margin-bottom:10px;}
+  .demo-video-copy p{color:var(--dim);font-size:14.5px;line-height:1.6;}
+  .demo-vidwrap{position:relative;border-radius:14px;overflow:hidden;border:1px solid var(--line);cursor:pointer;background:#000;}
+  .demo-vidwrap img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;}
+  .demo-vidwrap::after{content:"";position:absolute;inset:0;background:linear-gradient(to top,rgb(0 0 0/.45),transparent 55%);pointer-events:none;}
+  .demo-vidplay{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:58px;height:58px;border-radius:50%;background:rgb(255 255 255/.94);color:#000;display:flex;align-items:center;justify-content:center;transition:transform .2s ease;box-shadow:0 8px 30px rgb(0 0 0/.5);}
+  .demo-vidwrap:hover .demo-vidplay{transform:translate(-50%,-50%) scale(1.07);}
+  .demo-vidplay svg{width:20px;height:20px;margin-left:2px;}
+  .demo-viddur{position:absolute;right:10px;bottom:10px;font-size:11px;font-weight:600;background:rgb(0 0 0/.7);padding:4px 8px;border-radius:6px;color:#fff;}
+  .demo-vidwrap video{display:block;width:100%;aspect-ratio:16/9;background:#000;}
+  @media (max-width:900px){
+    .demo-video{grid-template-columns:1fr;gap:22px;}
+    .demo-body{grid-template-columns:1fr;max-height:none;}
+    .demo-side{flex-direction:row;align-items:center;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);padding:10px;}
+    .demo-side-sep,.demo-side-t,.demo-pl{display:none;}
+    .demo-nav{padding:8px 12px;}
+    .demo-tiles{grid-template-columns:1fr;}
+    .demo-bar{grid-template-columns:1fr auto;}
+    .demo-right{display:none;}
+    .demo-center{min-width:0;}
+  }
+
   /* reveal */
   .rv { opacity: 0; transform: translateY(28px); transition: opacity 1s var(--ease), transform 1s var(--ease); }
   .rv.in { opacity: 1; transform: none; }
@@ -287,6 +404,7 @@
   <div class="links">
     <a href="#features" data-scroll>Features</a>
     <a href="#shots" data-scroll>Interface</a>
+    <a href="#demo" data-scroll>Demo</a>
     <a href="https://github.com/govu/freebify" target="_blank" rel="noopener">GitHub</a>
     <a class="dl" href="#get" data-scroll>Download</a>
   </div>
@@ -318,10 +436,10 @@
   <h2 class="rv">Everything inside.</h2>
   <div class="feat-row rv"><span class="t">Original recordings</span><span class="d">Search returns the real studio release, not a slowed edit, a sped-up rip or a cover with the same title.</span><span class="arr">→</span></div>
   <div class="feat-row rv"><span class="t">Zero ads</span><span class="d">No audio interruptions, no banners, no “go premium” nags. The player plays. That’s the deal.</span><span class="arr">→</span></div>
-  <div class="feat-row rv"><span class="t">Live synced lyrics</span><span class="d">The current line lights up as it's sung — pulled from multiple lyric sources and auto-timed against the exact upload that's playing. Shift-click any line to pin it yourself.</span><span class="arr">→</span></div>
-  <div class="feat-row rv"><span class="t">Offline downloads</span><span class="d">Save songs to disk and keep listening with the internet off — the Downloads tab is a real offline mode, not a cache lottery.</span><span class="arr">→</span></div>
-  <div class="feat-row rv"><span class="t">Stats that remember</span><span class="d">Top tracks, artists and listening time, counted on your machine all year — a Wrapped that doesn't wait for December.</span><span class="arr">→</span></div>
-  <div class="feat-row rv"><span class="t">Built-in equalizer</span><span class="d">A real multi-band EQ baked into the player — tune the sound once and it applies everywhere, every song.</span><span class="arr">→</span></div>
+  <div class="feat-row rv"><span class="t">Live synced lyrics</span><span class="d">The current line lights up as it's sung, auto-timed against the exact upload that's playing from multiple lyric sources. Shift-click any line to pin it yourself.</span><span class="arr">→</span></div>
+  <div class="feat-row rv"><span class="t">Offline downloads</span><span class="d">Save songs to disk and keep listening with the internet off. The Downloads tab is a real offline mode, not a cache lottery.</span><span class="arr">→</span></div>
+  <div class="feat-row rv"><span class="t">Stats that remember</span><span class="d">Top tracks, artists and listening time, counted on your machine all year. A Wrapped that doesn't wait for December.</span><span class="arr">→</span></div>
+  <div class="feat-row rv"><span class="t">Built-in equalizer</span><span class="d">A real multi-band EQ baked into the player. Tune it once and it applies everywhere, to every song.</span><span class="arr">→</span></div>
   <div class="feat-row rv"><span class="t">Genre radio</span><span class="d">Start a radio from any track and the queue stays on-vibe: the same sound, not the same song rehashed.</span><span class="arr">→</span></div>
   <div class="feat-row rv"><span class="t">Discord presence</span><span class="d">Your status shows the song, the artist, the artwork and live progress, like the big players do.</span><span class="arr">→</span></div>
   <div class="feat-row rv"><span class="t">Silent auto-updates</span><span class="d">New versions download in the background and install when you quit. You never manage the app.</span><span class="arr">→</span></div>
@@ -350,13 +468,95 @@
   </div>
 </section>
 
+<section class="demo" id="demo">
+  <div class="demo-inner">
+    <div class="demo-head">
+      <h2 class="rv">Don't take our word.<br>Take the controls.</h2>
+      <p class="rv d1">A live slice of the real interface. Click a track, hit play, search, like — the songs are placeholders, every pixel and interaction is the app's own.</p>
+    </div>
+    <div class="demo-win rv d2">
+      <div class="demo-tb">
+        <div class="demo-dots"><i></i><i></i><i></i></div>
+        <span class="demo-tb-label">Freebify — live demo</span>
+      </div>
+      <div class="demo-body">
+        <aside class="demo-side" data-lenis-prevent>
+          <div class="demo-nav on" data-view="home">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
+            Home
+          </div>
+          <div class="demo-nav" data-view="search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            Search
+          </div>
+          <div class="demo-nav" data-view="library">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v16M9 4v16"/><path d="m15 4 5 1.5-4 14.5-5-1.5z"/></svg>
+            Library
+          </div>
+          <div class="demo-side-sep"></div>
+          <div class="demo-side-t">Playlists</div>
+          <div class="demo-pl">late night drives</div>
+          <div class="demo-pl">gym, unfortunately</div>
+          <div class="demo-pl">rain on the window</div>
+          <div class="demo-pl">songs I'd defend in court</div>
+        </aside>
+        <main class="demo-main" id="demoMain" data-lenis-prevent></main>
+      </div>
+      <div class="demo-bar">
+        <div class="demo-prog" id="demoProg"><div class="demo-prog-bg"></div><div class="demo-prog-fg" id="demoProgFg"></div></div>
+        <div class="demo-now">
+          <div class="demo-art" id="demoNowArt"><span id="demoNowMono">F</span>
+            <div class="demo-eq"><i></i><i></i><i></i><i></i></div>
+          </div>
+          <div style="min-width:0">
+            <div class="demo-now-t" id="demoNowT">Pick a track</div>
+            <div class="demo-now-a" id="demoNowA">the player is live</div>
+          </div>
+          <button class="demo-like" id="demoLike" aria-label="Like" style="background:none;border:0;cursor:pointer;padding:4px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20.7C5.4 16.9 2 13.2 2 9.6 2 6.9 4 5 6.5 5c2 0 3.9 1.2 5.5 3.4C13.6 6.2 15.5 5 17.5 5 20 5 22 6.9 22 9.6c0 3.6-3.4 7.3-10 11.1z"/></svg>
+          </button>
+        </div>
+        <div class="demo-center">
+          <div class="demo-transport">
+            <button class="demo-tb2" id="demoShuf" aria-label="Shuffle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg></button>
+            <button class="demo-tb2" id="demoPrev" aria-label="Previous"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+            <button class="demo-play" id="demoPlay" aria-label="Play">
+              <svg id="demoPlayIco" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            </button>
+            <button class="demo-tb2" id="demoNext" aria-label="Next"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM15 12 4 19V5z"/></svg></button>
+            <button class="demo-tb2" id="demoRep" aria-label="Repeat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg></button>
+          </div>
+          <div class="demo-time"><span id="demoTcur">0:00</span><span>/</span><span id="demoTend">0:00</span></div>
+        </div>
+        <div class="demo-right">
+          <div class="demo-vol">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4z" fill="currentColor" stroke="none"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.4 5.6a9 9 0 0 1 0 12.8"/></svg>
+            <div class="demo-vol-track" id="demoVol"><div class="demo-vol-fg" id="demoVolFg"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="demo-video rv d3">
+      <div class="demo-video-copy">
+        <h3>Or watch the pitch.</h3>
+        <p>The whole argument in 26 seconds. No ads, no account, original recordings only — kinetic type, because the app speaks for itself two inches up.</p>
+      </div>
+      <div class="demo-vidwrap" id="demoVidWrap" role="button" tabindex="0" aria-label="Play Freebify promo video">
+        <img src="promo-poster.jpg" alt="Freebify promo frame">
+        <div class="demo-vidplay"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>
+        <span class="demo-viddur">0:26</span>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section class="get" id="get">
   <div class="inner">
     <h2 class="rv">Get Freebify.<br><span>Keep the money.</span></h2>
     <div class="row rv d1">
-      <a class="btn solid" id="dlBtn" href="https://github.com/govu/freebify/releases/latest/download/Freebify-setup.exe" target="_blank" rel="noopener">Download Freebify 1.0.48</a>
-      <a class="btn line" id="altBtn" href="https://github.com/govu/freebify/releases/latest/download/Freebify-portable.exe" target="_blank" rel="noopener">Portable .exe</a>
-      <a class="btn line" id="osBtn" href="https://github.com/govu/freebify/releases/latest/download/Freebify-arm64.dmg" target="_blank" rel="noopener">macOS .dmg</a>
+      <a class="btn solid" id="dlBtn" href="download.html?os=windows">Download Freebify 1.0.48</a>
+      <a class="btn line" id="altBtn" href="download.html?os=portable">Portable .exe</a>
+      <a class="btn line" id="osBtn" href="download.html?os=mac">macOS .dmg</a>
     </div>
     <div class="note rv d2">
       <span id="platNote">Free forever · Windows 10/11 · ~120 MB</span><b id="verMeta"> · v1.0.48</b><span id="updNote"> · updates itself</span>
@@ -391,9 +591,9 @@
   <p class="legal">Freebify is an independent, non-commercial open-source project (GPL-3.0 + Freebify Attribution Clause — copies and forks must keep visible credit to the original author and may not reuse the Freebify name or logo). It is a media player, not a music service: it hosts, stores, uploads and sells nothing. All audio, metadata and artwork are requested by the user's own device, directly from the third-party platforms that serve them (YouTube / YouTube Music and the public Audius API), under those platforms' own terms; the software itself contains no copyrighted material. Not affiliated with, endorsed by, or sponsored by Spotify, YouTube, Google, Audius, or any label or rights holder; all trademarks belong to their respective owners. Intended for personal, non-commercial use; responsibility for complying with each platform's terms and local law rests with the user. Provided "as is", without warranty; the authors accept no liability for how the software is used.</p>
 </footer>
 
-<script src="https://unpkg.com/lenis@1.3.11/dist/lenis.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.7/gsap.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.7/ScrollTrigger.min.js"></script>
+<script src="vendor/lenis.min.js"></script>
+<script src="vendor/gsap.min.js"></script>
+<script src="vendor/ScrollTrigger.min.js"></script>
 <script>
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -412,7 +612,15 @@
   /* ---------- lenis smooth scroll ---------- */
   let lenis = null;
   if (!reduced && window.Lenis) {
-    lenis = new Lenis({ lerp: 0.09, wheelMultiplier: 1, smoothWheel: true });
+    // heavier glide than stock: a long lerp tail gives the page its own
+    // momentum signature, syncTouch carries the same inertia to touch flings
+    lenis = new Lenis({
+      lerp: 0.065,
+      wheelMultiplier: 1.12,
+      touchMultiplier: 1.5,
+      syncTouch: true,
+      smoothWheel: true,
+    });
     const raf = (t) => { lenis.raf(t); requestAnimationFrame(raf); };
     requestAnimationFrame(raf);
   }
@@ -565,6 +773,184 @@
   if (_y) document.documentElement.style.transform = `translateY(${-_y}px)`;
   if (new URLSearchParams(location.search).has("vw")) document.title = `W${innerWidth}x${innerHeight} DPR${devicePixelRatio}`;
 
+  /* ---------- interactive demo ---------- */
+  (() => {
+    const main = document.getElementById("demoMain");
+    if (!main) return;
+    const TRX = [
+      { t: "Neon Static",   a: "Volt Avenue",      d: 204, h: 34, g: "electronic" },
+      { t: "Slow Burn",     a: "Mira Solís",       d: 178, h: 20, g: "indie" },
+      { t: "Paper Moons",   a: "The Cartographers",d: 251, h: 30, g: "indie" },
+      { t: "Half Awake",    a: "Juno Vale",        d: 217, h: 24, g: "alt" },
+      { t: "Glasshouse",    a: "Noir Division",    d: 185, h: 50, g: "electronic" },
+      { t: "Golden Hour",   a: "Casa Verde",       d: 242, h: 40, g: "alt" },
+      { t: "Bitter Salt",   a: "The Lowells",      d: 169, h: 16, g: "indie" },
+      { t: "Overnight FM",  a: "Kairo",            d: 232, h: 44, g: "electronic" },
+    ];
+    const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+    const art = (tr, i) =>
+      `<div class="demo-art" data-art="${i}" style="background:linear-gradient(135deg,hsl(0 0% ${tr.h}%),hsl(0 0% ${Math.max(6, tr.h - 12)}%))"><span style="opacity:.92">${tr.a[0]}</span><div class="demo-eq"><i></i><i></i><i></i><i></i></div></div>`;
+    const row = (tr, i) =>
+      `<div class="demo-row" data-i="${i}">
+        <div class="demo-num">${String(i + 1).padStart(2, "0")}</div>
+        <div class="demo-tmeta">${art(tr, i)}<div style="min-width:0"><div class="demo-tt">${tr.t}</div><div class="demo-ta">${tr.a}</div></div></div>
+        <div class="demo-dur">${fmt(tr.d)}</div>
+      </div>`;
+    const state = { view: "home", cur: -1, playing: false, pos: 0, likes: new Set(), q: "", chip: "all", shuf: false, rep: false };
+    const curTr = () => state.cur >= 0 ? TRX[state.cur] : null;
+
+    function render() {
+      if (state.view === "home") {
+        main.innerHTML = `<div class="demo-view">
+          <div class="demo-greet">Good evening</div>
+          <div class="demo-tiles">${TRX.slice(0, 4).map((tr, i) =>
+            `<div class="demo-tile" data-i="${i}">${art(tr, i)}<span class="demo-tile-t">${tr.t}</span></div>`).join("")}</div>
+          <div class="demo-sec">Made for late nights</div>
+          <div class="demo-rows" id="demoRows">${TRX.map(row).join("")}</div>
+        </div>`;
+      } else if (state.view === "search") {
+        const chips = ["all", "electronic", "indie", "alt"];
+        const res = TRX.map((tr, i) => ({ tr, i }))
+          .filter(({ tr }) => (state.chip === "all" || tr.g === state.chip) &&
+            (tr.t + " " + tr.a).toLowerCase().includes(state.q.toLowerCase()));
+        main.innerHTML = `<div class="demo-view">
+          <div class="demo-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input id="demoQ" placeholder="What do you want to hear?" value="${state.q.replace(/"/g, "&quot;")}" autocomplete="off">
+          </div>
+          <div class="demo-chips">${chips.map(c => `<div class="demo-chip${state.chip === c ? " on" : ""}" data-c="${c}">${c === "all" ? "All" : c[0].toUpperCase() + c.slice(1)}</div>`).join("")}</div>
+          <div class="demo-rows" id="demoRows">${res.length ? res.map(({ tr, i }) => row(tr, i)).join("") : `<div class="demo-empty">Nothing matches “${state.q}” — the real app has the whole catalog, this demo has eight songs.</div>`}</div>
+        </div>`;
+        const q = document.getElementById("demoQ");
+        q.addEventListener("input", () => { state.q = q.value; const p = q.selectionStart; render(); const q2 = document.getElementById("demoQ"); q2.focus(); q2.setSelectionRange(p, p); });
+        q.addEventListener("keydown", e => e.stopPropagation());
+        document.querySelectorAll(".demo-chip").forEach(c => c.addEventListener("click", () => { state.chip = c.dataset.c; render(); }));
+      } else {
+        const liked = [...state.likes];
+        main.innerHTML = `<div class="demo-view">
+          <div class="demo-greet">Liked songs</div>
+          <div class="demo-rows" id="demoRows">${liked.length
+            ? liked.map(i => row(TRX[i], i)).join("")
+            : `<div class="demo-empty">Nothing liked yet — tap the ♡ next to the player bar.</div>`}</div>
+        </div>`;
+      }
+      bindRows();
+      paint();
+    }
+    function bindRows() {
+      main.querySelectorAll(".demo-row,.demo-tile").forEach(el =>
+        el.addEventListener("click", () => play(+el.dataset.i)));
+    }
+    function play(i) {
+      if (i === state.cur) { toggle(); return; }
+      state.cur = i; state.pos = 0; state.playing = true;
+      paint();
+    }
+    function toggle() {
+      if (state.cur < 0) return play(state.shuf ? Math.floor(Math.random() * TRX.length) : 0);
+      state.playing = !state.playing;
+      paint();
+    }
+    function step(dir) {
+      let n;
+      if (state.shuf) { do { n = Math.floor(Math.random() * TRX.length); } while (n === state.cur && TRX.length > 1); }
+      else n = (state.cur + dir + TRX.length) % TRX.length;
+      play(n);
+    }
+    function paint() {
+      const tr = curTr();
+      main.querySelectorAll(".demo-row").forEach(r => r.classList.toggle("on", +r.dataset.i === state.cur));
+      main.querySelectorAll(".demo-art").forEach(a => {
+        a.classList.toggle("live", +a.dataset.art === state.cur);
+        a.classList.toggle("pause", +a.dataset.art === state.cur && !state.playing);
+      });
+      const nowArt = document.getElementById("demoNowArt");
+      if (tr) {
+        document.getElementById("demoNowT").textContent = tr.t;
+        document.getElementById("demoNowA").textContent = tr.a;
+        document.getElementById("demoNowMono").textContent = tr.a[0];
+        nowArt.style.background = `linear-gradient(135deg,hsl(0 0% ${tr.h}%),hsl(0 0% ${Math.max(6, tr.h - 12)}%))`;
+        nowArt.classList.toggle("live", true);
+        nowArt.classList.toggle("pause", !state.playing);
+      } else {
+        nowArt.classList.remove("live", "pause");
+        nowArt.style.background = "";
+      }
+      document.getElementById("demoPlayIco").innerHTML = state.playing
+        ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>'
+        : '<path d="M8 5v14l11-7z"/>';
+      document.getElementById("demoLike").classList.toggle("on", tr && state.likes.has(state.cur));
+      document.getElementById("demoTend").textContent = tr ? fmt(tr.d) : "0:00";
+      document.getElementById("demoTcur").textContent = fmt(state.pos);
+      document.getElementById("demoProgFg").style.width = tr ? `${(state.pos / tr.d) * 100}%` : "0";
+    }
+    // transport
+    document.getElementById("demoPlay").addEventListener("click", toggle);
+    document.getElementById("demoNext").addEventListener("click", () => step(1));
+    document.getElementById("demoPrev").addEventListener("click", () => state.pos > 3 ? (state.pos = 0, paint()) : step(-1));
+    document.getElementById("demoShuf").addEventListener("click", e => { state.shuf = !state.shuf; e.currentTarget.classList.toggle("on", state.shuf); });
+    document.getElementById("demoRep").addEventListener("click", e => { state.rep = !state.rep; e.currentTarget.classList.toggle("on", state.rep); });
+    document.getElementById("demoLike").addEventListener("click", () => {
+      if (state.cur < 0) return;
+      state.likes.has(state.cur) ? state.likes.delete(state.cur) : state.likes.add(state.cur);
+      paint();
+      if (state.view === "library") render();
+    });
+    // seek + volume
+    const prog = document.getElementById("demoProg");
+    prog.addEventListener("click", e => {
+      const tr = curTr(); if (!tr) return;
+      const r = prog.getBoundingClientRect();
+      state.pos = Math.min(tr.d - 1, Math.max(0, ((e.clientX - r.left) / r.width) * tr.d));
+      paint();
+    });
+    const vol = document.getElementById("demoVol");
+    vol.addEventListener("click", e => {
+      const r = vol.getBoundingClientRect();
+      document.getElementById("demoVolFg").style.width = `${Math.round(((e.clientX - r.left) / r.width) * 100)}%`;
+    });
+    // nav
+    document.querySelectorAll(".demo-nav[data-view]").forEach(n => n.addEventListener("click", () => {
+      document.querySelectorAll(".demo-nav").forEach(x => x.classList.remove("on"));
+      n.classList.add("on");
+      state.view = n.dataset.view;
+      render();
+    }));
+    // clock — 2 ticks/sec, auto-advance on end
+    setInterval(() => {
+      const tr = curTr();
+      if (!tr || !state.playing) return;
+      state.pos += 0.5;
+      if (state.pos >= tr.d) { state.pos = 0; state.rep ? paint() : step(1); return; }
+      document.getElementById("demoTcur").textContent = fmt(state.pos);
+      document.getElementById("demoProgFg").style.width = `${(state.pos / tr.d) * 100}%`;
+    }, 500);
+    render();
+    // dev hook: ?demo=N autoplays track N, ?dview=search|library opens a view
+    const _dp = new URLSearchParams(location.search);
+    const _dv = _dp.get("dview");
+    if (_dv && document.querySelector(`.demo-nav[data-view="${_dv}"]`)) {
+      document.querySelectorAll(".demo-nav").forEach(x => x.classList.remove("on"));
+      document.querySelector(`.demo-nav[data-view="${_dv}"]`).classList.add("on");
+      state.view = _dv; render();
+    }
+    if (_dp.get("demo") !== null && _dp.has("demo"))
+      setTimeout(() => play(Math.min(TRX.length - 1, +_dp.get("demo") || 0)), 350);
+  })();
+
+  /* ---------- promo video ---------- */
+  (() => {
+    const w = document.getElementById("demoVidWrap");
+    if (!w) return;
+    const go = () => {
+      w.innerHTML = `<video src="promo.mp4" controls autoplay playsinline></video>`;
+      w.style.cursor = "default";
+      w.removeAttribute("role"); w.removeAttribute("tabindex");
+    };
+    w.addEventListener("click", go, { once: true });
+    w.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+  })();
+
   /* ---------- release wiring ---------- */
   // OS detect: userAgentData.platform (modern, no deprecation) first,
   // UA/platform regex as fallback. Order matters: Android UA contains
@@ -581,42 +967,39 @@
     "windows";
   const isMac = OS === "mac", isLinux = OS === "linux";
   const OS_LABEL = { windows: "Windows", mac: "macOS", linux: "Linux", android: "Android", ios: "iOS" }[OS];
-  const REL = "https://github.com/govu/freebify/releases/latest/download/";
-  // hero CTA mirrors the detected platform — on a phone it stays a
-  // scroll-to-picker since the app is desktop-only
+  // every download routes through download.html — it resolves the asset,
+  // shows the disclaimer + platform notes, then starts the file
   const heroDl = document.getElementById("heroDl");
   const dlBtn0 = document.getElementById("dlBtn");
+  const altBtn = document.getElementById("altBtn");
+  const osBtn = document.getElementById("osBtn");
   if (OS === "windows" || OS === "mac" || OS === "linux") {
-    const asset = OS === "mac" ? "Freebify-arm64.dmg" : OS === "linux" ? "Freebify.AppImage" : "Freebify-setup.exe";
     heroDl.textContent = `Download for ${OS_LABEL}`;
-    heroDl.href = REL + asset;
+    heroDl.href = `download.html?os=${OS}`;
     delete heroDl.dataset.scroll;
+    dlBtn0.href = `download.html?os=${OS}`;
     dlBtn0.textContent = `Download for ${OS_LABEL}`;
   } else {
     heroDl.textContent = "Download for desktop";
     document.getElementById("platNote").textContent = "Desktop app · pick yours below";
   }
   if (isLinux) {
-    document.getElementById("dlBtn").href = REL + "Freebify.AppImage";
-    const alt = document.getElementById("altBtn");
-    alt.href = REL + "Freebify-amd64.deb";
-    alt.textContent = "Ubuntu / Debian .deb";
-    const osBtn0 = document.getElementById("osBtn");
-    osBtn0.href = REL + "Freebify-setup.exe";
-    osBtn0.textContent = "Windows .exe";
+    dlBtn0.href = "download.html?os=linux";
+    altBtn.href = "download.html?os=deb";
+    altBtn.textContent = "Ubuntu / Debian .deb";
+    osBtn.href = "download.html?os=windows";
+    osBtn.textContent = "Windows .exe";
     document.getElementById("platNote").textContent = "Free forever · Linux · ~120 MB";
     document.getElementById("updNote").style.display = "none";
     document.getElementById("macNote").style.display = "";
     document.getElementById("macNote").innerHTML = "<br>AppImage: mark it executable (<i>chmod +x</i>) before the first run, then it updates itself after that.";
   } else if (isMac) {
     // Apple Silicon is the sane default; Intel users get the x64 dmg as alt
-    document.getElementById("dlBtn").href = REL + "Freebify-arm64.dmg";
-    const alt = document.getElementById("altBtn");
-    alt.href = REL + "Freebify-x64.dmg";
-    alt.textContent = "Intel Mac";
-    const osBtn0 = document.getElementById("osBtn");
-    osBtn0.href = REL + "Freebify-setup.exe";
-    osBtn0.textContent = "Windows .exe";
+    dlBtn0.href = "download.html?os=mac";
+    altBtn.href = "download.html?os=mac-intel";
+    altBtn.textContent = "Intel Mac";
+    osBtn.href = "download.html?os=windows";
+    osBtn.textContent = "Windows .exe";
     document.getElementById("platNote").textContent = "Free forever · macOS 11+ · ~120 MB";
     document.getElementById("updNote").style.display = "none";
     document.getElementById("macNote").style.display = "";
@@ -627,31 +1010,11 @@
     .then(r => r.json())
     .then(rel => {
       const v = rel.tag_name?.replace(/^v/, "") || "";
-      const setup = rel.assets?.find(a => /setup\.exe$/i.test(a.name));
-      const portable = rel.assets?.find(a => /portable\.exe$/i.test(a.name));
-      const dmgArm = rel.assets?.find(a => /arm64\.dmg$/i.test(a.name));
-      const dmgIntel = rel.assets?.find(a => /x64\.dmg$/i.test(a.name));
-      const appImage = rel.assets?.find(a => /\.AppImage$/i.test(a.name));
-      const deb = rel.assets?.find(a => /\.deb$/i.test(a.name));
       if (v) {
         document.getElementById("verMeta").textContent = " · v" + v;
         document.getElementById("dlBtn").textContent =
           OS === "windows" || OS === "mac" || OS === "linux" ? `Download for ${OS_LABEL} ${v}` : `Download Freebify ${v}`;
         const fv = document.getElementById("footVer"); if (fv) fv.textContent = ` · v${v}`;
-      }
-      const dlBtn = document.getElementById("dlBtn"), altBtn = document.getElementById("altBtn"), osBtn = document.getElementById("osBtn");
-      if (isMac) {
-        if (dmgArm) dlBtn.href = dmgArm.browser_download_url;
-        if (dmgIntel) altBtn.href = dmgIntel.browser_download_url;
-        if (setup) osBtn.href = setup.browser_download_url;
-      } else if (isLinux) {
-        if (appImage) dlBtn.href = appImage.browser_download_url;
-        if (deb) altBtn.href = deb.browser_download_url;
-        if (setup) osBtn.href = setup.browser_download_url;
-      } else {
-        if (setup) dlBtn.href = setup.browser_download_url;
-        if (portable) altBtn.href = portable.browser_download_url;
-        if (dmgArm) osBtn.href = dmgArm.browser_download_url;
       }
       const dls = rel.assets?.reduce((n, a) => n + (a.download_count || 0), 0);
       if (dls >= 500) {

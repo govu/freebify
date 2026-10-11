@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Download Freebify</title>
+<meta name="description" content="Download Freebify — free, ad-free desktop music player.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M41.5 33A19 19 0 1 1 24 5' stroke='white' stroke-width='5' stroke-linecap='round' fill='none'/%3E%3Ccircle cx='24' cy='24' r='10' stroke='white' stroke-width='5' fill='none'/%3E%3Ccircle cx='24' cy='24' r='3.5' fill='white'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0a0a; --panel:#101010; --card:#181818; --cardh:#242424;
+    --line:rgb(255 255 255/.08); --ink:#fff; --dim:#a3a3a3; --faint:#858585;
+    --f:'Inter Tight',system-ui,-apple-system,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{background:var(--bg)}
+  body{background:var(--bg);color:var(--ink);font-family:var(--f);min-height:100vh;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+  button{font-family:inherit}
+
+  nav{display:flex;align-items:center;justify-content:space-between;padding:20px clamp(20px,4vw,44px);position:relative;z-index:5}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:16px;letter-spacing:-0.01em}
+  .back{font-size:13px;font-weight:600;color:var(--dim);display:flex;align-items:center;gap:6px;transition:color .2s ease}
+  .back:hover{color:var(--ink)}
+
+  .stage{flex:1;display:flex;align-items:center;justify-content:center;padding:24px;position:relative}
+  /* dim backdrop — modal feel */
+  .stage::before{content:"";position:fixed;inset:0;background:radial-gradient(60% 50% at 50% 30%,rgb(255 255 255/.05),transparent 70%);pointer-events:none}
+
+  .modal{width:min(560px,100%);background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:clamp(26px,4vw,40px);position:relative;box-shadow:0 40px 100px -20px rgb(0 0 0/.9);animation:modalIn .45s cubic-bezier(.2,.9,.25,1) both}
+  @keyframes modalIn{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){.modal{animation:none}}
+
+  .m-eyebrow{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .m-eyebrow svg{width:13px;height:13px}
+  h1{font-size:clamp(26px,4vw,34px);font-weight:800;letter-spacing:-0.025em;line-height:1.1;margin-bottom:10px}
+  .m-sub{color:var(--dim);font-size:14.5px;line-height:1.6;margin-bottom:22px}
+  .m-sub b{color:var(--ink);font-weight:600}
+
+  .note{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;display:flex;gap:12px;font-size:13.5px;line-height:1.55;color:var(--dim)}
+  .note svg{width:16px;height:16px;flex:none;margin-top:1px;color:var(--faint)}
+  .note b{color:var(--ink);font-weight:600}
+  .note .k{display:inline-block;background:#0d0d0d;border:1px solid var(--line);border-radius:5px;padding:1px 7px;font-size:12px;font-weight:600;color:var(--ink);white-space:nowrap}
+  .note ol{margin:6px 0 0 18px;display:flex;flex-direction:column;gap:5px}
+  .note ol li::marker{color:var(--faint)}
+
+  .legal-line{font-size:12px;color:var(--faint);line-height:1.6;margin:18px 0 22px}
+  .legal-line a{color:var(--dim);text-decoration:underline;text-underline-offset:3px;transition:color .2s}
+  .legal-line a:hover{color:var(--ink)}
+
+  .dl-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;background:var(--ink);color:var(--bg);border:0;border-radius:12px;padding:16px 20px;font-size:15px;font-weight:700;cursor:pointer;transition:transform .15s ease,opacity .2s ease}
+  .dl-btn:hover{transform:scale(1.015)}
+  .dl-btn:active{transform:scale(.96)}
+  .dl-btn svg{width:16px;height:16px}
+  .dl-meta{text-align:center;font-size:12px;color:var(--faint);margin-top:12px}
+
+  .os-row{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:26px;padding-top:22px;border-top:1px solid var(--line)}
+  .os-pill{font-size:12px;font-weight:600;color:var(--dim);border:1px solid var(--line);border-radius:99px;padding:7px 14px;transition:all .2s ease;display:flex;align-items:center;gap:7px}
+  .os-pill svg{width:12px;height:12px}
+  .os-pill:hover{color:var(--ink);border-color:rgb(255 255 255/.25)}
+  .os-pill.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+
+  /* post-download state */
+  .done-ico{width:52px;height:52px;border-radius:50%;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;margin-bottom:18px}
+  .done-ico svg{width:22px;height:22px}
+  .again{display:inline-flex;align-items:center;gap:8px;margin-top:16px;font-size:13px;font-weight:600;color:var(--dim);border:1px solid var(--line);border-radius:99px;padding:10px 18px;background:none;cursor:pointer;transition:all .2s ease}
+  .again:hover{color:var(--ink);border-color:rgb(255 255 255/.25)}
+
+  .hide{display:none!important}
+</style>
+</head>
+<body>
+<nav>
+  <a class="brand" href="index.html">
+    <svg width="20" height="20" viewBox="0 0 48 48" fill="none">
+      <path d="M41.5 33A19 19 0 1 1 24 5" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+      <circle cx="24" cy="24" r="10" stroke="currentColor" stroke-width="5"/>
+      <circle cx="24" cy="24" r="3.5" fill="currentColor"/>
+    </svg>
+    Freebify
+  </a>
+  <a class="back" href="index.html">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5m7-7-7 7 7 7"/></svg>
+    Back to site
+  </a>
+</nav>
+
+<div class="stage">
+  <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <!-- pre-download: disclaimer gate -->
+    <div id="gateView">
+      <div class="m-eyebrow">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+        Before you download
+      </div>
+      <h1 id="mTitle">Freebify for <span id="osName">Windows</span></h1>
+      <p class="m-sub">Freebify is <b>free, open-source and unsigned</b>. Signing certificates cost hundreds a year, and free means free — so your OS may warn you once. Here's the honest walkthrough:</p>
+
+      <div id="osNotes"></div>
+
+      <div class="legal-line">
+        Freebify is a media player, not a music service: it hosts nothing and sells nothing. Audio and artwork are requested by your device directly from third-party platforms under their own terms.
+        <a href="https://github.com/govu/freebify/blob/main/DISCLAIMER.md" target="_blank" rel="noopener">Full disclaimer</a> ·
+        <a href="https://github.com/govu/freebify/blob/main/TERMS.md" target="_blank" rel="noopener">Terms</a> ·
+        <a href="https://github.com/govu/freebify/blob/main/PRIVACY.md" target="_blank" rel="noopener">Privacy</a>
+      </div>
+
+      <button class="dl-btn" id="dlBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3v13m0 0 5-5m-5 5-5-5M4 21h16"/></svg>
+        I understand — download<span id="dlVer"></span>
+      </button>
+      <div class="dl-meta" id="dlMeta">~120 MB · free forever · no account</div>
+      <div class="os-row" id="osRow"></div>
+    </div>
+
+    <!-- post-download -->
+    <div id="doneView" class="hide">
+      <div class="done-ico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg>
+      </div>
+      <h1>Download started.</h1>
+      <p class="m-sub" id="doneSub">Check your downloads folder. While it lands:</p>
+      <div id="doneNotes"></div>
+      <button class="again" id="againBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><path d="M12 3v13m0 0 5-5m-5 5-5-5M4 21h16"/></svg>
+        Download again
+      </button>
+      <a class="again" href="index.html" style="margin-left:8px">Back to site</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  const REL = "https://github.com/govu/freebify/releases/latest/download/";
+  const WARN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01"/><circle cx="12" cy="12" r="9.2"/></svg>';
+  const INFO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16v-4m0-4h.01"/><circle cx="12" cy="12" r="9.2"/></svg>';
+
+  const OS_COPY = {
+    windows: {
+      name: "Windows", asset: "Freebify-setup.exe", meta: "Windows 10/11 · ~120 MB · auto-updates",
+      notes: [
+        WARN + `<div><b>If SmartScreen steps in:</b> "Windows protected your PC" appears because the app is unsigned. It's expected, not a virus — click <span class="k">More info</span> → <span class="k">Run anyway</span>. Done once, never again.</div>`,
+      ],
+      done: "Run the installer, and if SmartScreen appears: <b>More info → Run anyway</b>. Freebify updates itself from here on.",
+    },
+    portable: {
+      name: "Windows (portable)", asset: "Freebify-portable.exe", meta: "No install · runs anywhere · ~120 MB",
+      notes: [
+        WARN + `<div><b>Same SmartScreen note:</b> unsigned app → <span class="k">More info</span> → <span class="k">Run anyway</span>.</div>`,
+        INFO + `<div><b>Portable trade-off:</b> no installer means <b>no auto-updates</b> — new versions get grabbed right here. It also re-extracts itself each launch, so the installed build starts faster.</div>`,
+      ],
+      done: "Run it from anywhere — desktop, USB, a folder called 'definitely not music'. It re-extracts on each launch, so it's a touch slower to open than the installed build.",
+    },
+    mac: {
+      name: "macOS (Apple Silicon)", asset: "Freebify-arm64.dmg", meta: "macOS 11+ · M1/M2/M3/M4 · ~120 MB",
+      notes: [
+        WARN + `<div><b>"Freebify can't be opened"? That's Gatekeeper, not a bug.</b> The app isn't signed with a $99/yr Apple certificate. The fix takes five seconds, once:
+          <ol><li>Open the .dmg and drag Freebify to <b>Applications</b></li><li><b>Right-click</b> (or Control-click) the app → <span class="k">Open</span></li><li>Click <span class="k">Open</span> again in the dialog</li></ol>
+          After that it launches normally forever.</div>`,
+        INFO + `<div><b>Updates on Mac are manual:</b> macOS won't auto-install new versions of an unsigned app. When a release drops, grab the new .dmg right here; takes a minute.</div>`,
+      ],
+      done: "Open the .dmg → drag to <b>Applications</b> → <b>right-click → Open</b> on first launch. That's the only Gatekeeper dance, one time ever.",
+    },
+    "mac-intel": {
+      name: "macOS (Intel)", asset: "Freebify-x64.dmg", meta: "macOS 11+ · Intel Macs · ~120 MB",
+      notes: [
+        WARN + `<div><b>"Freebify can't be opened"? That's Gatekeeper, not a bug.</b> The app isn't signed with a $99/yr Apple certificate. The fix takes five seconds, once:
+          <ol><li>Open the .dmg and drag Freebify to <b>Applications</b></li><li><b>Right-click</b> the app → <span class="k">Open</span></li><li>Click <span class="k">Open</span> again</li></ol></div>`,
+        INFO + `<div><b>Updates on Mac are manual</b>: unsigned apps don't auto-update on macOS. New versions land right here.</div>`,
+      ],
+      done: "Open the .dmg → drag to <b>Applications</b> → <b>right-click → Open</b>. One-time thing.",
+    },
+    linux: {
+      name: "Linux (AppImage)", asset: "Freebify.AppImage", meta: "Any modern distro · ~120 MB · auto-updates",
+      notes: [
+        INFO + `<div><b>One step before first run:</b> mark it executable — <span class="k">chmod +x Freebify.AppImage</span> — or right-click → Properties → "Allow executing". After that it runs and self-updates like a normal app.</div>`,
+      ],
+      done: "<span class='k'>chmod +x Freebify.AppImage</span> then double-click. It self-updates after that.",
+    },
+    deb: {
+      name: "Ubuntu / Debian", asset: "Freebify-amd64.deb", meta: ".deb package · ~120 MB",
+      notes: [
+        INFO + `<div><b>Install:</b> <span class="k">sudo apt install ./Freebify-amd64.deb</span> — apt handles the deps.</div>`,
+      ],
+      done: "<span class='k'>sudo apt install ./Freebify-amd64.deb</span> — then find Freebify in your launcher.",
+    },
+  };
+  const OTHER = {
+    windows: [["portable","Portable .exe"],["mac","macOS .dmg"],["linux","Linux"]],
+    portable: [["windows","Installer .exe"],["mac","macOS .dmg"],["linux","Linux"]],
+    mac: [["mac-intel","Intel Mac"],["windows","Windows .exe"],["linux","Linux"]],
+    "mac-intel": [["mac","Apple Silicon"],["windows","Windows .exe"],["linux","Linux"]],
+    linux: [["deb",".deb package"],["windows","Windows .exe"],["mac","macOS .dmg"]],
+    deb: [["linux","AppImage"],["windows","Windows .exe"],["mac","macOS .dmg"]],
+  };
+
+  const params = new URLSearchParams(location.search);
+  let os = params.get("os") || "";
+  if (!OS_COPY[os]) {
+    // detect
+    const ua = navigator.userAgent || "";
+    const uap = (navigator.userAgentData?.platform || "").toLowerCase();
+    const ipad = /mac/i.test(ua) && navigator.maxTouchPoints > 1;
+    os = /mac/.test(uap) || (/mac os/i.test(ua) && !ipad) ? "mac"
+       : /linux/.test(uap) || /linux/i.test(navigator.platform || "") ? "linux"
+       : "windows";
+    history.replaceState(null, "", `?os=${os}`);
+  }
+  const cfg = OS_COPY[os];
+
+  document.getElementById("osName").textContent = cfg.name.replace(/ \(.*/, "");
+  document.getElementById("osNotes").innerHTML = cfg.notes.map(n => `<div class="note">${n}</div>`).join("");
+  document.getElementById("doneNotes").innerHTML =
+    cfg.notes.map(n => `<div class="note">${n}</div>`).join("");
+  document.getElementById("doneSub").innerHTML = "Check your downloads folder. While it lands — " + cfg.done;
+  document.getElementById("dlMeta").textContent = cfg.meta + " · free forever · no account";
+  document.getElementById("osRow").innerHTML =
+    `<span class="os-pill on" style="cursor:default">${cfg.name}</span>` +
+    OTHER[os].map(([k, l]) => `<a class="os-pill" href="?os=${k}">${l}</a>`).join("");
+  document.title = `Download Freebify for ${cfg.name}`;
+
+  // version label (best-effort)
+  const ctl = new AbortController(); setTimeout(() => ctl.abort(), 6000);
+  fetch("https://api.github.com/repos/govu/freebify/releases/latest", { cache: "no-store", signal: ctl.signal })
+    .then(r => r.json()).then(rel => {
+      const v = rel.tag_name?.replace(/^v/, "");
+      if (v) document.getElementById("dlVer").textContent = ` for ${cfg.name.replace(/ \(.*/, "")} v${v}`;
+    }).catch(() => {});
+
+  const start = () => {
+    const a = document.createElement("a");
+    a.href = REL + cfg.asset;
+    a.download = cfg.asset;
+    document.body.appendChild(a); a.click(); a.remove();
+    document.getElementById("gateView").classList.add("hide");
+    document.getElementById("doneView").classList.remove("hide");
+    document.getElementById("doneView").querySelector("h1").focus?.();
+  };
+  document.getElementById("dlBtn").addEventListener("click", start);
+  document.getElementById("againBtn").addEventListener("click", start);
+</script>
+</body>
+</html>

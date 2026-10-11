@@ -209,6 +209,9 @@ async function probeHost({ kind, base }, videoId, parentSignal) {
   const timer = setTimeout(() => ctl.abort(), 6000)
   const onParentAbort = () => ctl.abort()
   parentSignal?.addEventListener("abort", onParentAbort, { once: true })
+  // an unreachable/erroring host is marked dead for a while — a video-level
+  // miss (200 but no audio streams) doesn't count against the host
+  const markBad = () => hostBadUntil.set(base, Date.now() + HOST_BAD_TTL)
   try {
     const res = await fetch(
       kind === "piped"
@@ -216,7 +219,7 @@ async function probeHost({ kind, base }, videoId, parentSignal) {
         : `${base}/api/v1/videos/${videoId}?fields=adaptiveFormats`,
       { headers: { "User-Agent": "Freebify/1.0" }, signal: ctl.signal }
     )
-    if (!res.ok) return null
+    if (!res.ok) { markBad(); return null }
     const json = await res.json().catch(() => null)
     if (!json) return null
     const streams =
@@ -240,6 +243,9 @@ async function probeHost({ kind, base }, videoId, parentSignal) {
     }
     return host === "googlevideo.com" || host.endsWith(".googlevideo.com") ? url : null
   } catch {
+    // only the parent's abort is innocent (a sibling won the race); our own
+    // 6s timeout or a socket error means the host is actually down
+    if (!parentSignal?.aborted) markBad()
     return null
   } finally {
     clearTimeout(timer)
@@ -261,6 +267,148 @@ function firstNonNull(promises) {
     }
   })
 }
+
+// ---------- in-process stream resolution ----------
+// One HTTPS POST to /player with the VISIONOS client context (~300ms)
+// instead of a ~5s yt-dlp.exe spawn per track. VISIONOS is the client
+// yt-dlp itself lands on — it's the only one still serving direct
+// adaptiveFormats urls to anonymous sessions; every other client went
+// SABR-only in 2025. Three details are load-bearing, all verified against
+// yt-dlp's own request shape:
+//   - clientVersion/osVersion/UA must be CURRENT — stale values get
+//     playabilityStatus LOGIN_REQUIRED on licensed music while harmless
+//     videos still pass (verified empirically, per-video gating)
+//   - the User-Agent HEADER must match the context (field alone →
+//     "Video unavailable")
+//   - playbackContext.contentPlaybackContext.signatureTimestamp must be a
+//     REAL sts from the current player — without it, music returns
+//     LOGIN_REQUIRED. It's embedded as "STS" in every page's ytcfg, so one
+//     homepage fetch per session provides both sts and visitorData.
+const VISIONOS_CTX = {
+  clientName: "VISIONOS",
+  clientVersion: "1.02",
+  hl: "en",
+  gl: "US",
+  deviceMake: "Apple",
+  deviceModel: "RealityDevice17,1",
+  osName: "visionOS",
+  osVersion: "26.5.23O471",
+}
+const VISIONOS_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"
+const INNERTUBE_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
+
+let ytSession = null // { sts, visitorData, at }
+let ytSessionInflight = null
+const YT_SESSION_TTL = 4 * 60 * 60 * 1000
+
+async function ytSessionCreds(force = false) {
+  if (ytSession && !force && Date.now() - ytSession.at < YT_SESSION_TTL) return ytSession
+  if (!force && ytSessionInflight) return ytSessionInflight
+  const job = (async () => {
+    const ctl = new AbortController()
+    const timer = setTimeout(() => ctl.abort(), 8000)
+    try {
+      const res = await fetch("https://www.youtube.com/", {
+        headers: { "User-Agent": VISIONOS_UA },
+        signal: ctl.signal,
+      })
+      if (!res.ok) return null
+      const html = await res.text()
+      const sts = /"STS":(\d+)/.exec(html)?.[1]
+      const visitorData = /"VISITOR_DATA":"([^"]+)"/.exec(html)?.[1]
+      if (!sts || !visitorData) return null
+      ytSession = { sts: +sts, visitorData, at: Date.now() }
+      return ytSession
+    } catch {
+      return null
+    } finally {
+      clearTimeout(timer)
+    }
+  })()
+  ytSessionInflight = job
+  try {
+    return await job
+  } finally {
+    if (ytSessionInflight === job) ytSessionInflight = null
+  }
+}
+
+async function visionosResolve(videoId) {
+  const ctl = new AbortController()
+  const timer = setTimeout(() => ctl.abort(), 9000)
+  try {
+    // two attempts: a stale sts/visitorData pair flips licensed music to
+    // LOGIN_REQUIRED, so refresh creds once before giving up to the chain
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const creds = await ytSessionCreds(attempt > 0)
+      if (!creds) return null
+      const res = await fetch(
+        `https://www.youtube.com/youtubei/v1/player?prettyPrint=false&key=${INNERTUBE_KEY}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "User-Agent": VISIONOS_UA,
+            "Origin": "https://www.youtube.com",
+            "X-Goog-Visitor-Id": creds.visitorData,
+            "X-YouTube-Client-Name": "101",
+            "X-YouTube-Client-Version": VISIONOS_CTX.clientVersion,
+          },
+          body: JSON.stringify({
+            videoId,
+            context: { client: { ...VISIONOS_CTX, visitorData: creds.visitorData } },
+            playbackContext: {
+              contentPlaybackContext: {
+                html5Preference: "HTML5_PREF_WANTS",
+                signatureTimestamp: creds.sts,
+              },
+            },
+            contentCheckOk: true,
+            racyCheckOk: true,
+          }),
+          signal: ctl.signal,
+        },
+      )
+      if (!res.ok) return null
+      const d = await res.json().catch(() => null)
+      if (!d) return null
+      const status = d.playabilityStatus?.status
+      if (status !== "OK") {
+        if (status === "LOGIN_REQUIRED" && attempt === 0) continue
+        return null
+      }
+      const audio = (d.streamingData?.adaptiveFormats ?? [])
+        .filter((f) => /^audio\//.test(f.mimeType ?? "") && typeof f.url === "string")
+        .sort((a, b) => (b.averageBitrate || b.bitrate || 0) - (a.averageBitrate || a.bitrate || 0))
+      const url = audio[0]?.url
+      if (!url) return null
+      const host = new URL(url).hostname
+      if (host !== "googlevideo.com" && !host.endsWith(".googlevideo.com")) return null
+      // 1-byte range probe — a bot-guarded/throttled URL answers 403 here,
+      // cheap proof before the URL lands in <audio> and the persisted cache
+      const probe = await fetch(url, { headers: { Range: "bytes=0-0" }, signal: ctl.signal })
+      return probe.status === 200 || probe.status === 206 ? url : null
+    }
+    return null
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+// on-demand resolves that exhausted the whole chain get a short negative
+// TTL — otherwise every retry (yt:invalidate, failAdvance, hover re-entry)
+// re-runs the full resolve for a video that simply can't play
+const resolveFailAt = new Map() // videoId -> ts
+const RESOLVE_FAIL_TTL = 3 * 60 * 1000
+const RESOLVE_FAIL_CAP = 200
+
+// dead fast hosts remember for 15min — otherwise every cold resolve burns
+// 5 TLS handshakes on public instances that are down ~always
+const hostBadUntil = new Map() // base -> ts
+const HOST_BAD_TTL = 15 * 60 * 1000
 
 // Cap concurrent yt-dlp.exe spawns with a two-tier semaphore: prefetches
 // (hover/visibility warm-up) may hold at most 2 slots, while real playback
@@ -335,6 +483,9 @@ async function resolveStreamUrl(videoId, prefetch = false) {
   loadStreamCache()
   const hit = streamCache.get(videoId)
   if (hit && hit.expiresAt > Date.now() + 60_000) return hit.url
+  // short negative TTL — a track that just exhausted every resolver
+  // shouldn't re-run the whole chain on each retry
+  if (!prefetch && Date.now() - (resolveFailAt.get(videoId) ?? 0) < RESOLVE_FAIL_TTL) return null
   const key = prefetch ? `${videoId}:lo` : videoId
   if (inflight.has(key)) return inflight.get(key)
   // a live on-demand resolve already covers this prefetch — and a prefetch
@@ -376,26 +527,38 @@ async function resolveStreamUrl(videoId, prefetch = false) {
           return url.startsWith("http") ? url : null
         })
 
-      // on-demand clicks race the fast hosts against yt-dlp — whichever
-      // returns a usable URL first wins; prefetches stay cheap and quiet.
-      // When the race resolves, abort the losing probes so 4 dead in-flight
-      // requests don't burn bandwidth/hammer public instances per click.
-      const url =
-        prefetch || probeBad.has(videoId)
-          ? await dlpResolve()
-          : await (async () => {
-              const raceCtl = new AbortController()
-              try {
-                return await firstNonNull([
-                  ...FAST_HOSTS.map((h) => probeHost(h, videoId, raceCtl.signal)),
-                  dlpResolve(raceCtl.signal),
-                ])
-              } finally {
-                raceCtl.abort()
-              }
-            })()
+      // in-process first — a ~300ms /player POST replaces the whole spawn.
+      // Prefetches stop here: they must stay free, so a VISIONOS miss just
+      // leaves the cache cold and the real click runs the full chain.
+      // On-demand clicks then race the healthy fast hosts against yt-dlp;
+      // dead hosts are skipped instead of burning a TLS handshake each.
+      let url = await visionosResolve(videoId)
+      if (!url && !prefetch) {
+        const healthy = FAST_HOSTS.filter((h) => (hostBadUntil.get(h.base) ?? 0) < Date.now())
+        url =
+          probeBad.has(videoId) || !healthy.length
+            ? await dlpResolve()
+            : await (async () => {
+                const raceCtl = new AbortController()
+                try {
+                  return await firstNonNull([
+                    ...healthy.map((h) => probeHost(h, videoId, raceCtl.signal)),
+                    dlpResolve(raceCtl.signal),
+                  ])
+                } finally {
+                  raceCtl.abort()
+                }
+              })()
+      }
 
-      if (!url) return null
+      if (!url) {
+        if (!prefetch) {
+          resolveFailAt.set(videoId, Date.now())
+          if (resolveFailAt.size > RESOLVE_FAIL_CAP)
+            resolveFailAt.delete(resolveFailAt.keys().next().value)
+        }
+        return null
+      }
       let expiresAt = Date.now() + 5 * 3600 * 1000
       const m = /[?&]expire=(\d+)/.exec(url)
       if (m) expiresAt = Number(m[1]) * 1000
@@ -2119,6 +2282,9 @@ function register(ipcMain) {
     // via runYtdlp so the mac de-quarantine lands before this first spawn too
     runYtdlp(["--version"], 8000).catch(() => {})
   }
+  // warm the in-process resolver's session creds (sts + visitorData, one
+  // homepage fetch) so the first click skips the bootstrap round-trip
+  ytSessionCreds().catch(() => {})
 
   // no raw available() here — Innertube.create() has no timeout of its own
   // and on a dead-but-silent network the promise never settles, hanging
@@ -2157,6 +2323,9 @@ function register(ipcMain) {
       // egress), the next resolve must not take the probe branch again
       probeBad.add(videoId)
       if (probeBad.size > 200) probeBad.delete(probeBad.keys().next().value)
+      // an invalidation means "the URL we served died", not "can't resolve"
+      // — don't let a prior chain-failure TTL block the fresh attempt
+      resolveFailAt.delete(videoId)
     }
     return true
   })
