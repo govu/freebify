@@ -35,6 +35,42 @@ interface LibraryState {
 const newId = () =>
   `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
 
+// serialize a playlist for sharing — the .freebify.json counterpart of the
+// importer's Spotify/CSV paths (entries re-match on YouTube at import)
+export function playlistExportJson(p: Pick<LocalPlaylist, "name" | "tracks">): string {
+  return JSON.stringify(
+    {
+      app: "freebify",
+      type: "playlist",
+      version: 1,
+      name: p.name,
+      exportedAt: new Date().toISOString(),
+      tracks: p.tracks.map((t) => ({
+        title: t.title,
+        artist: t.user?.name ?? "",
+        duration: t.duration,
+        source: t.source ?? "audius",
+        streamId: t.streamId,
+        album: t.album?.name,
+      })),
+    },
+    null,
+    2,
+  )
+}
+
+// write through the native save dialog — returns true only on a real write
+export async function exportPlaylistToFile(p: Pick<LocalPlaylist, "name" | "tracks">): Promise<boolean> {
+  const save = window.freebify?.app?.saveJson
+  if (!save) return false
+  try {
+    const r = await save(p.name.replace(/[\\/:*?"<>|]/g, "_"), playlistExportJson(p))
+    return Boolean(r?.saved)
+  } catch {
+    return false
+  }
+}
+
 // smallest unused "My Playlist #N" — avoids duplicate names after deletions
 function nextPlaylistName(playlists: LocalPlaylist[]): string {
   const taken = new Set(

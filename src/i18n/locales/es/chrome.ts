@@ -10,6 +10,7 @@ export default {
   "card.album": "Álbum",
   "card.artist": "Artista",
   "card.followers": "{n} seguidores",
+  "card.open": "Abrir",
   "card.play": "Reproducir",
   "card.playlist": "Playlist",
   "card.plays": "{n} reproducciones",

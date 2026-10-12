@@ -30,6 +30,7 @@ export default {
   "home.loadError": "No se pudo cargar tu música",
   "home.loadErrorHint": "Comprueba tu conexión. Los dos catálogos están inaccesibles.",
   "home.moodMixes": "Mixes de {name}",
+  "home.newForYou": "Nuevo para ti",
   "home.newReleases": "Nuevos lanzamientos",
   "home.retry": "Reintentar",
   "home.rewind.partialReady": "Tu {label} hasta ahora está listo",

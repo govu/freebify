@@ -1,12 +1,17 @@
 import { motion } from "motion/react"
-import { BadgeCheck, ChevronLeft, ChevronRight, ListMusic, Play } from "lucide-react"
+import { BadgeCheck, ChevronLeft, ChevronRight, Disc3, Download, Heart, Link2, ListEnd, ListMusic, ListPlus, Play, Radio, Share2, User as UserIcon } from "lucide-react"
 import type { ReactNode } from "react"
 import { useEffect, useRef, useState } from "react"
-import { Link } from "react-router-dom"
+import { createPortal } from "react-dom"
+import { Link, useNavigate } from "react-router-dom"
 import type { Playlist, Track, User } from "../api/types"
+import { hasArtistPage } from "../api/types"
+import { apiClient } from "../api/audius"
 import { prefetchStream, yt } from "../api/youtube"
-import { usePlayer } from "../store/player"
-import { useT } from "../i18n"
+import { notify, usePlayer } from "../store/player"
+import { useDownloads } from "../store/downloads"
+import { exportPlaylistToFile, useLibrary } from "../store/library"
+import { t, useT } from "../i18n"
 import type { LocalPlaylist } from "../store/library"
 import { fmtCount } from "../utils/format"
 import { ArtworkImg } from "./ArtworkImg"
@@ -88,8 +93,8 @@ function PlayFAB({ onClick, playing }: { onClick: (e: React.MouseEvent) => void;
       onClick={onClick}
       aria-label={tt("card.play")}
       initial={false}
-      whileTap={{ scale: 0.9 }}
-      className="absolute bottom-3 right-3 z-10 grid size-11 translate-y-2 place-items-center rounded-full bg-white text-black opacity-0 shadow-xl shadow-black/40 transition-all duration-200 hover:scale-105 group-hover:translate-y-0 group-hover:opacity-100"
+      whileTap={{ scale: 0.96 }}
+      className="absolute bottom-3 right-3 z-10 grid size-11 translate-y-2 place-items-center rounded-full bg-white text-black opacity-0 shadow-xl shadow-black/40 transition-[transform,opacity,box-shadow] duration-200 hover:scale-105 group-hover:translate-y-0 group-hover:opacity-100"
     >
       {playing ? <Equalizer playing className="h-3.5" /> : <Play size={18} className="ml-0.5 fill-current" />}
     </motion.button>
@@ -97,21 +102,219 @@ function PlayFAB({ onClick, playing }: { onClick: (e: React.MouseEvent) => void;
 }
 
 const cardCls =
-  "group relative w-44 shrink-0 rounded-xl bg-card p-3 transition-all duration-200 hover:bg-cardhover"
+  "group relative w-44 shrink-0 rounded-[20px] bg-card p-3 transition-colors duration-200 hover:bg-cardhover"
+
+// ---- right-click menus on cards -----------------------------------------
+// Track rows have the full ⋯ menu; cards get the same core actions on
+// right-click. Portaled to document.body — the Section scrollports clip
+// (overflow-x) anything mounted inside the card.
+interface CardMenuAction {
+  label: string
+  icon?: ReactNode
+  onClick: () => void
+}
+
+function useCardMenu() {
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
+  const open = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setPos({ x: e.clientX, y: e.clientY })
+  }
+  return { pos, open, close: () => setPos(null) }
+}
+
+function CardMenu({ pos, actions, onClose }: { pos: { x: number; y: number }; actions: CardMenuAction[]; onClose: () => void }) {
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+    }
+    window.addEventListener("blur", onClose)
+    window.addEventListener("resize", onClose)
+    window.addEventListener("scroll", onClose, true) // capture — the row scrolls, not window
+    window.addEventListener("contextmenu", onClose)
+    window.addEventListener("keydown", key)
+    return () => {
+      window.removeEventListener("blur", onClose)
+      window.removeEventListener("resize", onClose)
+      window.removeEventListener("scroll", onClose, true)
+      window.removeEventListener("contextmenu", onClose)
+      window.removeEventListener("keydown", key)
+    }
+  }, [onClose])
+  // flip upward when the menu would clip below the viewport
+  const flip = pos.y > window.innerHeight - (actions.length * 41 + 16)
+  return createPortal(
+    <>
+      <div
+        className="fixed inset-0 z-[90]"
+        onMouseDown={onClose}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          onClose()
+        }}
+      />
+      <div
+        role="menu"
+        style={{
+          left: Math.min(pos.x, window.innerWidth - 220),
+          ...(flip ? { bottom: window.innerHeight - pos.y } : { top: pos.y }),
+        }}
+        className="fixed z-[100] w-52 overflow-hidden rounded-xl border border-line bg-cardhover py-1 shadow-2xl shadow-black/50"
+      >
+        {actions.map((a, i) => (
+          <button
+            key={i}
+            role="menuitem"
+            onClick={() => {
+              onClose()
+              a.onClick()
+            }}
+            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-ink transition hover:bg-white/10"
+          >
+            {a.icon}
+            <span className="flex-1 truncate">{a.label}</span>
+          </button>
+        ))}
+      </div>
+    </>,
+    document.body,
+  )
+}
+
+const copyText = (text: string) =>
+  navigator.clipboard.writeText(text).then(
+    () => notify(t("table.linkCopied")),
+    () => {},
+  )
+
+// resolve a card's playlist into tracks for Play — same id-prefix routing
+// as the playlist page
+async function playlistTracks(p: Playlist): Promise<Track[]> {
+  try {
+    if (p.id.startsWith("ytalb-")) return (await yt.album(p.id.slice(6)))?.tracks ?? []
+    if (p.id.startsWith("ytpl-")) return (await yt.playlist(p.id.slice(5)))?.tracks ?? []
+    return await apiClient.playlistTracks(p.id)
+  } catch {
+    return []
+  }
+}
+
+function playlistLink(p: Playlist): string | undefined {
+  if (p.permalink) return p.permalink
+  if (p.id.startsWith("ytpl-")) return `https://music.youtube.com/playlist?list=${p.id.slice(5).replace(/^VL/, "")}`
+  if (p.id.startsWith("ytalb-")) return `https://music.youtube.com/browse/${p.id.slice(6)}`
+  return undefined
+}
+
+function artistLink(u: User): string | undefined {
+  if (u.permalink) return u.permalink
+  const ch = u.streamId ?? (u.id.startsWith("yt-") ? u.id.slice(3) : "")
+  return ch ? `https://music.youtube.com/channel/${ch}` : undefined
+}
 
 export function TrackCard({ t, context }: { t: Track; context?: Track[] }) {
+  const tt = useT()
+  const navigate = useNavigate()
   const playTrack = usePlayer((s) => s.playTrack)
+  const playContext = usePlayer((s) => s.playContext)
   const toggle = usePlayer((s) => s.toggle)
+  const playNextUp = usePlayer((s) => s.playNextUp)
+  const enqueue = usePlayer((s) => s.enqueue)
   const isCurrent = usePlayer((s) => s.current?.id === t.id)
   // combined selector: non-current cards always yield `false`, so a global
   // play/pause only re-renders the ONE card whose icon actually changes
   const isCurPlaying = usePlayer((s) => s.current?.id === t.id && s.isPlaying)
+  const liked = useLibrary((s) => Boolean(s.liked[t.id]))
+  const toggleLike = useLibrary((s) => s.toggleLike)
+  const dlState = useDownloads((s) =>
+    s.items[t.id] ? "done" : s.progress[t.id] !== undefined ? "busy" : "none",
+  )
+  const dlPct = useDownloads((s) => s.progress[t.id] ?? 0)
+  const dlStart = useDownloads((s) => s.start)
+  const dlRemove = useDownloads((s) => s.remove)
+  const canDl = Boolean(window.freebify?.dl)
+  const menu = useCardMenu()
   // clicking the card of the track that's already loaded toggles it —
   // replaying from 0 on a pause-click feels broken
   const play = () => (isCurrent ? toggle() : playTrack(t, context))
+  const link = t.permalink ?? (t.streamId ? `https://music.youtube.com/watch?v=${t.streamId}` : undefined)
+
+  const actions: CardMenuAction[] = [
+    { label: tt("card.play"), icon: <Play size={15} />, onClick: play },
+    { label: tt("table.playNext"), icon: <ListEnd size={15} />, onClick: () => playNextUp(t) },
+    { label: tt("table.addQueue"), icon: <ListPlus size={15} />, onClick: () => enqueue(t) },
+    ...(t.source === "yt" && t.streamId
+      ? [
+          {
+            label: tt("table.startRadio"),
+            icon: <Radio size={15} />,
+            onClick: () =>
+              void yt.upNext(t.streamId!).then((tracks) => {
+                if (tracks.length) playContext(tracks, 0)
+                else notify(tt("table.radioFail"))
+              }),
+          },
+        ]
+      : []),
+    ...(hasArtistPage(t.user)
+      ? [
+          {
+            label: tt("table.goArtist"),
+            icon: <UserIcon size={15} />,
+            onClick: () =>
+              navigate(`/artist/${encodeURIComponent(t.user.id)}?n=${encodeURIComponent(t.user.name)}`),
+          },
+        ]
+      : []),
+    ...(t.album?.id
+      ? [
+          {
+            label: tt("table.goAlbum"),
+            icon: <Disc3 size={15} />,
+            onClick: () =>
+              navigate(
+                t.album!.id.startsWith("ytalb-")
+                  ? `/playlist/${encodeURIComponent(t.album!.id)}`
+                  : `/playlist/ytalb-${encodeURIComponent(t.album!.id)}`,
+              ),
+          },
+        ]
+      : []),
+    {
+      label: liked ? tt("table.unlike") : tt("table.like"),
+      icon: <Heart size={15} className={liked ? "fill-current" : ""} />,
+      onClick: () => toggleLike(t),
+    },
+    ...(canDl
+      ? [
+          {
+            label:
+              dlState === "done"
+                ? tt("table.removeDownload")
+                : dlState === "busy"
+                  ? tt("table.downloading", { pct: dlPct })
+                  : tt("table.download"),
+            icon: dlState === "done" ? <BadgeCheck size={15} /> : <Download size={15} />,
+            onClick: () => {
+              if (dlState === "done") void dlRemove(t.id)
+              else if (dlState === "none") void dlStart(t)
+            },
+          },
+        ]
+      : []),
+    ...(link
+      ? [{ label: tt("table.copyLink"), icon: <Link2 size={15} />, onClick: () => void copyText(link) }]
+      : []),
+  ]
 
   return (
-    <motion.div whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 400, damping: 26 }} className={cardCls}>
+    <motion.div
+      whileHover={{ y: -4 }}
+      transition={{ type: "spring", stiffness: 400, damping: 26 }}
+      className={cardCls}
+      onContextMenu={menu.open}
+    >
       <div
         role="button"
         tabIndex={0}
@@ -127,6 +330,7 @@ export function TrackCard({ t, context }: { t: Track; context?: Track[] }) {
         <p className={`mt-3 truncate text-sm font-semibold ${isCurrent ? "underline decoration-white/30 underline-offset-4" : ""}`}>{t.title}</p>
         <p className="mt-0.5 truncate text-xs text-dim">{t.user.name}</p>
       </div>
+      {menu.pos && <CardMenu pos={menu.pos} actions={actions} onClose={menu.close} />}
     </motion.div>
   )
 }
@@ -205,12 +409,32 @@ function CollageCover({ p, alt }: { p: Playlist; alt: string }) {
 
 export function PlaylistCard({ p }: { p: Playlist }) {
   const tt = useT()
+  const navigate = useNavigate()
+  const playContext = usePlayer((s) => s.playContext)
+  const menu = useCardMenu()
   // yt editorial playlists carry NO artwork — the collage fetches track
   // thumbs for them. Items that already ship a real cover (album rows,
   // new releases, Audius) go straight to ArtworkImg: no extra browse call.
   const isYt = (p.id.startsWith("ytpl-") || p.id.startsWith("ytalb-")) && !p.artwork?.["480x480"]
+  const link = playlistLink(p)
+  const open = () => navigate(`/playlist/${encodeURIComponent(p.id)}`)
+  const actions: CardMenuAction[] = [
+    { label: tt("card.open"), icon: <ListMusic size={15} />, onClick: open },
+    {
+      label: tt("card.play"),
+      icon: <Play size={15} />,
+      onClick: () =>
+        void playlistTracks(p).then((tracks) => {
+          if (tracks.length) playContext(tracks, 0)
+          else notify(t("import.notFound"))
+        }),
+    },
+    ...(link
+      ? [{ label: tt("table.copyLink"), icon: <Link2 size={15} />, onClick: () => void copyText(link) }]
+      : []),
+  ]
   return (
-    <motion.div whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 400, damping: 26 }}>
+    <motion.div whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 400, damping: 26 }} onContextMenu={menu.open}>
       <Link to={`/playlist/${encodeURIComponent(p.id)}`} className={`block ${cardCls}`}>
         <div className="relative">
           {isYt ? (
@@ -224,6 +448,7 @@ export function PlaylistCard({ p }: { p: Playlist }) {
           {p.is_album ? tt("card.album") : tt("card.playlist")} · {p.total_play_count ? tt("card.plays", { n: fmtCount(p.total_play_count) }) : p.user.name}
         </p>
       </Link>
+      {menu.pos && <CardMenu pos={menu.pos} actions={actions} onClose={menu.close} />}
     </motion.div>
   )
 }
@@ -265,21 +490,52 @@ export function PlaylistCover({
 
 export function LocalPlaylistCard({ p }: { p: LocalPlaylist }) {
   const tt = useT()
+  const navigate = useNavigate()
+  const playContext = usePlayer((s) => s.playContext)
+  const menu = useCardMenu()
+  const open = () => navigate(`/playlist/${encodeURIComponent(p.id)}`)
+  const actions: CardMenuAction[] = [
+    { label: tt("card.open"), icon: <ListMusic size={15} />, onClick: open },
+    {
+      label: tt("card.play"),
+      icon: <Play size={15} />,
+      onClick: () => p.tracks.length && playContext(p.tracks, 0),
+    },
+    {
+      label: tt("playlist.export"),
+      icon: <Share2 size={15} />,
+      onClick: () =>
+        void exportPlaylistToFile(p).then((ok) => {
+          if (ok) notify(t("playlist.exported"))
+        }),
+    },
+  ]
   return (
-    <motion.div whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 400, damping: 26 }}>
+    <motion.div whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 400, damping: 26 }} onContextMenu={menu.open}>
       <Link to={`/playlist/${encodeURIComponent(p.id)}`} className={`block ${cardCls}`}>
         <PlaylistCover tracks={p.tracks} className="rounded-lg" />
         <p className="mt-3 truncate text-sm font-semibold">{p.name}</p>
         <p className="mt-0.5 truncate text-xs text-dim">{tt("card.playlist")} · {tt("card.tracks", { n: p.tracks.length })}</p>
       </Link>
+      {menu.pos && <CardMenu pos={menu.pos} actions={actions} onClose={menu.close} />}
     </motion.div>
   )
 }
 
 export function ArtistCard({ u }: { u: User }) {
   const tt = useT()
+  const navigate = useNavigate()
+  const menu = useCardMenu()
+  const open = () => navigate(`/artist/${encodeURIComponent(u.id)}?n=${encodeURIComponent(u.name)}`)
+  const link = artistLink(u)
+  const actions: CardMenuAction[] = [
+    { label: tt("card.open"), icon: <UserIcon size={15} />, onClick: open },
+    ...(link
+      ? [{ label: tt("table.copyLink"), icon: <Link2 size={15} />, onClick: () => void copyText(link) }]
+      : []),
+  ]
   return (
-    <motion.div whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 400, damping: 26 }}>
+    <motion.div whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 400, damping: 26 }} onContextMenu={menu.open}>
       <Link to={`/artist/${encodeURIComponent(u.id)}?n=${encodeURIComponent(u.name)}`} className={`block ${cardCls}`}>
         <ArtworkImg
           art={u.profile_picture}
@@ -293,6 +549,7 @@ export function ArtistCard({ u }: { u: User }) {
         </p>
         <p className="mt-0.5 truncate text-xs text-dim">{tt("card.artist")} · {tt("card.followers", { n: fmtCount(u.follower_count) })}</p>
       </Link>
+      {menu.pos && <CardMenu pos={menu.pos} actions={actions} onClose={menu.close} />}
     </motion.div>
   )
 }

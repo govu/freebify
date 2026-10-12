@@ -171,7 +171,7 @@ export function EqPopover() {
                   }`}
                 >
                   <span
-                    className={`absolute top-1/2 size-3 -translate-y-1/2 rounded-full transition-all ${
+                    className={`absolute top-1/2 size-3 -translate-y-1/2 rounded-full transition-[left,background-color] ${
                       normOn ? "left-[16px] bg-black" : "left-[2px] bg-white/60"
                     }`}
                   />

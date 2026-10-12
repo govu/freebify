@@ -86,5 +86,7 @@ contextBridge.exposeInMainWorld("freebify", {
       get: () => ipcRenderer.invoke("app:get-login"),
       set: (v) => ipcRenderer.invoke("app:set-login", v),
     },
+    // write a JSON file through the system save dialog — playlist export
+    saveJson: (name, json) => ipcRenderer.invoke("app:save-json", name, json),
   },
 })

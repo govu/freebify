@@ -68,7 +68,7 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="scroller mt-5 min-h-0 flex-1 overflow-y-auto border-t border-line px-3 pt-4">
+      <div className="scroller mt-5 min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-line px-3 pt-4">
         <p className="mb-2 hidden px-3 text-xs font-semibold text-faint lg:block">
           {tt("side.yourLibrary")}
         </p>

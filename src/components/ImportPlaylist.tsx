@@ -174,6 +174,33 @@ export function ImportPlaylist() {
     }
   }
 
+  // .freebify.json — our own export format; entries still re-match through
+  // search so the imported playlist holds real playable Track objects
+  const importJson = async (file: File) => {
+    setBusy(true)
+    try {
+      const j = JSON.parse(await file.text())
+      if (j?.app !== "freebify" || j?.type !== "playlist" || !Array.isArray(j?.tracks))
+        throw new Error("not a freebify playlist")
+      const entries: ImportEntry[] = j.tracks
+        .slice(0, 500)
+        .map((tr: { title?: string; artist?: string }) => ({
+          title: String(tr?.title ?? ""),
+          artist: String(tr?.artist ?? ""),
+        }))
+        .filter((e: ImportEntry) => e.title || e.artist)
+      if (!entries.length) throw new Error("empty")
+      await matchEntries(
+        typeof j.name === "string" && j.name.trim() ? j.name : file.name.replace(/\.[^.]+$/, "").replace(/\.freebify$/, ""),
+        entries,
+      )
+    } catch {
+      notify(t("import.badJson"))
+      setBusy(false)
+      setProgress(null)
+    }
+  }
+
   return (
     <>
       <button
@@ -250,12 +277,12 @@ export function ImportPlaylist() {
                 <input
                   ref={fileRef}
                   type="file"
-                  accept=".csv,text/csv"
+                  accept=".csv,.json,.freebify.json,text/csv,application/json"
                   className="hidden"
                   onChange={(e) => {
                     const f = e.target.files?.[0]
                     e.target.value = ""
-                    if (f) void importCsv(f)
+                    if (f) void (/\.(freebify\.json|json)$/i.test(f.name) ? importJson(f) : importCsv(f))
                   }}
                 />
                 <button

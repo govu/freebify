@@ -1,5 +1,5 @@
 import { animate, AnimatePresence, motion, useMotionValue, useTransform } from "motion/react"
-import { ChevronLeft, ChevronRight, Clock3, Disc3, Play, Sparkles, Users, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, Clock3, Disc3, Play, Users, X } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import type { Artwork } from "../api/types"
 import type { RewindData } from "../store/rewind"
@@ -455,7 +455,7 @@ function OutroSlide({ data, onClose, onPlay }: { data: RewindData; onClose: () =
         <div className="mt-4 flex justify-center gap-2">
           <Chip icon={<Clock3 size={11} />} delay={0.85}>{hm(data.ms)}</Chip>
           <Chip icon={<Disc3 size={11} />} delay={0.93}>{t("rewind.chipPlays", { n: data.plays.toLocaleString(dateLocale()) })}</Chip>
-          <Chip icon={<Sparkles size={11} />} delay={1.01}>{t("rewind.chipArtists", { n: data.artistCount })}</Chip>
+          <Chip icon={<Users size={11} />} delay={1.01}>{t("rewind.chipArtists", { n: data.artistCount })}</Chip>
         </div>
       </motion.div>
       <div className="mt-8 flex items-center justify-center gap-3">

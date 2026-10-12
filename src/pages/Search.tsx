@@ -141,7 +141,7 @@ export function SearchPage() {
         className="sticky top-14 z-20 mx-auto mb-8 mt-4 max-w-lg"
       >
         <div className="relative">
-          <div className="group flex items-center gap-3 rounded-full border border-line bg-panel/90 px-5 py-3.5 shadow-xl shadow-black/30 backdrop-blur transition-all duration-300 focus-within:border-white/50 focus-within:shadow-[0_0_0_4px_rgba(255,255,255,0.07),0_18px_40px_-12px_rgba(0,0,0,0.8)] hover:border-white/25">
+          <div className="group flex items-center gap-3 rounded-full border border-line bg-panel/90 px-5 py-3.5 shadow-xl shadow-black/30 backdrop-blur transition-[border-color,box-shadow] duration-300 focus-within:border-white/50 focus-within:shadow-[0_0_0_4px_rgba(255,255,255,0.07),0_18px_40px_-12px_rgba(0,0,0,0.8)] hover:border-white/25">
             <SearchIcon size={18} className="shrink-0 text-dim transition-colors duration-300 group-focus-within:text-ink" />
             <input
               ref={inputRef}
@@ -159,7 +159,7 @@ export function SearchPage() {
                 }
               }}
               placeholder={tt("search.placeholder")}
-              className="w-full bg-transparent text-[15px] font-medium placeholder:font-normal placeholder:text-faint/70 focus-visible:shadow-none"
+              className="w-full bg-transparent text-[15px] font-medium placeholder:font-normal placeholder:text-dim/70 focus-visible:shadow-none"
             />
             <AnimatePresence>
               {query && (
@@ -289,7 +289,7 @@ export function SearchPage() {
                           {tt("search.song")} · {top.user.name}
                         </p>
                       </div>
-                      <span className="absolute bottom-5 right-5 grid size-12 translate-y-2 place-items-center rounded-full bg-white text-black opacity-0 shadow-xl transition-all group-hover:translate-y-0 group-hover:opacity-100">
+                      <span className="absolute bottom-5 right-5 grid size-12 translate-y-2 place-items-center rounded-full bg-white text-black opacity-0 shadow-xl transition-[transform,opacity] group-hover:translate-y-0 group-hover:opacity-100">
                         <Play size={20} className="ml-0.5 fill-current" />
                       </span>
                     </button>

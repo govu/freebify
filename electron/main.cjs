@@ -496,6 +496,24 @@ if (!gotLock) {
     })
     ipcMain.on("app:log", (_e, msg) => logLine("renderer", msg))
 
+    // save a JSON file via the system dialog — playlist export uses this;
+    // the renderer can't touch the filesystem directly
+    ipcMain.handle("app:save-json", async (_e, defaultName, json) => {
+      try {
+        const win = BrowserWindow.getAllWindows()[0]
+        const { dialog } = require("electron")
+        const r = await dialog.showSaveDialog(win, {
+          defaultPath: path.join(app.getPath("downloads"), `${defaultName}.freebify.json`),
+          filters: [{ name: "Freebify playlist", extensions: ["freebify.json", "json"] }],
+        })
+        if (r.canceled || !r.filePath) return { saved: false }
+        fs.writeFileSync(r.filePath, json, "utf8")
+        return { saved: true, path: r.filePath }
+      } catch {
+        return { saved: false }
+      }
+    })
+
     // Discord Rich Presence — "Listening to Freebify" with art + progress.
     // The renderer only sends real transitions (track/play/pause/seek);
     // Discord computes the progress bar itself from the timestamps.

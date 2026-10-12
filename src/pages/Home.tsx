@@ -35,6 +35,17 @@ function moodForNow() {
   return pick
 }
 
+// artist-name matching for the "new for you" shelf — stats store plain
+// names while YTM releases may carry "- Topic"/"VEVO" channel suffixes
+function normArtistName(n: string) {
+  return n
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/\s*(-\s*topic|vevo|official)$/i, "")
+    .trim()
+}
+
 export function Home() {
   const tt = useT()
   const [chartTracks, setChartTracks] = useState<Track[]>([])
@@ -55,6 +66,21 @@ export function Home() {
   const months = useStats((s) => s.months)
   const rewind = useMemo(() => (Object.keys(months).length ? availableRewind() : null), [months])
   const openRewind = useRewind((s) => s.open)
+
+  // "New for you" — this week's releases filtered down to the artists the
+  // user actually plays (top 40 by listen time). Empty until stats exist —
+  // the shelf only appears once there's a real signal to match against.
+  const statArtists = useStats((s) => s.artists)
+  const newForYou = useMemo(() => {
+    const top = new Set(
+      Object.values(statArtists)
+        .sort((a, b) => b.ms - a.ms)
+        .slice(0, 40)
+        .map((a) => normArtistName(a.name)),
+    )
+    if (!top.size) return []
+    return releases.filter((p) => p.user?.name && top.has(normArtistName(p.user.name)))
+  }, [statArtists, releases])
 
   useEffect(() => {
     let live = true
@@ -302,6 +328,16 @@ export function Home() {
             ) : (
               releases.map((p) => <PlaylistCard key={p.id} p={p} />)
             )}
+          </Section>
+        )}
+
+        {/* new for you — releases filtered to the user's top artists;
+            surfaces only once listening stats have a signal to match */}
+        {newForYou.length > 0 && (
+          <Section title={tt("home.newForYou")}>
+            {newForYou.map((p) => (
+              <PlaylistCard key={`fy-${p.id}`} p={p} />
+            ))}
           </Section>
         )}
 

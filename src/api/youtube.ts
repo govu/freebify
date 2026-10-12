@@ -87,6 +87,7 @@ declare global {
           get: () => Promise<boolean>
           set: (v: boolean) => Promise<boolean>
         }
+        saveJson?: (name: string, json: string) => Promise<{ saved: boolean; path?: string }>
       }
     }
   }

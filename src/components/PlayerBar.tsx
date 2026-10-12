@@ -99,7 +99,7 @@ export function PlayerBar() {
               </AnimatePresence>
             </div>
             <motion.button
-              whileTap={{ scale: 0.8 }}
+              whileTap={{ scale: 0.96 }}
               onClick={() => {
                 if (!liked) setPop((p) => p + 1)
                 toggleLike(current)
@@ -139,7 +139,7 @@ export function PlayerBar() {
             <SkipBack size={18} className="fill-current" />
           </CtlBtn>
           <motion.button
-            whileTap={{ scale: 0.92 }}
+            whileTap={{ scale: 0.96 }}
             onClick={toggle}
             disabled={disabled}
             aria-label={buffering && !isPlaying ? t("player.cancelLoading") : isPlaying ? t("player.pause") : t("player.play")}

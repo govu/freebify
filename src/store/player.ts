@@ -324,22 +324,28 @@ function prefetchNextTrack() {
   const { queue, index, shuffle } = usePlayer.getState()
   // downloaded tracks need no warm-up — the local file IS the warm path
   const dls = useDownloads.getState().items
-  if (!shuffle) {
-    // warm the next few — the yt-dlp semaphore caps concurrency anyway, and
-    // the cache makes repeat resolutions free. Covers instant next-track
-    // starts plus clicking a few rows down without waiting for a resolve.
-    for (const next of queue.slice(index + 1, index + 5)) {
-      if (next?.source === "yt" && next.streamId && !dls[next.id]) {
-        void yt.prefetch(next.streamId).catch(() => null)
-      }
+  // upcoming positions: the sequential tail, or the shuffled deck order —
+  // the deck knows the real next pick, so shuffle gets the same warm start
+  const upcoming = shuffle
+    ? shuffleDeck.filter((i) => i !== index && i >= 0 && i < queue.length).slice(0, 4)
+    : queue.slice(index + 1, index + 5).map((_, k) => index + 1 + k)
+  // warm the next few — the resolve lands in cache long before the pick.
+  // Covers instant next-track starts plus clicking a few rows down.
+  for (const i of upcoming) {
+    const next = queue[i]
+    if (next?.source === "yt" && next.streamId && !dls[next.id]) {
+      void yt.prefetch(next.streamId).catch(() => null)
     }
-    // deeper warm-up for the immediate next track: a real media element
-    // holding an already-buffered stream — next() then starts in <100ms.
-    // runs on every 'playing' event (each resume!) — reuse the existing
-    // buffer for the same track instead of refetching the stream.
-    // Audius needs no resolve — its stream endpoint redirects straight to
-    // the file, so the same instant-start/crossfade path covers it free.
-    const first = queue[index + 1]
+  }
+  // deeper warm-up for the immediate next track: a real media element
+  // holding an already-buffered stream — next() then starts in <100ms.
+  // runs on every 'playing' event (each resume!) — reuse the existing
+  // buffer for the same track instead of refetching the stream.
+  // Audius needs no resolve — its stream endpoint redirects straight to
+  // the file, so the same instant-start/crossfade path covers it free.
+  const firstPos = upcoming[0]
+  const first = queue[firstPos]
+  {
     if (
       first &&
       isPlayable(first) &&
@@ -356,7 +362,8 @@ function prefetchNextTrack() {
       void urlP.then((url) => {
           if (!url) return
           const s = usePlayer.getState()
-          if (s.queue[s.index + 1]?.id !== first.id || engine !== "audio") return
+          const pos = s.shuffle ? shuffleDeck[0] : s.index + 1
+          if (s.queue[pos]?.id !== first.id || engine !== "audio") return
           dropPrebuffer()
           const el = mkAudio(url)
           el.preload = "auto"
@@ -389,6 +396,38 @@ function prefetchNextTrack() {
 // Keyed to the track AND the queue instance — replaying the same song in
 // a fresh queue fills again (a stale flag used to dead-end the queue).
 let radioFilledFor: { id: string; tail: string } | null = null
+
+// ---- true shuffle (Spotify-style deck) ----------------------------------
+// A shuffled permutation of the queue positions still to play. next()
+// drains it, so every track plays exactly once before the deck reshuffles
+// — the old "random ≠ current" pick could repeat a song three times while
+// others were never heard. Module state (positions only make sense beside
+// the live queue); prev() keeps walking the played-history stack either way.
+let shuffleDeck: number[] = []
+
+const shuffledIdxs = (n: number, exclude = -1): number[] => {
+  const a = Array.from({ length: n }, (_, i) => i).filter((i) => i !== exclude)
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
+// deal a fresh deck over the live queue — toggle-on and wholesale queue
+// replacements (playContext, radio start, single-track plays)
+function resetDeck() {
+  const s = usePlayer.getState()
+  shuffleDeck = s.shuffle ? shuffledIdxs(s.queue.length, s.index) : []
+}
+
+// tail appends (enqueue, radio fill) scatter through the deck — Spotify
+// deals new arrivals into the remaining shuffle, not onto a visible tail
+function deckAppend(startIdx: number, count: number) {
+  if (!usePlayer.getState().shuffle) return
+  for (let n = 0; n < count; n++)
+    shuffleDeck.splice(Math.floor(Math.random() * (shuffleDeck.length + 1)), 0, startIdx + n)
+}
 
 // radio results often carry "the same song, other versions" (covers,
 // re-uploads, "Nueva Versión") — YouTube treats them as related because
@@ -423,6 +462,22 @@ function genreMix(vid: string, seed: Track): Promise<Track[]> {
   })
 }
 
+// videoIds already used as up-next seeds this session — an exhausted
+// panel must not be re-queried on every track change
+const radioTried = new Set<string>()
+
+function pickRadioSeeds(s: PlayerState): Track[] {
+  if (radioTried.size > 120) radioTried.clear()
+  // bias to the queue tail: fresh radio picks drift the mix forward like
+  // Spotify's endless autoplay; fall back to any untried yt track
+  const cands = s.queue.filter(
+    (t) => t.id !== s.current?.id && t.source === "yt" && t.streamId && !radioTried.has(t.streamId),
+  )
+  const tail = cands.slice(-10)
+  const pool = tail.length >= 3 ? tail : cands
+  return shuffledIdxs(pool.length).map((i) => pool[i]).slice(0, 4)
+}
+
 function maybeFillRadio() {
   const { queue, index, current, autoplay } = usePlayer.getState()
   if (!autoplay) return
@@ -439,12 +494,29 @@ function maybeFillRadio() {
   const vid = current.streamId
   void (async () => {
     try {
-      const more = await genreMix(vid, current)
+      let more = await genreMix(vid, current)
+      radioTried.add(vid)
       const s = usePlayer.getState()
       if (s.current?.id !== current.id) return
-      const have = new Set(s.queue.map((t) => t.streamId ?? t.id))
-      const haveTitles = new Set(s.queue.map((t) => normTitle(t.title)))
-      const add = more.filter((t) => t.streamId && !have.has(t.streamId) && !haveTitles.has(normTitle(t.title)))
+      const dedupe = () => {
+        const st = usePlayer.getState()
+        const have = new Set(st.queue.map((t) => t.streamId ?? t.id))
+        const haveTitles = new Set(st.queue.map((t) => normTitle(t.title)))
+        return more.filter(
+          (t) => t.streamId && !have.has(t.streamId) && !haveTitles.has(normTitle(t.title)),
+        )
+      }
+      let add = dedupe()
+      // the seed's up-next panel is exhausted — everything it offered is
+      // already queued or heard. Reseed off tracks near the queue tail so
+      // the radio keeps walking forward instead of dead-ending (the old
+      // behavior: silence until the user restarted the radio by hand)
+      for (const seed of add.length ? [] : pickRadioSeeds(s)) {
+        more = await genreMix(seed.streamId!, seed)
+        radioTried.add(seed.streamId!)
+        add = dedupe()
+        if (add.length) break
+      }
       if (!add.length) {
         // an empty fetch must not poison the flag — after a network blip
         // the queue would dead-end forever at track's end; clear so the
@@ -458,6 +530,7 @@ function maybeFillRadio() {
         !t.duration && t.streamId ? { ...t, duration: byVid.get(t.streamId!)?.duration ?? t.duration } : t
       )
       usePlayer.setState({ queue: [...patched, ...add] })
+      deckAppend(s.queue.length, add.length)
     } catch {
       // transient failure — clear the flag so the next play retries
       // instead of dead-ending the queue for this track
@@ -466,13 +539,12 @@ function maybeFillRadio() {
       // the queue may have hit "end" while this fetch was in flight —
       // re-kick the advance so playback picks up the freshly appended tracks
       const s = usePlayer.getState()
-      if (!s.isPlaying && !s.buffering && s.index + 1 >= s.queue.length - 1 && s.queue.length) {
-        // only if the player actually stalled at the boundary (a manual
-        // pause ALSO has isPlaying false — don't resurrect over it)
-        if (!s.current || s.currentTime >= (s.duration || Infinity) - 1) {
-          void s.next(true)
-        }
-      }
+      // only if the player actually stalled at the boundary: isPlaying false
+      // + the track ran to its end (a manual pause mid-track has
+      // currentTime << duration — never resurrect over it). The queue may
+      // have just grown, so position-in-queue can't detect the stall.
+      if (!s.isPlaying && !s.buffering && s.current && s.currentTime >= (s.duration || Infinity) - 4)
+        void s.next(true)
     }
   })()
 }
@@ -674,6 +746,8 @@ export const usePlayer = create<PlayerState>()(
           }
           autoFailStreak = 0
           set({ queue: playable, history: [] })
+          radioTried.clear()
+          shuffleDeck = get().shuffle ? shuffledIdxs(playable.length, i) : []
           loadAt(i)
           // warm the tracks the user is most likely to hit next — the
           // resolve lands in cache long before they'd ever click it
@@ -694,6 +768,8 @@ export const usePlayer = create<PlayerState>()(
             }
           }
           set({ queue: [t], history: [] })
+          radioTried.clear()
+          shuffleDeck = []
           loadAt(0)
         },
 
@@ -790,7 +866,7 @@ export const usePlayer = create<PlayerState>()(
         },
 
         next: (auto = false) => {
-          const { queue, index, history, shuffle, repeat } = get()
+          const { queue, index, history, shuffle, repeat, autoplay } = get()
           if (queue.length === 0) return
           if (auto && repeat === "one") {
             // a mid-flight crossfade means `audio` is the fading element
@@ -809,8 +885,15 @@ export const usePlayer = create<PlayerState>()(
           if (!auto) autoFailStreak = 0
           let nextIndex = index + 1
           if (shuffle && queue.length > 1) {
-            const options = queue.map((_, i) => i).filter((i) => i !== index)
-            nextIndex = options[Math.floor(Math.random() * options.length)]
+            // drain the deck — every track plays once; a fresh deal only
+            // after the whole queue was heard (or positions went stale)
+            while (shuffleDeck.length && (shuffleDeck[0] === index || shuffleDeck[0] >= queue.length))
+              shuffleDeck.shift()
+            // reshuffle only when the queue loops (repeat-all or radio refills
+            // keep it fed) — with repeat off the deck drains and playback ends
+            if (!shuffleDeck.length && (repeat === "all" || autoplay))
+              shuffleDeck = shuffledIdxs(queue.length, index)
+            nextIndex = shuffleDeck.length ? shuffleDeck.shift()! : queue.length
           }
           if (nextIndex >= queue.length) {
             if (repeat === "all") nextIndex = 0
@@ -890,7 +973,10 @@ export const usePlayer = create<PlayerState>()(
           set({ muted: m })
         },
 
-        toggleShuffle: () => set({ shuffle: !get().shuffle }),
+        toggleShuffle: () => {
+          set({ shuffle: !get().shuffle })
+          resetDeck()
+        },
 
         cycleRepeat: () => {
           const order: RepeatMode[] = ["off", "all", "one"]
@@ -928,12 +1014,15 @@ export const usePlayer = create<PlayerState>()(
           if (get().index === -1 || get().queue.length === 0) {
             autoFailStreak = 0
             set({ queue: [t], history: [] })
+            radioTried.clear()
+            shuffleDeck = []
             loadAt(0)
             return
           }
           // runtime queue cap — persist only saves 300; an unbounded queue
           // would diverge index↔current on restore and bloat memory. Dropping
           // old entries would rebase every stored position — refuse instead.
+          const prevLen = get().queue.length
           set((s) => {
             if (s.queue.length >= 500) {
               notify(tt("core.queueFull"))
@@ -941,6 +1030,7 @@ export const usePlayer = create<PlayerState>()(
             }
             return { queue: [...s.queue, t] }
           })
+          if (get().queue.length > prevLen) deckAppend(prevLen, 1)
           notify(tt("core.addedQueue"))
         },
         playNextUp: (t) => {
@@ -951,9 +1041,12 @@ export const usePlayer = create<PlayerState>()(
           if (get().index === -1 || get().queue.length === 0) {
             autoFailStreak = 0
             set({ queue: [t], history: [] })
+            radioTried.clear()
+            shuffleDeck = []
             loadAt(0)
             return
           }
+          const insertAt = get().index + 1
           set((s) => {
             const q = [...s.queue]
             q.splice(s.index + 1, 0, t)
@@ -961,6 +1054,12 @@ export const usePlayer = create<PlayerState>()(
             // shifted by one
             return { queue: q, history: s.history.map((h) => (h > s.index ? h + 1 : h)) }
           })
+          // play-next is literal under shuffle too: rebase deck positions
+          // past the insert point, then deal this track in first
+          if (get().shuffle) {
+            shuffleDeck = shuffleDeck.map((d) => (d >= insertAt ? d + 1 : d))
+            shuffleDeck.unshift(insertAt)
+          }
           notify(tt("core.playNext"))
         },
         removeAt: (i) => {
@@ -973,11 +1072,14 @@ export const usePlayer = create<PlayerState>()(
             .filter((h) => h !== i)
             .map((h) => (h > i ? h - 1 : h))
           set({ queue: q, index: ni, history: h })
+          shuffleDeck = shuffleDeck.filter((d) => d !== i).map((d) => (d > i ? d - 1 : d))
         },
         clearQueue: () => {
           const { current, index } = get()
           // keep what's playing — clear upcoming + history
           set(index >= 0 && current ? { queue: [current], index: 0, history: [] } : { queue: [], index: -1, history: [] })
+          radioTried.clear()
+          shuffleDeck = []
         },
         jumpTo: (i) => {
           const { queue, index, history } = get()
@@ -986,6 +1088,7 @@ export const usePlayer = create<PlayerState>()(
           // same contract as next() — Prev must return to the track heard
           // before the jump, not to index-1
           if (index >= 0) set({ history: [...history.slice(-63), index] })
+          shuffleDeck = shuffleDeck.filter((d) => d !== i)
           loadAt(i)
         },
         moveInQueue: (from, to) => {
@@ -995,7 +1098,9 @@ export const usePlayer = create<PlayerState>()(
           const [item] = q.splice(from, 1)
           q.splice(to, 0, item)
           const ni = index > from && index <= to ? index - 1 : index < from && index >= to ? index + 1 : index
-          set({ queue: q, index: ni, history: get().history.map((h) => (h === from ? to : h > from && h <= to ? h - 1 : h < from && h >= to ? h + 1 : h)) })
+          const remap = (h: number) => (h === from ? to : h > from && h <= to ? h - 1 : h < from && h >= to ? h + 1 : h)
+          set({ queue: q, index: ni, history: get().history.map(remap) })
+          shuffleDeck = shuffleDeck.map(remap)
         },
         // "Go to song radio" — clears everything after the current track and
         // re-seeds with the genre mix (like Spotify's radio). What you were
@@ -1010,7 +1115,10 @@ export const usePlayer = create<PlayerState>()(
             if (s.current?.id !== current.id || !mix.length) return
             // a radio REPLACES what follows (same as Spotify); history stays
             radioFilledFor = { id: current.id, tail: mix.slice(0, 4).map((t) => t.id).join(",") }
+            radioTried.clear()
+            radioTried.add(vid)
             set({ queue: [...s.queue.slice(0, s.index + 1), ...mix] })
+            resetDeck()
             notify(tt("core.radioStarted"))
           })()
         },
@@ -1414,6 +1522,7 @@ function bindAudio(a: HTMLAudioElement): HTMLAudioElement {
   })
   on("timeupdate", () => {
     if (engine === "audio" && !a.seeking) usePlayer.setState({ currentTime: a.currentTime })
+    if (engine === "audio") pushPositionState()
     // crossfade trigger — only sequential queues (shuffle resolves its pick
     // at transition time, so no crossfade there) with a prebuffer ready
     const st = usePlayer.getState()
@@ -1549,7 +1658,10 @@ ytEngine.setEvents({
   },
   onTime: (t) => {
     disarmYtBeat()
-    if (engine === "yt") usePlayer.setState({ currentTime: t })
+    if (engine === "yt") {
+      usePlayer.setState({ currentTime: t })
+      pushPositionState()
+    }
   },
   onError: () => {
     disarmYtBeat()
@@ -1663,6 +1775,28 @@ function updateMediaSession(track: Track) {
       ] as MediaImage[]
     ).filter((a) => Boolean(a.src)),
   })
+}
+
+// position into the SMTC overlay — gives Windows' media popup a live
+// seekbar instead of just static track info
+let lastPosPush = 0
+function pushPositionState() {
+  if (!("mediaSession" in navigator) || !navigator.mediaSession.setPositionState) return
+  const now = Date.now()
+  if (now - lastPosPush < 900) return
+  lastPosPush = now
+  const s = usePlayer.getState()
+  const dur = s.duration
+  if (!Number.isFinite(dur) || dur <= 0) return
+  try {
+    navigator.mediaSession.setPositionState({
+      duration: dur,
+      playbackRate: 1,
+      position: Math.min(s.currentTime, dur),
+    })
+  } catch {
+    /* transient mid-seek states can throw — harmless */
+  }
 }
 
 if ("mediaSession" in navigator) {

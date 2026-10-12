@@ -145,7 +145,7 @@ export function QueuePanel() {
           </button>
         )}
 
-        <div className="scroller min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+        <div className="scroller min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-4">
           {queue[index] && (
             <>
               <p className="px-3 pb-1 text-xs font-semibold text-faint">{tt("queue.nowPlaying")}</p>

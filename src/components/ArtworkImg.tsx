@@ -82,13 +82,14 @@ export function ArtworkImg({ art, size = "480x480", alt = "", className = "", ic
       src={urls[idx]}
       alt={alt}
       loading="lazy"
+      decoding="async"
       draggable={false}
       onLoad={() => setLoaded(true)}
       onError={() => {
         setIdx((i) => i + 1)
         setLoaded(false)
       }}
-      className={`object-cover transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"} ${className}`}
+      className={`object-cover ring-1 ring-inset ring-white/10 transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"} ${className}`}
     />
   )
 }

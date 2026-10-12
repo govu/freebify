@@ -2032,7 +2032,7 @@ export function NowPlaying() {
               <SkipBack size={26} className="fill-current" />
             </button>
             <motion.button
-              whileTap={{ scale: 0.9 }}
+              whileTap={{ scale: 0.96 }}
               onClick={toggle}
               aria-label={tt(isPlaying ? "np.pause" : "np.play")}
               className="grid size-16 place-items-center rounded-full bg-white text-black shadow-xl transition hover:scale-105"

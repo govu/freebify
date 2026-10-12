@@ -1,5 +1,5 @@
 import { motion } from "motion/react"
-import { Check, Download, Link2, ListMusic, Pencil, Play, Plus, Search, Trash2 } from "lucide-react"
+import { Check, Download, Link2, ListMusic, Pencil, Play, Plus, Search, Share2, Trash2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { apiClient } from "../api/audius"
@@ -11,7 +11,7 @@ import { PlaylistCover } from "../components/Cards"
 import { HeroSkeleton, RowsSkeleton } from "../components/Skeletons"
 import { TrackTable } from "../components/TrackTable"
 import { t, useT } from "../i18n"
-import { useLibrary } from "../store/library"
+import { exportPlaylistToFile, useLibrary } from "../store/library"
 import { useDownloads } from "../store/downloads"
 import { notify, usePlayer } from "../store/player"
 import { fmtCount, fmtDuration } from "../utils/format"
@@ -371,6 +371,19 @@ function LocalPlaylistView({ id }: { id: string }) {
             className="flex items-center gap-2 rounded-full border border-line px-5 py-2.5 text-sm font-semibold text-dim transition hover:border-dim hover:text-ink"
           >
             <Download size={15} /> {tt("playlist.downloadAll")}
+          </button>
+        )}
+        {tracks.length > 0 && window.freebify?.app?.saveJson && (
+          <button
+            onClick={() =>
+              void exportPlaylistToFile({ name: playlist.name, tracks }).then((ok) => {
+                if (ok) notify(t("playlist.exported"))
+              })
+            }
+            title={tt("playlist.exportTitle")}
+            className="flex items-center gap-2 rounded-full border border-line px-5 py-2.5 text-sm font-semibold text-dim transition hover:border-dim hover:text-ink"
+          >
+            <Share2 size={15} /> {tt("playlist.export")}
           </button>
         )}
         <button
