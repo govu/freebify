@@ -4,6 +4,7 @@ const path = require("path")
 const { pathToFileURL } = require("url")
 const youtube = require("./youtube.cjs")
 const downloads = require("./downloads.cjs")
+const spotify = require("./spotify.cjs")
 
 // fbx:// scheme for downloaded files — privileges must be granted before
 // the app is ready (they can't be retrofitted onto a running session)
@@ -245,7 +246,11 @@ function sendDeepLink(link) {
 }
 function handleDeepLink(argv) {
   const link = argv.find((a) => typeof a === "string" && a.startsWith("freebify://"))
-  if (link) sendDeepLink(link)
+  if (!link) return
+  // the OAuth callback is app-internal — never leak it to the renderer
+  // as a navigation deeplink
+  if (/spotify-callback/i.test(link)) return
+  sendDeepLink(link)
 }
 // macOS delivers via event instead of argv
 app.on("open-url", (e, url) => {
@@ -313,8 +318,9 @@ if (!gotLock) {
         ])
       )
     }
-    youtube.register(ipcMain)
-    downloads.register(ipcMain)
+  youtube.register(ipcMain)
+  spotify.register(ipcMain)
+  downloads.register(ipcMain)
     handleDeepLink(process.argv)
 
     // auto-update via electron-updater → GitHub Releases (publish config

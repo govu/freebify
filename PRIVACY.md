@@ -44,6 +44,24 @@ client *running on your own computer* what you're listening to so it can
 show on your Discord profile. This data goes to Discord under Discord's
 privacy policy; you can turn it off at any time.
 
+## Spotify playlist import (optional, read-only)
+
+To import a Spotify playlist longer than 100 tracks, Freebify can ask you to
+log in to Spotify once. The login screens belong to Spotify and happen
+between your device and Spotify only. What Freebify stores from it:
+
+- **the session token lives in the app's memory for the current session
+  only** — never on disk, never in the log file, and it is erased the
+  moment you close the app (or right away from Settings on request)
+- Freebify **never sees your Spotify password** — the browser window you
+  type it into belongs to Spotify
+- the only thing the token is ever asked for is reading public or your
+  own playlists, strictly read-only — it cannot write, edit or remove
+  anything from your Spotify account
+
+You can revoke Freebify's access at any time from
+https://www.spotify.com/account/apps/.
+
 ## Changes
 
 This policy may be updated alongside the app. The current version is

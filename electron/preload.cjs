@@ -26,8 +26,14 @@ contextBridge.exposeInMainWorld("freebify", {
     mxmLyrics: (title, artist) => ipcRenderer.invoke("yt:mxmlyrics", title, artist),
     videoSearch: (q) => ipcRenderer.invoke("yt:videosearch", q),
     ytsearch: (q, n) => ipcRenderer.invoke("yt:ytsearch", q, n),
-    spotifyList: (id) => ipcRenderer.invoke("yt:spotifylist", id),
     suggest: (q) => ipcRenderer.invoke("yt:suggest", q),
+  },
+  // Spotify OAuth is strictly read-only and lives in the main process —
+  // the renderer only ever sees the imported track list, never the token
+  spotify: {
+    import: (id, opts) => ipcRenderer.invoke("sp:import", id, opts ?? {}),
+    connected: () => ipcRenderer.invoke("sp:connected"),
+    forget: () => ipcRenderer.invoke("sp:forget"),
   },
   dl: {
     // downloaded files live in userData/downloads — the renderer plays

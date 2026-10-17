@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react"
-import { FileSpreadsheet, Link2, Loader2, X } from "lucide-react"
+import { ChevronDown, ChevronUp, FileSpreadsheet, Link2, Loader2, Lock, X } from "lucide-react"
 import { useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { yt } from "../api/youtube"
@@ -10,6 +10,16 @@ import { useLibrary } from "../store/library"
 // Import playlists: Spotify or YouTube Music links, or a CSV export
 // (each row re-matched by search). Best-effort matching — the top
 // YouTube Music hit is taken; originals-only catalog means a few misses.
+// Spotify >100 tracks needs a one-off OAuth connect (main process keeps
+// the token in RAM); the embed path without it caps at Spotify's own 100.
+
+// An embed import that hit Spotify's anonymous cap — parked until the
+// user connects their account (full list) or takes the first 100
+interface CappedImport {
+  id: string
+  name: string
+  tracks: ImportEntry[]
+}
 
 const YT_LIST = /[?&]list=([A-Za-z0-9_-]+)/
 const SPOTIFY_LIST = /open\.spotify\.com\/playlist\/([A-Za-z0-9]+)/
@@ -18,7 +28,6 @@ interface ImportEntry {
   title: string
   artist: string
 }
-
 // minimal CSV cell parser — quoted fields, escaped "" quotes, comma sep
 function csvRows(text: string): string[][] {
   const rows: string[][] = []
@@ -62,6 +71,9 @@ export function ImportPlaylist() {
   const [url, setUrl] = useState("")
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+  const [capped, setCapped] = useState<CappedImport | null>(null)
+  const [connecting, setConnecting] = useState(false)
+  const [privacyOpen, setPrivacyOpen] = useState(false)
   const createPlaylist = useLibrary((s) => s.createPlaylist)
   const addTracksToPlaylist = useLibrary((s) => s.addTracksToPlaylist)
   const deletePlaylist = useLibrary((s) => s.deletePlaylist)
@@ -116,7 +128,11 @@ export function ImportPlaylist() {
   const importUrl = async () => {
     const u = url.trim()
     const spotifyId = SPOTIFY_LIST.exec(u)?.[1]
-    if (spotifyId) return importSpotify(spotifyId)
+    if (spotifyId) {
+      setCapped(null)
+      setPrivacyOpen(false)
+      return importSpotify(spotifyId)
+    }
     const id = YT_LIST.exec(u)?.[1]
     if (!id) {
       notify(t("import.pasteLink"))
@@ -139,21 +155,60 @@ export function ImportPlaylist() {
     }
   }
 
-  const importSpotify = async (id: string) => {
+  const importSpotify = async (id: string, opts?: { connect?: boolean }) => {
     setBusy(true)
     try {
-      const res = await yt.spotifyList(id)
-      if (!res) {
+      const res = await yt.spotifyImport(id, opts)
+      if (!res?.ok || !res.name) {
         notify(t("import.unreadable"))
         setBusy(false)
+        setProgress(null)
         return
       }
-      await matchEntries(res.name, res.tracks)
+      // the anonymous embed tops out at Spotify's 100-cap — park it and
+      // offer the connect (full list through the user's own session)
+      if (res.capped && !opts?.connect && res.tracks?.length) {
+        setBusy(false)
+        setCapped({ id, name: res.name, tracks: res.tracks })
+        return
+      }
+      await matchEntries(res.name, res.tracks ?? [])
     } catch {
       notify(t("import.failed"))
       setBusy(false)
       setProgress(null)
     }
+  }
+
+  const connectAndImport = async () => {
+    if (!capped) return
+    const target = capped
+    setConnecting(true)
+    try {
+      const res = await yt.spotifyImport(target.id, { connect: true })
+      setConnecting(false)
+      if (!res?.ok || !res.name) {
+        notify(res?.connectFailed ? t("import.connectFailed") : t("import.unreadable"))
+        return
+      }
+      setCapped(null)
+      setPrivacyOpen(false)
+      await matchEntries(res.name, res.tracks ?? [])
+    } catch {
+      setConnecting(false)
+      notify(t("import.connectFailed"))
+    }
+  }
+
+  const cappedImport = async () => {
+    if (!capped) return
+    const target = capped
+    setCapped(null)
+    matchEntries(target.name, target.tracks).catch(() => {
+      setBusy(false)
+      setProgress(null)
+      notify(t("import.failed"))
+    })
   }
 
   const importCsv = async (file: File) => {
@@ -164,7 +219,7 @@ export function ImportPlaylist() {
       const [ti, ai] = findCols(rows[0])
       const entries: ImportEntry[] = rows
         .slice(1)
-        .slice(0, 500) // cap — a 5000-row export would churn forever
+        .slice(0, 5000) // 1 search per row in batches of 4 — beyond this the churn dwarfs the payoff
         .map((r) => ({ title: r[ti]?.trim() ?? "", artist: r[ai]?.trim() ?? "" }))
       await matchEntries(file.name.replace(/\.[^.]+$/, ""), entries)
     } catch {
@@ -183,7 +238,7 @@ export function ImportPlaylist() {
       if (j?.app !== "freebify" || j?.type !== "playlist" || !Array.isArray(j?.tracks))
         throw new Error("not a freebify playlist")
       const entries: ImportEntry[] = j.tracks
-        .slice(0, 500)
+        .slice(0, 5000)
         .map((tr: { title?: string; artist?: string }) => ({
           title: String(tr?.title ?? ""),
           artist: String(tr?.artist ?? ""),
@@ -238,6 +293,51 @@ export function ImportPlaylist() {
                 </button>
               </div>
 
+              {capped ? (
+                <div className="mt-5">
+                  <h4 className="text-sm font-bold">{tt("import.cappedTitle")}</h4>
+                  <p className="mt-1 text-xs leading-relaxed text-dim">{tt("import.cappedBody")}</p>
+                  <button
+                    onClick={() => void connectAndImport()}
+                    disabled={connecting}
+                    className="mt-4 flex w-full items-center justify-center rounded-full bg-white py-2.5 text-sm font-bold text-black transition enabled:hover:scale-[1.02] disabled:opacity-40"
+                  >
+                    {connecting ? <Loader2 size={15} className="animate-spin" /> : tt("import.connect")}
+                  </button>
+                  <button
+                    onClick={() => void cappedImport()}
+                    className="mt-2 w-full rounded-full border border-line py-2.5 text-sm font-semibold text-dim transition enabled:hover:border-dim enabled:hover:text-ink"
+                  >
+                    {tt("import.cappedProceed")}
+                  </button>
+                  <button
+                    onClick={() => setPrivacyOpen((v) => !v)}
+                    className="mt-4 flex items-center gap-1.5 text-xs font-semibold text-faint transition hover:text-dim"
+                  >
+                    {privacyOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    {tt("import.privacyToggle")}
+                  </button>
+                  <AnimatePresence>
+                    {privacyOpen && (
+                      <motion.p
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="overflow-hidden text-xs leading-relaxed text-faint"
+                      >
+                        <span className="mt-2 block rounded-lg border border-line bg-card p-3">
+                          {tt("import.privacyDetail")}
+                        </span>
+                      </motion.p>
+                    )}
+                  </AnimatePresence>
+                  <p className="mt-3 flex items-start gap-1.5 text-[11px] leading-relaxed text-faint">
+                    <Lock size={11} className="mt-0.5 shrink-0" />
+                    {tt("import.privacyNote")}
+                  </p>
+                </div>
+              ) : (
+                <>
               <div className="mt-5">
                 <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-dim">
                   <Link2 size={12} /> {tt("import.linkLabel")}
@@ -295,6 +395,8 @@ export function ImportPlaylist() {
                     : tt("import.chooseCsv")}
                 </button>
               </div>
+                </>
+              )}
             </motion.div>
           </motion.div>
         )}
