@@ -1,33 +1,11 @@
-// Spotify playlist import — the ONLY consumer of the Spotify Web API.
-// Strictly read-only (playlist-read-*): the user's own OAuth session
-// unlocks the FULL track list, which the anonymous embed page caps at 100.
-//
-// Privacy contract the UI makes (and this file must keep true):
-// - no Spotify servers of ours exist — every request goes straight from
-//   the user's machine to accounts.spotify.com / api.spotify.com
-// - the token lives in this module's MEMORY ONLY: never persisted, never
-//   written to the log file, never sent over IPC to the renderer
-// - closing the app erases it; `forget()` erases it on demand
-const crypto = require("crypto")
+// Spotify playlist import — anonymous embed reader.
+// Spotify's embed page publishes exactly the first 100 tracks of a public
+// playlist and nothing more (its own cap): reading beyond that requires a
+// Premium-gated Web API grant, which Freebify does not use. CSV import
+// (Exportify etc.) is the route for longer lists — it doesn't touch Spotify.
 const fs = require("fs")
-const http = require("http")
 const path = require("path")
-const { app, shell } = require("electron")
-
-const CLIENT_ID = "6868fab689ff4c2ebfe0566801474075"
-// the dashboard registers both URIs; loopback is the one in use — the user's
-// default browser redirects there and this process's short-lived receiver
-// captures the code. When Spotify rejects the loopback, the token exchange
-// fails and the user simply retries (bias to correctness over complexity)
-const REDIRECT = "http://127.0.0.1:41810/callback"
-// playlist-read-private is the minimum for the user's own lists — reading
-// PUBLIC playlists needs NO scope at all, and `playlist-read-public` was
-// removed from Spotify's scope list years ago (requesting a dead scope
-// makes the whole authorize call come back as invalid_scope)
-const SCOPE = "playlist-read-private"
-const API = "https://api.spotify.com/v1"
-// 200 pages x 100 = 20k — Spotify's own UI tops out far below this
-const MAX_TRACKS = 20000
+const { app } = require("electron")
 
 function log(tag, msg) {
   try {
@@ -35,207 +13,6 @@ function log(tag, msg) {
     fs.mkdirSync(dir, { recursive: true })
     fs.appendFileSync(path.join(dir, "freebify.log"), `${new Date().toISOString()} [${tag}] ${msg}\n`)
   } catch {}
-}
-
-let token = null // { value, expiresAt } — memory only
-
-const EXPIRY_SKEW = 60 * 1000 // refresh a minute early, don't test 401s on users
-
-function connected() {
-  return Boolean(token && Date.now() < token.expiresAt)
-}
-
-function forget() {
-  token = null
-}
-
-// ---------- OAuth: system browser + loopback receiver ----------
-// Spotify explicitly wants account login in the user's own browser, and its
-// login page serves a broken, unstyled fallback to embedded Chromium. The
-// default browser handles every login variant (password, Google, Facebook)
-// and the authorization code returns via 127.0.0.1:41810.
-
-// the page the browser ends on after the handshake — neutral, no branding
-const CALLBACK_HTML =
-  '<meta charset="utf-8"><body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0a0a;color:#fff;font-family:sans-serif"><div style="text-align:center"><p style="font-size:15px">Playlist authorized.</p><p style="font-size:13px;color:#a3a3a3;margin-top:6px">You can close this window.</p></div></body>'
-const DENIED_HTML =
-  '<meta charset="utf-8"><body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0a0a;color:#fff;font-family:sans-serif"><div style="text-align:center"><p style="font-size:15px">Connection was not completed.</p><p style="font-size:13px;color:#a3a3a3;margin-top:6px">You can close this window and try again.</p></div></body>'
-
-// the receiver must be bound BEFORE the browser ever redirects; a bind
-// failure (port taken) resolves null and the user can just retry. The
-// receiver lives only while the login is pending — it is NOT a server
-const AUTH_MAX_WAIT = 10 * 60 * 1000 // generous 2FA / password-manager time
-
-function listenForCode(state) {
-  return new Promise((resolveOuter) => {
-    let settled = false
-    let srv = null
-    let waitTimer = null
-    const done = (code) => {
-      if (settled) return
-      settled = true
-      clearTimeout(waitTimer)
-      try {
-        srv?.close?.()
-      } catch {}
-      resolveOuter(code ? { code, state } : null)
-    }
-
-    srv = http.createServer((req, res) => {
-      if (!req.url?.startsWith("/callback")) {
-        res.writeHead(404)
-        return void res.end()
-      }
-      const q = new URL(req.url, "http://127.0.0.1")
-      const err = q.searchParams.get("error")
-      const code = q.searchParams.get("code")
-      const gotState = q.searchParams.get("state")
-      res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
-      res.end(err || !code || gotState !== state ? DENIED_HTML : CALLBACK_HTML)
-      if (err || !code || gotState !== state) {
-        // don't wait for the ACK — favicon retries etc. would re-run this
-        log("spotify.auth", "denied: " + (err || (code ? "state mismatch" : "no code")))
-        done(null)
-        return
-      }
-      done(code)
-    })
-    srv.on("error", (e) => {
-      log("spotify.auth", `loopback bind failed: ${e?.code ?? e}`)
-      done(null)
-    })
-    srv.listen(41810, "127.0.0.1")
-    // user never finishes the login in the browser — stop listening so a
-    // later retry can bind again (same crash = orphaned server holding the port)
-    waitTimer = setTimeout(() => done(null), AUTH_MAX_WAIT)
-  })
-}
-
-async function tokenExchange(form) {
-  try {
-    const res = await fetch("https://accounts.spotify.com/api/token", {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams(form),
-      signal: AbortSignal.timeout(15000),
-    })
-    if (!res.ok) {
-      log("spotify.auth", `exchange ${res.status}`)
-      return null
-    }
-    const j = await res.json()
-    return j?.access_token ? j : null
-  } catch (e) {
-    log("spotify.auth", `exchange failed: ${e?.message ?? e}`)
-    return null
-  }
-}
-
-// returns true when a usable token is in memory afterwards.
-// Collapses concurrent attempts onto one handshake — two clicks would race
-// on the same loopback port; a second "connect" while pending awaits the
-// first handshake instead of starting its own
-let pendingAuth = null
-async function connect() {
-  if (connected()) return true
-  if (pendingAuth) return pendingAuth
-  pendingAuth = connectInner().finally(() => {
-    pendingAuth = null
-  })
-  return pendingAuth
-}
-
-async function connectInner() {
-  const verifier = crypto.randomBytes(64).toString("base64url")
-  const challenge = crypto.createHash("sha256").update(verifier).digest("base64url")
-  const state = crypto.randomBytes(16).toString("base64url")
-  const params = new URLSearchParams({
-    response_type: "code",
-    client_id: CLIENT_ID,
-    scope: SCOPE,
-    redirect_uri: REDIRECT,
-    code_challenge_method: "S256",
-    code_challenge: challenge,
-    state,
-  })
-  const authUrl = `https://accounts.spotify.com/authorize?${params}`
-
-  const receiver = listenForCode(state)
-  try {
-    await shell.openExternal(authUrl)
-  } catch (e) {
-    log("spotify.auth", `openExternal failed: ${e?.message ?? e}`)
-    return false
-  }
-  const got = await receiver
-  if (!got) return false
-  const tok = await tokenExchange({
-    grant_type: "authorization_code",
-    code: got.code,
-    redirect_uri: REDIRECT,
-    client_id: CLIENT_ID,
-    code_verifier: verifier,
-  })
-  if (!tok) return false
-  token = {
-    value: tok.access_token,
-    expiresAt: Date.now() + Math.max(60, Number(tok.expires_in) || 3600) * 1000 - EXPIRY_SKEW,
-  }
-  return true
-}
-
-// ---------- playlist readers ----------
-
-// first page + continuation walking against the user's own session
-async function apiPlaylist(id) {
-  if (!token) return null
-  const headers = { Authorization: `Bearer ${token.value}` }
-  try {
-    const meta = await fetch(`${API}/playlists/${id}?fields=name`, {
-      headers,
-      signal: AbortSignal.timeout(15000),
-    })
-    if (meta.status === 401 || meta.status === 403) {
-      log("spotify.import", `auth rejected (${meta.status}) — clearing token`)
-      token = null
-      return null
-    }
-    if (!meta.ok) {
-      log("spotify.import", `playlist meta ${meta.status}`)
-      return null
-    }
-    const name = (await meta.json())?.name
-    if (!name) return null
-    const tracks = []
-    let url = `${API}/playlists/${id}/tracks?limit=100&offset=0&fields=next,items(track)`
-    while (url && tracks.length < MAX_TRACKS) {
-      const r = await fetch(url, { headers, signal: AbortSignal.timeout(20000) })
-      if (r.status === 401 || r.status === 403) {
-        token = null
-        return null
-      }
-      if (!r.ok) {
-        log("spotify.import", `tracks ${r.status} @${tracks.length}`)
-        return null
-      }
-      const j = await r.json()
-      for (const it of j.items ?? []) {
-        const t = it?.track
-        if (!t || t.is_local) continue
-        const title = String(t.name ?? "")
-        const artist = (t.artists ?? [])
-          .map((a) => a?.name)
-          .filter(Boolean)
-          .join(", ")
-        if (title && artist) tracks.push({ title, artist })
-      }
-      url = j.next
-    }
-    return { name, tracks }
-  } catch (e) {
-    log("spotify.import", `api failed: ${e?.message ?? e}`)
-    return null
-  }
 }
 
 // anonymous embed scrape — public playlists only, Spotify caps at 100
@@ -259,48 +36,22 @@ async function embedPlaylist(id) {
   }
 }
 
-// renderer-facing entry:
-//   importPlaylist(id)          → token if already connected, else embed
-//   importPlaylist(id,{connect})→ run the OAuth flow first, then the API
-// → { ok:true, source, name, tracks: [{title,artist}], capped }
-// → { ok:false } when nothing readable exists
-async function importPlaylist(id, opts = {}) {
+// renderer-facing entry → { ok:true, name, tracks: [{title,artist}] }
+// → { ok:false } when the playlist isn't public / doesn't exist
+async function importPlaylist(id) {
   if (typeof id !== "string" || !/^[A-Za-z0-9]{10,40}$/.test(id)) return { ok: false }
-  if (opts.connect) {
-    const ok = await connect()
-    if (!ok) return { ok: false, connectFailed: true }
-  }
-  if (connected()) {
-    const api = await apiPlaylist(id)
-    if (api) {
-      log("spotify.import", `api ok: ${api.tracks.length} tracks`)
-      return { ok: true, source: "api", name: api.name, tracks: api.tracks, capped: false }
-    }
-    // 401 cleared the token — fall through to the embed once
-  }
   const emb = await embedPlaylist(id)
   if (!emb) return { ok: false }
-  return {
-    ok: true,
-    source: "embed",
-    name: emb.name,
-    tracks: emb.tracks,
-    capped: emb.tracks.length >= 100,
-  }
+  return { ok: true, name: emb.name, tracks: emb.tracks }
 }
 
 function register(ipcMain) {
-  ipcMain.handle("sp:import", (_e, id, opts) =>
-    importPlaylist(id, opts ?? {}).catch((e) => {
+  ipcMain.handle("sp:import", (_e, id) =>
+    importPlaylist(id).catch((e) => {
       log("spotify.import", `failed: ${e?.message ?? e}`)
       return { ok: false }
     })
   )
-  ipcMain.handle("sp:connected", () => connected())
-  ipcMain.handle("sp:forget", () => {
-    forget()
-    return true
-  })
 }
 
-module.exports = { register, importPlaylist, embeddedPlaylist: embedPlaylist, forget, connected, connect }
+module.exports = { register, importPlaylist, embeddedPlaylist: embedPlaylist }

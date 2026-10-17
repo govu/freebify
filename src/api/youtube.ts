@@ -37,12 +37,8 @@ interface YtBridge {
 
 export interface SpotifyImport {
   ok: boolean
-  connectFailed?: boolean
-  source?: "api" | "embed"
   name?: string
   tracks?: { title: string; artist: string }[]
-  // true → embed scrape hit Spotify's anonymous 100-track cap
-  capped?: boolean
 }
 
 declare global {
@@ -50,9 +46,7 @@ declare global {
     freebify?: {
       yt: YtBridge
       spotify?: {
-        import: (id: string, opts?: { connect?: boolean }) => Promise<SpotifyImport | null>
-        connected: () => Promise<boolean>
-        forget: () => Promise<boolean>
+        import: (id: string) => Promise<SpotifyImport | null>
       }
       dl?: {
         list: () => Promise<{ id: string; file: string; addedAt: number; track: Track }[]>
@@ -160,8 +154,8 @@ export const yt = {
   mxmLyrics: (title: string, artist: string) => ytBridge()?.mxmLyrics?.(title, artist) ?? Promise.resolve(null),
   videoSearch: (q: string) => ytBridge()?.videoSearch?.(q) ?? Promise.resolve([]),
   ytsearch: (q: string, n = 10) => ytBridge()?.ytsearch?.(q, n) ?? Promise.resolve([]),
-  spotifyImport: (id: string, opts?: { connect?: boolean }) =>
-    window.freebify?.spotify?.import(id, opts) ?? Promise.resolve(null),
+  spotifyImport: (id: string) =>
+    window.freebify?.spotify?.import(id) ?? Promise.resolve(null),
   suggest: (q: string) => ytBridge()?.suggest(q) ?? Promise.resolve([]),
 }
 
