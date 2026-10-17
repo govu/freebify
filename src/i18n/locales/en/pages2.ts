@@ -38,7 +38,7 @@ export default {
   "import.notFound": "Playlist not found. Check it isn't private",
   "import.pasteLink": "Paste a Spotify or YouTube Music playlist link",
   "import.privacyToggle": "Why does it ask me to log in?",
-  "import.privacyDetail": "The login only travels between this device and Spotify, directly — it's Spotify telling Freebify: \"show this user's playlists\". Freebify never sees your password, has no server, and the token lives only in memory while the app is open. Closing Freebify erases it — nothing is stored and nothing goes anywhere else.",
+  "import.privacyDetail": "The login opens in your own browser and travels only between your device and Spotify — it's Spotify telling Freebify: \"show this user's playlists\". Freebify never sees your password, has no server, and the token lives only in memory while the app is open. Closing Freebify erases it — nothing is stored and nothing goes anywhere else.",
   "import.privacyNote": "Session lives in RAM only — nothing stored, no server, nothing leaves your computer.",
   "import.submit": "Import playlist",
   "import.title": "Import a playlist",

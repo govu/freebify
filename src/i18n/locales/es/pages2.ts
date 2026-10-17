@@ -38,7 +38,7 @@ export default {
   "import.notFound": "Playlist no encontrada. Comprueba que no sea privada",
   "import.pasteLink": "Pega un enlace de playlist de Spotify o YouTube Music",
   "import.privacyToggle": "¿Por qué me pide entrar?",
-  "import.privacyDetail": "El login va solo entre este equipo y Spotify, directamente — es Spotify diciéndole a Freebify \"muéstrale sus playlists a este usuario\". Freebify nunca ve tu contraseña, no tiene ningún servidor, y el token vive solo en memoria mientras la app esté abierta. Cerrar Freebify lo borra — no se guarda nada y no viaja a ningún otro lado.",
+  "import.privacyDetail": "El login ocurre en tu propio navegador, solo entre tu equipo y Spotify — es Spotify diciéndole a Freebify \"muéstrale sus playlists a este usuario\". Freebify nunca ve tu contraseña, no tiene ningún servidor, y el token vive solo en memoria mientras la app esté abierta. Cerrar Freebify lo borra — no se guarda nada y no viaja a ningún otro lado.",
   "import.privacyNote": "La sesión vive solo en RAM — no se guarda nada, sin servidores, nada sale de tu equipo.",
   "import.submit": "Importar playlist",
   "import.title": "Importar una playlist",
