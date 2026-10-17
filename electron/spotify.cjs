@@ -20,7 +20,11 @@ const CLIENT_ID = "6868fab689ff4c2ebfe0566801474075"
 // captures the code. When Spotify rejects the loopback, the token exchange
 // fails and the user simply retries (bias to correctness over complexity)
 const REDIRECT = "http://127.0.0.1:41810/callback"
-const SCOPE = "playlist-read-private playlist-read-public"
+// playlist-read-private is the minimum for the user's own lists — reading
+// PUBLIC playlists needs NO scope at all, and `playlist-read-public` was
+// removed from Spotify's scope list years ago (requesting a dead scope
+// makes the whole authorize call come back as invalid_scope)
+const SCOPE = "playlist-read-private"
 const API = "https://api.spotify.com/v1"
 // 200 pages x 100 = 20k — Spotify's own UI tops out far below this
 const MAX_TRACKS = 20000
@@ -54,11 +58,13 @@ function forget() {
 // the page the browser ends on after the handshake — neutral, no branding
 const CALLBACK_HTML =
   '<meta charset="utf-8"><body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0a0a;color:#fff;font-family:sans-serif"><div style="text-align:center"><p style="font-size:15px">Playlist authorized.</p><p style="font-size:13px;color:#a3a3a3;margin-top:6px">You can close this window.</p></div></body>'
+const DENIED_HTML =
+  '<meta charset="utf-8"><body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0a0a;color:#fff;font-family:sans-serif"><div style="text-align:center"><p style="font-size:15px">Connection was not completed.</p><p style="font-size:13px;color:#a3a3a3;margin-top:6px">You can close this window and try again.</p></div></body>'
 
 // the receiver must be bound BEFORE the browser ever redirects; a bind
 // failure (port taken) resolves null and the user can just retry. The
 // receiver lives only while the login is pending — it is NOT a server
-const AUTH_MAX_WAIT = 5 * 60 * 1000 // generous 2FA / password-manager time
+const AUTH_MAX_WAIT = 10 * 60 * 1000 // generous 2FA / password-manager time
 
 function listenForCode(state) {
   return new Promise((resolveOuter) => {
@@ -84,14 +90,14 @@ function listenForCode(state) {
       const err = q.searchParams.get("error")
       const code = q.searchParams.get("code")
       const gotState = q.searchParams.get("state")
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
+      res.end(err || !code || gotState !== state ? DENIED_HTML : CALLBACK_HTML)
       if (err || !code || gotState !== state) {
+        // don't wait for the ACK — favicon retries etc. would re-run this
         log("spotify.auth", "denied: " + (err || (code ? "state mismatch" : "no code")))
         done(null)
         return
       }
-      res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
-      // don't wait for the ACK — favicon retries etc. would re-run this
-      res.end(CALLBACK_HTML)
       done(code)
     })
     srv.on("error", (e) => {
