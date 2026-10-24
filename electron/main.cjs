@@ -6,17 +6,17 @@ const youtube = require("./youtube.cjs")
 const downloads = require("./downloads.cjs")
 const spotify = require("./spotify.cjs")
 
-// fbx:// scheme for downloaded files — privileges must be granted before
+// fbx:// scheme for downloaded files - privileges must be granted before
 // the app is ready (they can't be retrofitted onto a running session)
 downloads.privilege()
 
-// dev is only ever a local vite server — a packaged exe must never flip
+// dev is only ever a local vite server - a packaged exe must never flip
 // into remote-URL loading via argv/env (it would hand the bridge to a
 // remote document)
 const isDev = !app.isPackaged
 const DEV_URL = process.env.VITE_DEV_SERVER_URL || "http://localhost:5173"
 
-// keep the taskbar group/notification identity stable across restarts —
+// keep the taskbar group/notification identity stable across restarts -
 // Windows keys pinned icons and toast attribution to this id
 app.setAppUserModelId("com.freebify.app")
 
@@ -25,7 +25,7 @@ const thumbarDir = () =>
   app.isPackaged
     ? path.join(process.resourcesPath, "thumbar")
     : path.join(__dirname, "..", "resources", "thumbar")
-// nativeImage objects are cached — createFromPath on every refresh would
+// nativeImage objects are cached - createFromPath on every refresh would
 // leak GDI handles on each play/pause flip
 const iconCache = new Map()
 const thumbIcon = (name) => {
@@ -37,15 +37,15 @@ const thumbIcon = (name) => {
   return img
 }
 let thumbarPlaying = false
-// only rebuild the Windows toolbar when its contents actually change —
+// only rebuild the Windows toolbar when its contents actually change -
 // progress pushes arrive ~40x per track and flooding ITaskbarList3 makes
 // the OS drop repaints silently (icon frozen on the last painted state)
 let thumbarSig = ""
-let thumbarTitle = "" // last-pushed title — needed for the optimistic click flip
+let thumbarTitle = "" // last-pushed title - needed for the optimistic click flip
 let thumbarShowQueued = false // at most one deferred "show" repaint
 let taskbarHidden = false // tray-hide removes the taskbar button entirely
 let tray = null
-// set when an update finishes downloading — powers the explicit "restart to
+// set when an update finishes downloading - powers the explicit "restart to
 // update" affordance, since X hides to the tray and users never see a quit
 let pendingUpdate = null
 let updaterRef = null
@@ -53,7 +53,7 @@ let autoUpdaterRef = null
 let lastUpdateCheck = 0
 let updateCheckInflight = false
 
-// debounced: focus/show/interval/manual all funnel here — never more than
+// debounced: focus/show/interval/manual all funnel here - never more than
 // one check per 2 min unless a manual button forces it
 function checkForUpdatesNow(force = false) {
   if (!autoUpdaterRef || updateCheckInflight) return null
@@ -61,7 +61,7 @@ function checkForUpdatesNow(force = false) {
   lastUpdateCheck = Date.now()
   updateCheckInflight = true
   // checkForUpdates() can throw SYNCHRONOUSLY (bad feed state, early call)
-  // — a direct call would skip .finally and wedge updateCheckInflight
+  // - a direct call would skip .finally and wedge updateCheckInflight
   // forever, disabling updates for the whole session
   return Promise.resolve()
     .then(() => autoUpdaterRef.checkForUpdates())
@@ -74,7 +74,7 @@ function checkForUpdatesNow(force = false) {
 const showWindow = () => {
   const win = BrowserWindow.getAllWindows()[0]
   if (win) {
-    // undo the tray-hide (minimize+skipTaskbar) before restore/show —
+    // undo the tray-hide (minimize+skipTaskbar) before restore/show -
     // the taskbar entry must exist again or the window stays invisible
     win.setSkipTaskbar(false)
     taskbarHidden = false
@@ -100,7 +100,7 @@ function buildTrayMenu() {
   ]
   if (pendingUpdate && updaterRef) {
     template.push({
-      label: `Restart to update — v${pendingUpdate.version}`,
+      label: `Restart to update to v${pendingUpdate.version}`,
       click: () => updaterRef.quitAndInstall(true, true),
     })
   }
@@ -109,7 +109,7 @@ function buildTrayMenu() {
 }
 
 function createTray() {
-  // no tray on macOS — the Dock covers show/quit and the thumbar icon set
+  // no tray on macOS - the Dock covers show/quit and the thumbar icon set
   // isn't even shipped there (new Tray() with an empty image throws)
   if (tray || process.platform === "darwin") return
   const icon = thumbIcon("tray.png")
@@ -121,18 +121,18 @@ function createTray() {
 }
 
 function refreshThumbar(win) {
-  // Windows-only API — on macOS the icons aren't even shipped
+  // Windows-only API - on macOS the icons aren't even shipped
   if (process.platform !== "win32" || !win || win.isDestroyed()) return
   const send = (cmd) => () => {
     logLine("thumbar", `click → player:cmd ${cmd}`)
     if (!win.isDestroyed()) win.webContents.send("player:cmd", cmd)
   }
-  // must only be called once the window has a real taskbar entry —
+  // must only be called once the window has a real taskbar entry -
   // setThumbarButtons on a not-yet-shown window silently no-ops, and on a
   // tray-hidden window (skipTaskbar → no taskbar button at all) Windows
   // rejects it outright: mark dirty, apply on the next real show
   if (taskbarHidden || !win.isVisible()) {
-    // one deferred repaint only — a long tray session pushes dozens of
+    // one deferred repaint only - a long tray session pushes dozens of
     // refreshes and an unguarded once("show") per push piles listeners up
     if (!thumbarShowQueued) {
       thumbarShowQueued = true
@@ -150,11 +150,11 @@ function refreshThumbar(win) {
       tooltip: thumbarPlaying ? "Pause" : "Play",
       icon: thumbIcon(thumbarPlaying ? "pause.png" : "play.png"),
       click: () => {
-        // optimistic flip — Windows dismisses the thumbnail flyout the
+        // optimistic flip - Windows dismisses the thumbnail flyout the
         // moment a button is clicked, and the renderer roundtrip is async,
         // so without this the next hover can still show the stale icon.
         // The renderer's push corrects the state a tick later anyway.
-        // thumbarSig is updated too — otherwise a failed toggle's
+        // thumbarSig is updated too - otherwise a failed toggle's
         // correcting push would dedup against the stale sig and the icon
         // would stay wrong forever
         thumbarPlaying = !thumbarPlaying
@@ -186,7 +186,7 @@ function loadBounds() {
       }
     }
   } catch {
-    /* first run / corrupt — defaults */
+    /* first run / corrupt - defaults */
   }
   return { width: 1280, height: 820 }
 }
@@ -205,14 +205,14 @@ function saveBounds(win) {
 // Music apps legitimately need autoplay (next-track advance, queue).
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required")
 
-// ---- lightweight file logging — support needs a real trail, not just
+// ---- lightweight file logging - support needs a real trail, not just
 // console output nobody can read once the window is gone ----
 const logsDir = () => path.join(app.getPath("userData"), "logs")
 function logLine(level, msg) {
   try {
     fs.mkdirSync(logsDir(), { recursive: true })
     const f = path.join(logsDir(), "freebify.log")
-    // cap at ~1MB — rotate by truncation, not unbounded growth
+    // cap at ~1MB - rotate by truncation, not unbounded growth
     if (fs.existsSync(f) && fs.statSync(f).size > 1024 * 1024) {
       fs.writeFileSync(f, fs.readFileSync(f, "utf8").slice(-512 * 1024))
     }
@@ -224,10 +224,10 @@ function logLine(level, msg) {
 process.on("uncaughtException", (e) => logLine("fatal", `uncaughtException: ${e?.stack ?? e}`))
 process.on("unhandledRejection", (e) => logLine("error", `unhandledRejection: ${e?.stack ?? e}`))
 
-// freebify:// deep links — registered in dev too so protocol testing works;
+// freebify:// deep links - registered in dev too so protocol testing works;
 // the renderer navigates to the link's path
 app.setAsDefaultProtocolClient?.("freebify")
-// a cold-start link arrives before any window exists — without the stash
+// a cold-start link arrives before any window exists - without the stash
 // it's silently dropped (the whole point of the feature is launching via link)
 let pendingDeepLink = null
 function sendDeepLink(link) {
@@ -237,7 +237,7 @@ function sendDeepLink(link) {
     return
   }
   if (win.webContents.isLoading()) {
-    // renderer hasn't subscribed yet — flush on did-finish-load
+    // renderer hasn't subscribed yet - flush on did-finish-load
     pendingDeepLink = link
     return
   }
@@ -247,7 +247,7 @@ function sendDeepLink(link) {
 function handleDeepLink(argv) {
   const link = argv.find((a) => typeof a === "string" && a.startsWith("freebify://"))
   if (!link) return
-  // the OAuth callback is app-internal — never leak it to the renderer
+  // the OAuth callback is app-internal - never leak it to the renderer
   // as a navigation deeplink
   if (/spotify-callback/i.test(link)) return
   sendDeepLink(link)
@@ -258,7 +258,7 @@ app.on("open-url", (e, url) => {
   if (url?.startsWith("freebify://")) sendDeepLink(url)
 })
 
-// explicit quit — the X button hides to the tray (music keeps playing,
+// explicit quit - the X button hides to the tray (music keeps playing,
 // like Spotify); only these paths actually end the app
 let allowQuit = false
 const quit = () => {
@@ -268,7 +268,7 @@ const quit = () => {
 app.on("before-quit", () => {
   allowQuit = true
 })
-// cap renderer-crash respawns — a reproducible crash used to destroy→
+// cap renderer-crash respawns - a reproducible crash used to destroy→
 // create→crash in an endless flicker loop
 let crashRespawns = 0
 let crashWindowStart = 0
@@ -308,7 +308,7 @@ if (!gotLock) {
             submenu: [
               { role: "minimize" },
               { role: "zoom" },
-              // frameless windows get no green light — without this role
+              // frameless windows get no green light - without this role
               // there is no way at all to enter fullscreen on macOS
               { role: "togglefullscreen" },
               { type: "separator" },
@@ -324,16 +324,16 @@ if (!gotLock) {
     handleDeepLink(process.argv)
 
     // auto-update via electron-updater → GitHub Releases (publish config
-    // in package.json). Errors are non-fatal — a 404 placeholder repo or
+    // in package.json). Errors are non-fatal - a 404 placeholder repo or
     // no network just means "no update this run". NSIS builds self-update;
-    // portable builds can't (no installer) — latest.yml is still published
+    // portable builds can't (no installer) - latest.yml is still published
     // so portable users get a "new version" hint via the releases page.
-    // portable builds can't self-update (no installer writes the app dir) —
+    // portable builds can't self-update (no installer writes the app dir) -
     // electron-builder signals them via PORTABLE_EXECUTABLE_DIR, NOT an
     // argv flag; the old check never fired, so portable exes downloaded a
     // 100MB update they could never install
     // manual-update path: unsigned macOS (Squirrel.mac needs a signature) and
-    // non-AppImage linux (deb can't self-update — only AppImage works with
+    // non-AppImage linux (deb can't self-update - only AppImage works with
     // electron-updater). Poll GitHub for a newer tag, offer the download.
     const manualUpdate = process.platform === "darwin" || (process.platform === "linux" && !process.env.APPIMAGE)
     const manualUrl = () =>
@@ -376,7 +376,7 @@ if (!gotLock) {
         autoUpdater.autoDownload = true
         autoUpdater.autoInstallOnAppQuit = true
         autoUpdater.on("update-downloaded", (info) => {
-          logLine("update", `downloaded ${info.version} — installs on quit`)
+          logLine("update", `downloaded ${info.version} - installs on quit`)
           pendingUpdate = { version: info.version, manual: false }
           updaterRef = autoUpdater
           buildTrayMenu()
@@ -387,12 +387,12 @@ if (!gotLock) {
           if (pendingUpdate && updaterRef) updaterRef.quitAndInstall(true, true)
         })
         // a renderer that mounted after the toast still learns about the
-        // pending update — the banner isn't a one-shot message
+        // pending update - the banner isn't a one-shot message
         ipcMain.handle("app:update-status", () => ({ pending: pendingUpdate?.version ?? null, manual: pendingUpdate?.manual === true }))
         ipcMain.handle("app:check-update", async () => {
           if (updateCheckInflight) return { checking: true, pending: pendingUpdate?.version ?? null } // a check was already in flight
           const r = await checkForUpdatesNow(true)
-          // null result = the check itself failed (offline, feed error) —
+          // null result = the check itself failed (offline, feed error) -
           // saying "no update" would lie to the user
           if (!r) return { pending: pendingUpdate?.version ?? null, failed: true }
           const latest = r?.updateInfo?.version
@@ -401,7 +401,7 @@ if (!gotLock) {
         autoUpdater.on("error", (e) => logLine("update", `check failed: ${e?.message ?? e}`))
         autoUpdaterRef = autoUpdater
         checkForUpdatesNow(true)
-        // 30 min cadence + focus/show triggers — a release lands within
+        // 30 min cadence + focus/show triggers - a release lands within
         // minutes of a session, not hours later
         setInterval(() => checkForUpdatesNow(), 30 * 60 * 1000).unref()
       } catch (e) {
@@ -409,7 +409,7 @@ if (!gotLock) {
       }
     }
 
-    // production ships no application menu — the default one leaks
+    // production ships no application menu - the default one leaks
     // Ctrl+R reloads and devtools accelerators into the packaged app.
     // macOS keeps its menu (set above): without one there is no Cmd+Q,
     // no copy/paste accelerators, no fullscreen role.
@@ -426,11 +426,11 @@ if (!gotLock) {
       "object-src 'none'",
       "base-uri 'self'",
     ].join("; ")
-    // One webRequest hook per session — merge both concerns:
+    // One webRequest hook per session - merge both concerns:
     // 1. media responses get ACAO:* so the renderer can route <audio> through
     //    Web Audio (EQ / loudness / crossfade). Only media resourceType is
-    //    touched — the header is meaningless to page/document loads.
-    // 2. our own document gets the CSP (prod only — it would kill HMR in dev)
+    //    touched - the header is meaningless to page/document loads.
+    // 2. our own document gets the CSP (prod only - it would kill HMR in dev)
     session.defaultSession.webRequest.onHeadersReceived((d, cb) => {
       if (d.resourceType === "media") {
         return cb({ responseHeaders: { ...d.responseHeaders, "access-control-allow-origin": ["*"] } })
@@ -442,7 +442,7 @@ if (!gotLock) {
     })
     if (!isDev && process.platform !== "darwin") Menu.setApplicationMenu(null)
 
-    // frameless window controls — the renderer draws its own min/max/close
+    // frameless window controls - the renderer draws its own min/max/close
     ipcMain.on("win:control", (e, action) => {
       const win = BrowserWindow.fromWebContents(e.sender)
       if (!win) return
@@ -452,7 +452,7 @@ if (!gotLock) {
     })
 
     // renderer pushes player state → swap play/pause icon + tooltip text.
-    // validate the payload — it crosses an IPC boundary
+    // validate the payload - it crosses an IPC boundary
     ipcMain.on("player:thumbar", (_e, s) => {
       const win = BrowserWindow.getAllWindows()[0]
       if (!win || !s || typeof s !== "object") return
@@ -466,10 +466,10 @@ if (!gotLock) {
         thumbarPlaying = playing
         refreshThumbar(win)
       }
-      const tip = title ? `${title} — ${artist || "Freebify"}` : "Freebify"
+      const tip = title ? `${title} · ${artist || "Freebify"}` : "Freebify"
       if (process.platform === "win32") win.setThumbnailToolTip(tip)
       tray?.setToolTip(tip)
-      // no taskbar progress fill — a bar under the icon reads as a download
+      // no taskbar progress fill - a bar under the icon reads as a download
       // indicator, not a media progress bar
     })
 
@@ -479,12 +479,12 @@ if (!gotLock) {
       electron: process.versions.electron,
       chromium: process.versions.chrome,
       platform: process.platform,
-      // updater IPC only exists for packaged NSIS installs — the renderer
+      // updater IPC only exists for packaged NSIS installs - the renderer
       // gates its "Check for updates" button on this so dev/portable
       // builds don't show a control that always fails
       canUpdate: app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR,
     }))
-    // launch at login — a no-op on Linux, but harmless there
+    // launch at login - a no-op on Linux, but harmless there
     ipcMain.handle("app:get-login", () => {
       try { return app.getLoginItemSettings().openAtLogin } catch { return false }
     })
@@ -502,7 +502,7 @@ if (!gotLock) {
     })
     ipcMain.on("app:log", (_e, msg) => logLine("renderer", msg))
 
-    // save a JSON file via the system dialog — playlist export uses this;
+    // save a JSON file via the system dialog - playlist export uses this;
     // the renderer can't touch the filesystem directly
     ipcMain.handle("app:save-json", async (_e, defaultName, json) => {
       try {
@@ -520,7 +520,7 @@ if (!gotLock) {
       }
     })
 
-    // Discord Rich Presence — "Listening to Freebify" with art + progress.
+    // Discord Rich Presence - "Listening to Freebify" with art + progress.
     // The renderer only sends real transitions (track/play/pause/seek);
     // Discord computes the progress bar itself from the timestamps.
     const discord = require("./discord.cjs")
@@ -530,7 +530,7 @@ if (!gotLock) {
     ipcMain.on("player:presence-enabled", (_e, v) => discord.setEnabled(v !== false))
 
     createWindow()
-    // a missing tray icon throws inside Tray() — if that happened before
+    // a missing tray icon throws inside Tray() - if that happened before
     // createWindow() the app became a windowless zombie process
     try {
       createTray()
@@ -544,13 +544,13 @@ if (!gotLock) {
   })
 }
 
-// only these schemes may leave the app — a javascript:/data:/file: URL
+// only these schemes may leave the app - a javascript:/data:/file: URL
 // reaching openExternal would be a real problem
 const SAFE_EXTERNAL = /^https?:\/\//i
 
 function createWindow() {
   const bounds = loadBounds()
-  // restored x/y may live on a monitor that's no longer attached — if no
+  // restored x/y may live on a monitor that's no longer attached - if no
   // display's work area overlaps the rect, let the OS center it instead
   if (bounds.x !== undefined && bounds.y !== undefined) {
     const visible = screen.getAllDisplays().some((d) => {
@@ -575,7 +575,7 @@ function createWindow() {
     minWidth: 940,
     minHeight: 620,
     backgroundColor: "#0a0a0a",
-    // frameless — the app draws its own window chrome (drag strip +
+    // frameless - the app draws its own window chrome (drag strip +
     // min/max/close) like Spotify does
     frame: false,
     autoHideMenuBar: true,
@@ -585,7 +585,7 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      // the preload only uses ipcRenderer — no need for an unsandboxed
+      // the preload only uses ipcRenderer - no need for an unsandboxed
       // renderer process at all
       sandbox: true,
       spellcheck: false,
@@ -594,7 +594,7 @@ function createWindow() {
   })
 
   if (bounds.maximized) win.maximize()
-  // first paint only when ready — avoids the white flash on cold start
+  // first paint only when ready - avoids the white flash on cold start
   win.once("ready-to-show", () => {
     win.show()
     refreshThumbar(win)
@@ -604,7 +604,7 @@ function createWindow() {
     checkForUpdatesNow() // bringing the app back up = a good moment to look
   })
   win.on("focus", () => checkForUpdatesNow())
-  // restore-from-minimize fires 'restore', not 'show' — without this the
+  // restore-from-minimize fires 'restore', not 'show' - without this the
   // deferred refresh queued while hidden never lands
   win.on("restore", () => {
     refreshThumbar(win)
@@ -617,7 +617,7 @@ function createWindow() {
   win.on("unmaximize", () => win.webContents.send("win:maximized", false))
   win.webContents.on("did-finish-load", () => {
     win.webContents.send("win:maximized", win.isMaximized())
-    // a cold-start deep link was stashed before the renderer subscribed —
+    // a cold-start deep link was stashed before the renderer subscribed -
     // deliver it now that the app:deeplink listener exists
     if (pendingDeepLink) {
       const l = pendingDeepLink
@@ -627,11 +627,11 @@ function createWindow() {
   })
   win.on("close", (e) => {
     saveBounds(win)
-    // X hides to the tray — music apps keep playing in the background;
+    // X hides to the tray - music apps keep playing in the background;
     // Quit lives on the tray menu (allowQuit) so the app exits cleanly.
     // minimize()+skipTaskbar, NOT hide(): hide() kills the Windows
     // thumbnail toolbar for good (setThumbarButtons silently no-ops on
-    // the re-shown window — the play/pause icon freezes at whatever was
+    // the re-shown window - the play/pause icon freezes at whatever was
     // last painted). A skipped+minimized window keeps the taskbar group
     // alive, so thumbar repaints keep working.
     if (!allowQuit && !isDev) {
@@ -643,7 +643,7 @@ function createWindow() {
         // minimize()+skipTaskbar, NOT hide(): hide() kills the Windows
         // thumbnail toolbar for good (setThumbarButtons silently no-ops on
         // the re-shown window). Only safe when a tray exists to restore
-        // from — linux desktops without a tray applet would orphan it
+        // from - linux desktops without a tray applet would orphan it
         e.preventDefault()
         win.minimize()
         win.setSkipTaskbar(true)
@@ -659,7 +659,7 @@ function createWindow() {
     return { action: "deny" }
   })
 
-  // no in-app navigation away from our document — YouTube embeds run in
+  // no in-app navigation away from our document - YouTube embeds run in
   // their own child frame, so the main frame should never navigate. Exact
   // match only: any file:// URL would get the preload + bridge attached.
   const appUrl = pathToFileURL(path.join(__dirname, "..", "dist", "index.html")).href
@@ -668,13 +668,13 @@ function createWindow() {
     if (!allowed) e.preventDefault()
   })
 
-  // deny every permission prompt by default — a music app needs none of
+  // deny every permission prompt by default - a music app needs none of
   // them except clipboard write (the Copy-link features use it)
   const allowedPerm = (perm) => perm === "clipboard-sanitized-write"
   win.webContents.session.setPermissionRequestHandler((_wc, perm, cb) => cb(allowedPerm(perm)))
   win.webContents.session.setPermissionCheckHandler((_wc, perm) => allowedPerm(perm))
 
-  // a crashed renderer shouldn't leave a dead window — relaunch it, but
+  // a crashed renderer shouldn't leave a dead window - relaunch it, but
   // cap respawns: a reproducible crash used to flicker-destroy forever
   win.webContents.on("render-process-gone", (_e, details) => {
     console.error("[freebify] renderer gone:", details.reason)
@@ -686,7 +686,7 @@ function createWindow() {
         crashRespawns = 0
       }
       if (++crashRespawns > 3) {
-        logLine("fatal", "renderer crashed 3x in 60s — giving up")
+        logLine("fatal", "renderer crashed 3x in 60s - giving up")
         quit()
         return
       }
@@ -699,13 +699,13 @@ function createWindow() {
 
   if (isDev) {
     win.loadURL(DEV_URL).catch(() => {})
-    // vite may still be starting when electron launches — retry once
+    // vite may still be starting when electron launches - retry once
     win.webContents.on("did-fail-load", () => {
       setTimeout(() => win.loadURL(DEV_URL).catch(() => {}), 800)
     })
   } else {
     // production needs the same resilience: a failed loadFile (corrupt
-    // asar, AV quarantine) used to leave a permanently INVISIBLE window —
+    // asar, AV quarantine) used to leave a permanently INVISIBLE window -
     // show:false until ready-to-show which never fires. Retry twice, then
     // show the window anyway so the user sees SOMETHING (even an error).
     let loadAttempts = 0

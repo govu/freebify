@@ -1,6 +1,6 @@
-// afterPack — adhoc-sign the bundled yt-dlp on macOS. electron-builder signs
+// afterPack - adhoc-sign the bundled yt-dlp on macOS. electron-builder signs
 // the .app itself (identity:"-"), but files under Contents/Resources are
-// hashed as *resources*, not signed as executables — an unsigned arm64
+// hashed as *resources*, not signed as executables - an unsigned arm64
 // Mach-O gets killed by the kernel on spawn, and YouTube playback would be
 // silently dead. ensureExecutable() already de-quarantines it at runtime;
 // this guarantees it also carries an adhoc signature.
@@ -20,7 +20,7 @@ exports.default = async (context) => {
   try {
     execFileSync("codesign", ["--force", "--sign", "-", bin], { stdio: "pipe" })
   } catch {
-    // codesign absent when cross-building — the binary ships its upstream
+    // codesign absent when cross-building - the binary ships its upstream
     // (already adhoc) signature; missing this is not fatal to the build
   }
 }

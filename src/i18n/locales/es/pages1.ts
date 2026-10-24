@@ -9,7 +9,7 @@ export default {
   "downloads.playAll": "Reproducir todo",
   "downloads.queued": "En cola",
   "downloads.removeLabel": "Eliminar descarga",
-  "downloads.subtitle": "{n} canciones — guardadas en este dispositivo, disponibles sin conexión",
+  "downloads.subtitle": "{n} canciones guardadas en este dispositivo, disponibles sin conexión",
   "downloads.title": "Descargas",
   "genre.kicker": "Género",
   "genre.loadError": "No se pudo cargar este género ahora.",

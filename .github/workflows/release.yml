@@ -12,7 +12,7 @@ permissions:
 jobs:
   # Each matrix job creates the release up front with `|| true`: the first to
   # land wins, the rest fail benignly and electron-builder --publish uploads
-  # into the same release. No separate create-release job — under runner
+  # into the same release. No separate create-release job - under runner
   # starvation a serial gate doubled the wait while doing nothing.
   build:
     name: Build ${{ matrix.os }}
@@ -37,7 +37,7 @@ jobs:
 
       - run: npm ci
 
-      # AppImageTool needs FUSE — ubuntu runners don't ship libfuse2
+      # AppImageTool needs FUSE - ubuntu runners don't ship libfuse2
       - name: Linux build deps
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get update && sudo apt-get install -y libfuse2
@@ -51,6 +51,6 @@ jobs:
         run: node scripts/sync-site-version.mjs && npm run build && npx electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # no Apple/cert signing — skip cert discovery instead of failing.
-          # (do NOT set CSC_LINK — an empty value is still read as a cert path)
+          # no Apple/cert signing - skip cert discovery instead of failing.
+          # (do NOT set CSC_LINK - an empty value is still read as a cert path)
           CSC_IDENTITY_AUTO_DISCOVERY: "false"

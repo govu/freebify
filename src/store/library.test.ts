@@ -62,7 +62,7 @@ describe("playlists", () => {
     expect(names()).toEqual(["My Playlist #2", "My Playlist #1"])
     useLibrary.getState().deletePlaylist(first)
     useLibrary.getState().createPlaylist()
-    // #1 was freed by the delete — reused instead of climbing to #3
+    // #1 was freed by the delete - reused instead of climbing to #3
     expect(names()).toEqual(["My Playlist #1", "My Playlist #2"])
     expect(useLibrary.getState().playlists.find((p) => p.id === second)?.name).toBe("My Playlist #2")
   })

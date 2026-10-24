@@ -34,7 +34,7 @@ contextBridge.exposeInMainWorld("freebify", {
     import: (id) => ipcRenderer.invoke("sp:import", id),
   },
   dl: {
-    // downloaded files live in userData/downloads — the renderer plays
+    // downloaded files live in userData/downloads - the renderer plays
     // them back through the fbx://dl/<file> scheme
     list: () => ipcRenderer.invoke("dl:list"),
     exists: (id) => ipcRenderer.invoke("dl:exists", id),
@@ -56,7 +56,7 @@ contextBridge.exposeInMainWorld("freebify", {
       ipcRenderer.on("player:cmd", h)
       return () => ipcRenderer.removeListener("player:cmd", h)
     },
-    // Discord Rich Presence — now-playing card on the user's profile
+    // Discord Rich Presence - now-playing card on the user's profile
     presence: (s) => ipcRenderer.send("player:presence", s),
     presenceEnabled: (v) => ipcRenderer.send("player:presence-enabled", v),
   },
@@ -90,7 +90,7 @@ contextBridge.exposeInMainWorld("freebify", {
       get: () => ipcRenderer.invoke("app:get-login"),
       set: (v) => ipcRenderer.invoke("app:set-login", v),
     },
-    // write a JSON file through the system save dialog — playlist export
+    // write a JSON file through the system save dialog - playlist export
     saveJson: (name, json) => ipcRenderer.invoke("app:save-json", name, json),
   },
 })

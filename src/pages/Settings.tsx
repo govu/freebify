@@ -14,7 +14,7 @@ interface AppInfo {
   canUpdate?: boolean
 }
 
-// first column: keycap label — "settings.k.*" entries resolve via the locale
+// first column: keycap label - "settings.k.*" entries resolve via the locale
 // fallback (unknown keys return themselves), so literal keycaps pass through
 const SHORTCUTS: [string, string][] = [
   ["settings.k.space", "settings.sc.playPause"],
@@ -68,7 +68,7 @@ export function SettingsPage() {
     setDiscord(next)
     try {
       localStorage.setItem("freebify-discord", next ? "on" : "off")
-    } catch { /* storage unavailable — pref stays session-only */ }
+    } catch { /* storage unavailable - pref stays session-only */ }
     window.dispatchEvent(new CustomEvent("freebify:discord-toggle", { detail: next }))
   }
 
@@ -86,7 +86,7 @@ export function SettingsPage() {
 
   const clearCache = () => {
     try {
-      // wipe only our keys — not the persisted library/player (those are
+      // wipe only our keys - not the persisted library/player (those are
       // the user's data, not cache)
       const keep = new Set(["freebify-library", "freebify-player", "freebify-resume"])
       for (const k of Object.keys(localStorage)) {

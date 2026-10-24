@@ -24,7 +24,7 @@ and it operates no content servers.
 - Any requests made through the Software originate from **your device and
   your IP address**. You are the client of those services; Freebify's
   authors are not a party to that interaction.
-- The Software is intended for **personal, non-commercial use** —
+- The Software is intended for **personal, non-commercial use**:
   playing media you are lawfully entitled to access. Do not use it to
   infringe copyright, to redistribute content, or in any commercial
   setting.
@@ -35,7 +35,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. The authors do not
 warrant that the Software will be uninterrupted, error-free, or that any
-third-party content will remain available — availability is controlled by
+third-party content will remain available; availability is controlled by
 the platforms that serve it, which may change their APIs, terms, or
 catalog at any time without notice.
 
@@ -45,7 +45,7 @@ TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE
 AUTHORS OR CONTRIBUTORS OF FREEBIFY BE LIABLE FOR ANY INDIRECT,
 INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF
 DATA, REVENUE, OR PROFITS, ARISING OUT OF OR IN CONNECTION WITH YOUR USE
-OF (OR INABILITY TO USE) THE SOFTWARE — INCLUDING ANY CLAIM BY A THIRD
+OF (OR INABILITY TO USE) THE SOFTWARE, INCLUDING ANY CLAIM BY A THIRD
 PARTY RELATING TO YOUR USE OF IT.
 
 ## 5. Indemnification
@@ -75,7 +75,7 @@ transmitted to the authors. See [PRIVACY.md](PRIVACY.md).
 
 These terms may be updated at any time; the current version is always at
 https://github.com/govu/freebify. You may stop using the Software at any
-time by uninstalling it — that is the entire termination process.
+time by uninstalling it. That is the entire termination process.
 
 ## 9. Governing spirit
 

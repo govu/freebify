@@ -12,7 +12,7 @@ import { TrackTable } from "../components/TrackTable"
 import { useT } from "../i18n"
 import { usePlayer } from "../store/player"
 
-// shared params→name lookup — the MoodPage route only carries the browse
+// shared params→name lookup - the MoodPage route only carries the browse
 // token in the URL; this map resolves a human title when navigated deep
 export const moodNames = new Map<string, string>()
 
@@ -32,7 +32,7 @@ export function SearchPage() {
   const playTrack = usePlayer((s) => s.playTrack)
   const navigate = useNavigate()
 
-  // browse categories for the empty state — YTM mood/genre taxonomy,
+  // browse categories for the empty state - YTM mood/genre taxonomy,
   // cached in-module so the MoodPage route can resolve name by token
   useEffect(() => {
     let live = true
@@ -46,7 +46,7 @@ export function SearchPage() {
     }
   }, [])
 
-  // autocomplete — lighter debounce than the search itself; hides once the
+  // autocomplete - lighter debounce than the search itself; hides once the
   // query settles (suggestions for what's already searched are noise)
   useEffect(() => {
     const q = query.trim()
@@ -180,7 +180,7 @@ export function SearchPage() {
               )}
             </AnimatePresence>
           </div>
-          {/* autocomplete — YouTube Music's own suggestion engine; clicking
+          {/* autocomplete - YouTube Music's own suggestion engine; clicking
               fills + searches immediately (feels instant) */}
           {suggs.length > 0 && (
             <div className="absolute inset-x-0 top-full z-30 mt-2 overflow-hidden rounded-2xl border border-line bg-panel/95 py-1 shadow-2xl shadow-black/50 backdrop-blur">
@@ -204,7 +204,7 @@ export function SearchPage() {
 
       {!debounced && (
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-          {/* mood categories — real YouTube Music editorial taxonomy,
+          {/* mood categories - real YouTube Music editorial taxonomy,
               richer than the flat genre list */}
           {moods.length > 0 && (
             <>
@@ -297,7 +297,7 @@ export function SearchPage() {
                 )}
                 <div>
                   <h2 className="mb-4 text-xl font-bold">{tt("search.songs")}</h2>
-                  {/* full result set as context — queue continues past the
+                  {/* full result set as context - queue continues past the
                       visible slice instead of stopping at row 6 */}
                   <TrackTable tracks={tracks.slice(0, 6)} context={tracks} showHeader={false} showPlays={false} />
                 </div>

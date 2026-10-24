@@ -9,7 +9,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     watch: {
-      // electron-builder streams ~200MB into release/ during packaging —
+      // electron-builder streams ~200MB into release/ during packaging -
       // chokidar grabbing those handles makes its rename() fail with EPERM
       ignored: ["**/release/**", "**/dist/**", "**/docs/**"],
     },

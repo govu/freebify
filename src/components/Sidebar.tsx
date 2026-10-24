@@ -27,7 +27,7 @@ export function Sidebar() {
 
   return (
     <aside className="flex w-[4.5rem] shrink-0 flex-col border-r border-line bg-panel lg:w-64">
-      {/* top of the sidebar doubles as drag region — the padding around
+      {/* top of the sidebar doubles as drag region - the padding around
           the logo drags the window; only the link itself stays clickable.
           No wordmark: the mark alone reads cleaner in the chrome area */}
       <div className="drag-region px-4 pb-2 pt-5 lg:px-6">
@@ -51,7 +51,7 @@ export function Sidebar() {
           >
             {({ isActive }) => (
               <>
-                {/* sliding active pill — the highlight glides between nav
+                {/* sliding active pill - the highlight glides between nav
                     items instead of popping in and out */}
                 {isActive && (
                   <motion.span
@@ -135,12 +135,12 @@ export function Sidebar() {
               <button
                 key={t.id}
                 onClick={() => playTrack(t, recents)}
-                title={`${t.title} — ${t.user.name}`}
+                title={`${t.title} - ${t.user.name}`}
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-left transition-colors hover:bg-hover"
               >
                 <ArtworkImg art={t.artwork} size="150x150" alt="" className="size-9 shrink-0 rounded-md" iconSize={14} />
                 <span className="min-w-0">
-                  {/* text-white vs text-ink was a no-op (both #fff) — the
+                  {/* text-white vs text-ink was a no-op (both #fff) - the
                       currently-playing row needs a real differentiator */}
                   <span className={`block truncate text-sm ${currentId === t.id ? "text-white underline decoration-white/30 underline-offset-4" : "text-ink"}`}>
                     {t.title}

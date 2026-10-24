@@ -1,4 +1,4 @@
-// Freebify mark — concentric rings radiating from a center point:
+// Freebify mark - concentric rings radiating from a center point:
 // a vinyl groove emitting sound. Ownable geometry, reads at any size.
 export function Logo({ size = 30, className = "" }: { size?: number; className?: string }) {
   return (

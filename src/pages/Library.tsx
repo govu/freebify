@@ -10,7 +10,7 @@ import { useLibrary } from "../store/library"
 import { usePlayer } from "../store/player"
 
 export function LibraryPage() {
-  // shallow-compare — a fresh array every snapshot would re-render this
+  // shallow-compare - a fresh array every snapshot would re-render this
   // page on ANY library write (recents update on every track play)
   const likedTracks = useLibrary(
     useShallow((s) => s.likedOrder.map((id) => s.liked[id]).filter(Boolean))

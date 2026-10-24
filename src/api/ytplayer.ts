@@ -1,4 +1,4 @@
-// YouTube IFrame Player API engine — invisible embedded player used as a
+// YouTube IFrame Player API engine - invisible embedded player used as a
 // resilient fallback when direct audio extraction (yt-dlp) fails.
 // The official player gives us play/pause/seek/volume/ended events.
 
@@ -24,7 +24,7 @@ function loadApi(): Promise<any> {
       ok ? resolve(window.YT) : reject(new Error("iframe_api failed"))
     }
     window.onYouTubeIframeAPIReady = () => finish(true)
-    // retries after a timeout must not stack duplicate <script> tags — a
+    // retries after a timeout must not stack duplicate <script> tags - a
     // still-loading earlier tag resolves us via the re-armed callback anyway
     if (!document.querySelector('script[src$="iframe_api"]')) {
       const s = document.createElement("script")
@@ -38,7 +38,7 @@ function loadApi(): Promise<any> {
       10000
     )
   }).catch((e) => {
-    // never cache a rejection — one offline launch would brick the
+    // never cache a rejection - one offline launch would brick the
     // fallback engine for the whole session otherwise
     apiPromise = null
     throw e
@@ -62,19 +62,19 @@ class YtEngine {
   private pollTimer: number | null = null
   private playTimer: number | null = null
   private events: YtEngineEvents = {}
-  // the video play() last loaded — postMessage events carry no id, so we
+  // the video play() last loaded - postMessage events carry no id, so we
   // verify the player's current video before attributing PLAYING/ERROR/
   // ENDED to the pending attempt. Stale events for a superseded video
   // would otherwise "win" a race or kill a healthy track.
   private expectedVid = ""
   private durEmitted = false
-  // applied onto every new video — otherwise the first ~second plays at
+  // applied onto every new video - otherwise the first ~second plays at
   // YouTube's default volume (100%) before the store's values land
   private lastVol = 1
   private lastMuted = false
   isActive = false
 
-  // the video the player reports must match what play() loaded — else the
+  // the video the player reports must match what play() loaded - else the
   // event belongs to a superseded video and is inert
   private vidOk(): boolean {
     if (!this.expectedVid) return true
@@ -99,7 +99,7 @@ class YtEngine {
     if (!this.readyPromise) {
       this.readyPromise = (async () => {
         const YT = await loadApi()
-        // reuse the host across retries — a timed-out attempt used to
+        // reuse the host across retries - a timed-out attempt used to
         // append a duplicate player every time (zombie iframes). A stale
         // <iframe> (the API replaced the div but kept the id) must go.
         let host = document.getElementById("yt-frame-host")
@@ -136,12 +136,12 @@ class YtEngine {
               },
               onStateChange: (e: any) => this.handleState(e.data),
               onError: (e: any) => {
-                // stale error for a superseded video — drop entirely
+                // stale error for a superseded video - drop entirely
                 if (!this.vidOk()) return
                 this.settlePlay(false)
                 this.playing = false
                 this.stopPoll()
-                // inert while stopped — a late error for a superseded
+                // inert while stopped - a late error for a superseded
                 // video must not kill the healthy current track
                 if (this.isActive) this.events.onError?.(e?.data ?? 0)
               },
@@ -157,7 +157,7 @@ class YtEngine {
     return this.readyPromise
   }
 
-  // a successful readyPromise caches forever — but a player that died
+  // a successful readyPromise caches forever - but a player that died
   // post-init (widget crash, iframe GC'd) would burn the 8s play timeout
   // on every track forever. Tearing down lets the next play() rebuild.
   private teardown() {
@@ -177,7 +177,7 @@ class YtEngine {
   playing = false
 
   private handleState(state: number) {
-    // inert while stopped/superseded — a late PLAYING must never resurrect it
+    // inert while stopped/superseded - a late PLAYING must never resurrect it
     if (!this.isActive || !this.vidOk()) return
     // YT.PlayerState: -1 unstarted, 0 ended, 1 playing, 2 paused, 3 buffering, 5 cued
     if (state === 1) {
@@ -199,7 +199,7 @@ class YtEngine {
     }
   }
 
-  // post-seek grace — getCurrentTime briefly keeps reporting the PRE-seek
+  // post-seek grace - getCurrentTime briefly keeps reporting the PRE-seek
   // position, which flickers the progress bar backwards. While the real
   // clock catches up, emit the seek target instead.
   private lastSeekPos: number | null = null
@@ -220,7 +220,7 @@ class YtEngine {
           }
           this.events.onTime?.(t)
         }
-        // duration arrives after metadata — emit it once it exists instead
+        // duration arrives after metadata - emit it once it exists instead
         // of trusting the one read at first PLAYING (often still 0)
         if (!this.durEmitted) {
           const d = this.duration()
@@ -249,7 +249,7 @@ class YtEngine {
   /** Preload the IFrame API + hidden player so the first play starts fast */
   warmup() {
     void this.ensure().catch(() => {
-      /* cold start still possible — play() retries ensure() itself */
+      /* cold start still possible - play() retries ensure() itself */
     })
   }
 
@@ -265,7 +265,7 @@ class YtEngine {
       this.isActive = true
       this.expectedVid = videoId
       this.durEmitted = false
-      // settle any previous attempt still waiting on its pendingPlay —
+      // settle any previous attempt still waiting on its pendingPlay -
       // overwriting the slot would leave that play() promise hanging
       this.settlePlay(false)
       const started = new Promise<boolean>((resolve) => {
@@ -278,7 +278,7 @@ class YtEngine {
           }
         }, 8000)
       })
-      // volume/mute BEFORE the first frame — the embed otherwise plays a
+      // volume/mute BEFORE the first frame - the embed otherwise plays a
       // beat at 100% before the store's values land
       try {
         this.player.setVolume?.(Math.round(this.lastVol * 100))
@@ -291,16 +291,16 @@ class YtEngine {
           startSeconds > 0 ? { videoId, startSeconds } : videoId
         )
       } catch {
-        // a synchronous load throw would otherwise orphan pendingPlay —
+        // a synchronous load throw would otherwise orphan pendingPlay -
         // the 8s timer eventually resolves it, but the caller sits waiting
         this.settlePlay(false)
       }
       const ok = await started
-      // a superseding play() may have re-activated while this one awaited —
+      // a superseding play() may have re-activated while this one awaited -
       // only a still-current failure may clear the flag
       if (!ok && this.gen === g) {
         this.isActive = false
-        // never resolved in 8s — the player may be dead (events stopped
+        // never resolved in 8s - the player may be dead (events stopped
         // arriving entirely). Rebuild once so the NEXT call doesn't burn
         // another timeout on a corpse.
         if (!retried) {
@@ -351,7 +351,7 @@ class YtEngine {
     } catch {
       /* ignore */
     }
-    // tell the store immediately — don't wait for the next 500ms poll to
+    // tell the store immediately - don't wait for the next 500ms poll to
     // discover the new position (keeps the bar from snapping back)
     this.events.onTime?.(sec)
   }
@@ -374,7 +374,7 @@ class YtEngine {
     }
   }
 
-  // ?? only catches null/undefined — an unstarted or errored player can
+  // ?? only catches null/undefined - an unstarted or errored player can
   // return NaN, which would poison currentTime/duration/resume state
   duration(): number {
     try {

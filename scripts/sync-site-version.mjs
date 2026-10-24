@@ -1,5 +1,5 @@
 // Bakes the current package.json version into docs/index.html as the static
-// fallback — if the GitHub API rate-limits a visitor, the page still shows a
+// fallback - if the GitHub API rate-limits a visitor, the page still shows a
 // real version instead of "v?". Runs automatically before `npm run dist`.
 import { readFileSync, writeFileSync } from "node:fs"
 

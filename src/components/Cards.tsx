@@ -20,7 +20,7 @@ import { Equalizer } from "./Equalizer"
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   const tt = useT()
   const rowRef = useRef<HTMLDivElement>(null)
-  // scroll edge state drives arrow visibility — no point offering a right
+  // scroll edge state drives arrow visibility - no point offering a right
   // arrow when the row is already at its end
   const [edges, setEdges] = useState({ start: true, end: false })
   const update = () => {
@@ -53,7 +53,7 @@ export function Section({ title, children }: { title: string; children: ReactNod
         <h2 className="text-xl font-bold tracking-tight">{title}</h2>
       </div>
       <div className="relative">
-        {/* pt-1 keeps the card hover-lift (y:-4) from clipping — overflow-x
+        {/* pt-1 keeps the card hover-lift (y:-4) from clipping - overflow-x
             auto forces overflow-y auto, so the top edge would get cut
             on every hover without the padding */}
         <div
@@ -106,7 +106,7 @@ const cardCls =
 
 // ---- right-click menus on cards -----------------------------------------
 // Track rows have the full ⋯ menu; cards get the same core actions on
-// right-click. Portaled to document.body — the Section scrollports clip
+// right-click. Portaled to document.body - the Section scrollports clip
 // (overflow-x) anything mounted inside the card.
 interface CardMenuAction {
   label: string
@@ -131,7 +131,7 @@ function CardMenu({ pos, actions, onClose }: { pos: { x: number; y: number }; ac
     }
     window.addEventListener("blur", onClose)
     window.addEventListener("resize", onClose)
-    window.addEventListener("scroll", onClose, true) // capture — the row scrolls, not window
+    window.addEventListener("scroll", onClose, true) // capture - the row scrolls, not window
     window.addEventListener("contextmenu", onClose)
     window.addEventListener("keydown", key)
     return () => {
@@ -188,7 +188,7 @@ const copyText = (text: string) =>
     () => {},
   )
 
-// resolve a card's playlist into tracks for Play — same id-prefix routing
+// resolve a card's playlist into tracks for Play - same id-prefix routing
 // as the playlist page
 async function playlistTracks(p: Playlist): Promise<Track[]> {
   try {
@@ -235,7 +235,7 @@ export function TrackCard({ t, context }: { t: Track; context?: Track[] }) {
   const dlRemove = useDownloads((s) => s.remove)
   const canDl = Boolean(window.freebify?.dl)
   const menu = useCardMenu()
-  // clicking the card of the track that's already loaded toggles it —
+  // clicking the card of the track that's already loaded toggles it -
   // replaying from 0 on a pause-click feels broken
   const play = () => (isCurrent ? toggle() : playTrack(t, context))
   const link = t.permalink ?? (t.streamId ? `https://music.youtube.com/watch?v=${t.streamId}` : undefined)
@@ -336,9 +336,9 @@ export function TrackCard({ t, context }: { t: Track; context?: Track[] }) {
 }
 
 // Editorial playlist covers come with the YouTube Music logo baked into
-// the artwork — ugly and generic. Instead, lazily fetch the first 4 track
+// the artwork - ugly and generic. Instead, lazily fetch the first 4 track
 // artworks and compose a Spotify-style 2×2 collage (only when the card
-// scrolls into view — a full row of getPlaylist calls would be wasteful).
+// scrolls into view - a full row of getPlaylist calls would be wasteful).
 function CollageCover({ p, alt }: { p: Playlist; alt: string }) {
   const ref = useRef<HTMLDivElement>(null)
   const [arts, setArts] = useState<string[] | null>(null)
@@ -370,7 +370,7 @@ function CollageCover({ p, alt }: { p: Playlist; alt: string }) {
             alt=""
             loading="lazy"
             className="aspect-square w-full object-cover"
-            // a dead thumb inside the collage shows a broken-image tile —
+            // a dead thumb inside the collage shows a broken-image tile -
             // hide it so the grid stays clean
             onError={(e) => {
               ;(e.target as HTMLImageElement).style.opacity = "0"
@@ -387,9 +387,9 @@ function CollageCover({ p, alt }: { p: Playlist; alt: string }) {
       </div>
     )
   }
-  // ytpl covers carry a baked-in YouTube Music logo — never render them:
+  // ytpl covers carry a baked-in YouTube Music logo - never render them:
   // a shimmer while the collage loads, a neutral icon tile if it fails.
-  // Albums (ytalb-) and Audius covers are real artwork — fine to fall back.
+  // Albums (ytalb-) and Audius covers are real artwork - fine to fall back.
   if (!p.id.startsWith("ytpl-")) {
     return (
       <div ref={ref}>
@@ -412,7 +412,7 @@ export function PlaylistCard({ p }: { p: Playlist }) {
   const navigate = useNavigate()
   const playContext = usePlayer((s) => s.playContext)
   const menu = useCardMenu()
-  // yt editorial playlists carry NO artwork — the collage fetches track
+  // yt editorial playlists carry NO artwork - the collage fetches track
   // thumbs for them. Items that already ship a real cover (album rows,
   // new releases, Audius) go straight to ArtworkImg: no extra browse call.
   const isYt = (p.id.startsWith("ytpl-") || p.id.startsWith("ytalb-")) && !p.artwork?.["480x480"]

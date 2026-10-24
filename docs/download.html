@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Download Freebify</title>
-<meta name="description" content="Download Freebify — free, ad-free desktop music player.">
+<meta name="description" content="Download Freebify: free, ad-free desktop music player.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M41.5 33A19 19 0 1 1 24 5' stroke='white' stroke-width='5' stroke-linecap='round' fill='none'/%3E%3Ccircle cx='24' cy='24' r='10' stroke='white' stroke-width='5' fill='none'/%3E%3Ccircle cx='24' cy='24' r='3.5' fill='white'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -26,7 +26,7 @@
   .back:hover{color:var(--ink)}
 
   .stage{flex:1;display:flex;align-items:center;justify-content:center;padding:24px;position:relative}
-  /* dim backdrop — modal feel */
+  /* dim backdrop, modal feel */
   .stage::before{content:"";position:fixed;inset:0;background:radial-gradient(60% 50% at 50% 30%,rgb(255 255 255/.05),transparent 70%);pointer-events:none}
 
   .modal{width:min(560px,100%);background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:clamp(26px,4vw,40px);position:relative;box-shadow:0 40px 100px -20px rgb(0 0 0/.9);animation:modalIn .45s cubic-bezier(.2,.9,.25,1) both}
@@ -96,7 +96,7 @@
         Before you download
       </div>
       <h1 id="mTitle">Freebify for <span id="osName">Windows</span></h1>
-      <p class="m-sub">Freebify is <b>free, open-source and unsigned</b>. Signing certificates cost hundreds a year, and free means free — so your OS may warn you once. Here's the honest walkthrough:</p>
+      <p class="m-sub">Freebify is <b>free, open-source and unsigned</b>. Signing certificates cost hundreds a year, and free means free, so your OS may warn you once. Here's the honest walkthrough:</p>
 
       <div id="osNotes"></div>
 
@@ -109,7 +109,7 @@
 
       <button class="dl-btn" id="dlBtn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3v13m0 0 5-5m-5 5-5-5M4 21h16"/></svg>
-        I understand — download<span id="dlVer"></span>
+        I understand, download<span id="dlVer"></span>
       </button>
       <div class="dl-meta" id="dlMeta">~120 MB · free forever · no account</div>
       <div class="os-row" id="osRow"></div>
@@ -141,7 +141,7 @@
     windows: {
       name: "Windows", asset: "Freebify-setup.exe", meta: "Windows 10/11 · ~120 MB · auto-updates",
       notes: [
-        WARN + `<div><b>If SmartScreen steps in:</b> "Windows protected your PC" appears because the app is unsigned. It's expected, not a virus — click <span class="k">More info</span> → <span class="k">Run anyway</span>. Done once, never again.</div>`,
+        WARN + `<div><b>If SmartScreen steps in:</b> "Windows protected your PC" appears because the app is unsigned. It's expected, not a virus. Click <span class="k">More info</span> → <span class="k">Run anyway</span>. Done once, never again.</div>`,
       ],
       done: "Run the installer, and if SmartScreen appears: <b>More info → Run anyway</b>. Freebify updates itself from here on.",
     },
@@ -149,9 +149,9 @@
       name: "Windows (portable)", asset: "Freebify-portable.exe", meta: "No install · runs anywhere · ~120 MB",
       notes: [
         WARN + `<div><b>Same SmartScreen note:</b> unsigned app → <span class="k">More info</span> → <span class="k">Run anyway</span>.</div>`,
-        INFO + `<div><b>Portable trade-off:</b> no installer means <b>no auto-updates</b> — new versions get grabbed right here. It also re-extracts itself each launch, so the installed build starts faster.</div>`,
+        INFO + `<div><b>Portable trade-off:</b> no installer means <b>no auto-updates</b>: new versions get grabbed right here. It also re-extracts itself each launch, so the installed build starts faster.</div>`,
       ],
-      done: "Run it from anywhere — desktop, USB, a folder called 'definitely not music'. It re-extracts on each launch, so it's a touch slower to open than the installed build.",
+      done: "Run it from anywhere: desktop, USB, a folder called 'definitely not music'. It re-extracts on each launch, so it's a touch slower to open than the installed build.",
     },
     mac: {
       name: "macOS (Apple Silicon)", asset: "Freebify-arm64.dmg", meta: "macOS 11+ · M1/M2/M3/M4 · ~120 MB",
@@ -175,16 +175,16 @@
     linux: {
       name: "Linux (AppImage)", asset: "Freebify.AppImage", meta: "Any modern distro · ~120 MB · auto-updates",
       notes: [
-        INFO + `<div><b>One step before first run:</b> mark it executable — <span class="k">chmod +x Freebify.AppImage</span> — or right-click → Properties → "Allow executing". After that it runs and self-updates like a normal app.</div>`,
+        INFO + `<div><b>One step before first run:</b> mark it executable (<span class="k">chmod +x Freebify.AppImage</span>) or right-click → Properties → "Allow executing". After that it runs and self-updates like a normal app.</div>`,
       ],
       done: "<span class='k'>chmod +x Freebify.AppImage</span> then double-click. It self-updates after that.",
     },
     deb: {
       name: "Ubuntu / Debian", asset: "Freebify-amd64.deb", meta: ".deb package · ~120 MB",
       notes: [
-        INFO + `<div><b>Install:</b> <span class="k">sudo apt install ./Freebify-amd64.deb</span> — apt handles the deps.</div>`,
+        INFO + `<div><b>Install:</b> <span class="k">sudo apt install ./Freebify-amd64.deb</span>, and apt handles the deps.</div>`,
       ],
-      done: "<span class='k'>sudo apt install ./Freebify-amd64.deb</span> — then find Freebify in your launcher.",
+      done: "<span class='k'>sudo apt install ./Freebify-amd64.deb</span>, then find Freebify in your launcher.",
     },
   };
   const OTHER = {
@@ -214,7 +214,7 @@
   document.getElementById("osNotes").innerHTML = cfg.notes.map(n => `<div class="note">${n}</div>`).join("");
   document.getElementById("doneNotes").innerHTML =
     cfg.notes.map(n => `<div class="note">${n}</div>`).join("");
-  document.getElementById("doneSub").innerHTML = "Check your downloads folder. While it lands — " + cfg.done;
+  document.getElementById("doneSub").innerHTML = "Check your downloads folder. While it lands, " + cfg.done;
   document.getElementById("dlMeta").textContent = cfg.meta + " · free forever · no account";
   document.getElementById("osRow").innerHTML =
     `<span class="os-pill on" style="cursor:default">${cfg.name}</span>` +

@@ -3,7 +3,7 @@ import type { Track } from "../api/types"
 import { streamUrl } from "../api/audius"
 import { slimTrack } from "./storage"
 
-// Renderer mirror of the main-process download manifest — main owns the
+// Renderer mirror of the main-process download manifest - main owns the
 // files + truth; this store just reflects it for menus/badges/playback.
 export interface DlItem {
   file: string
@@ -13,9 +13,9 @@ export interface DlItem {
 
 interface DownloadsState {
   items: Record<string, DlItem>
-  // in-flight downloads — id → 0-99 (entries vanish on done/error)
+  // in-flight downloads - id → 0-99 (entries vanish on done/error)
   progress: Record<string, number>
-  // track metadata for in-flight rows — the manifest only knows finished
+  // track metadata for in-flight rows - the manifest only knows finished
   // downloads, so without this a queued job renders as a raw "yt-…" id
   pendingTracks: Record<string, Track>
   // ids sitting in the main-process queue (not yet started)
@@ -24,7 +24,7 @@ interface DownloadsState {
   start: (t: Track) => Promise<void>
   startAll: (tracks: Track[]) => Promise<number>
   remove: (id: string) => Promise<void>
-  // drop a stale entry without touching main — used when the play path
+  // drop a stale entry without touching main - used when the play path
   // discovers the file is already gone (main pruned it in dl:exists)
   dropLocal: (id: string) => void
 }
@@ -48,7 +48,7 @@ export const useDownloads = create<DownloadsState>()((set, get) => ({
       }
       set({ items })
     } catch {
-      /* manifest read failed — keep whatever we have */
+      /* manifest read failed - keep whatever we have */
     }
   },
 
@@ -61,7 +61,7 @@ export const useDownloads = create<DownloadsState>()((set, get) => ({
       pendingTracks: { ...st.pendingTracks, [t.id]: slimTrack(t) },
       queued: { ...st.queued, [t.id]: true },
     }))
-    // Audius streams need their resolved URL up front — the yt path only
+    // Audius streams need their resolved URL up front - the yt path only
     // needs the videoId (yt-dlp handles the rest)
     const url = t.source === "yt" ? undefined : streamUrl(t.id)
     try {
@@ -72,7 +72,7 @@ export const useDownloads = create<DownloadsState>()((set, get) => ({
     }
   },
 
-  // batch entry point for "download album/playlist" — the main process
+  // batch entry point for "download album/playlist" - the main process
   // queue caps concurrency, so this just fires every track's start()
   startAll: async (tracks) => {
     const s = get()
@@ -106,7 +106,7 @@ export const useDownloads = create<DownloadsState>()((set, get) => ({
     }),
 }))
 
-// clear every trace of an in-flight id — shared by start() rejection and
+// clear every trace of an in-flight id - shared by start() rejection and
 // the done/error event paths
 function cleanup(id: string) {
   useDownloads.setState((s) => {
@@ -120,7 +120,7 @@ function cleanup(id: string) {
   })
 }
 
-// boot wiring — pull the manifest once, then live off dl:event pushes
+// boot wiring - pull the manifest once, then live off dl:event pushes
 {
   const b = bridge()
   if (b) {
@@ -130,7 +130,7 @@ function cleanup(id: string) {
       if (ev.type === "queued") {
         useDownloads.setState((s) => ({ queued: { ...s.queued, [ev.id]: true } }))
       } else if (ev.type === "progress") {
-        // first progress from a job = it actually started — off the waitlist
+        // first progress from a job = it actually started - off the waitlist
         useDownloads.setState((s) => {
           const queued = { ...s.queued }
           delete queued[ev.id]
@@ -149,7 +149,7 @@ function cleanup(id: string) {
       } else if (ev.type === "error") {
         cleanup(ev.id)
       } else if (ev.type === "removed") {
-        // main pruned it — the file is gone from disk (Explorer cleanup)
+        // main pruned it - the file is gone from disk (Explorer cleanup)
         useDownloads.setState((s) => {
           if (!s.items[ev.id]) return s
           const items = { ...s.items }

@@ -1,4 +1,4 @@
-// Screenshot driver — runs the REAL app (electron/main.cjs) in an isolated
+// Screenshot driver - runs the REAL app (electron/main.cjs) in an isolated
 // profile, navigates each view, and captures at 2x raster density.
 // Usage: electron shot-main.cjs   (vite dev must be running on :5173)
 const { app, BrowserWindow } = require("electron")

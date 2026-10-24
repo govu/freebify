@@ -5,7 +5,7 @@ import type { Artwork } from "../api/types"
 type ImgSize = "150x150" | "480x480" | "1000x1000"
 
 // persisted tracks (library/recents/playlists/queue) can carry ytimg URLs
-// with signed params that have long since expired — the bare path always
+// with signed params that have long since expired - the bare path always
 // serves, so strip at render the same way cleanThumb does at fetch
 const stripSigned = (u: string) => u.replace(/(ytimg\.com\/[^?]+)\?.*$/, "$1")
 
@@ -18,7 +18,7 @@ function candidates(art: Artwork, size: ImgSize): string[] {
   } catch {
     return [primary]
   }
-  // YouTube's maxresdefault only exists for HD uploads — when the chosen size
+  // YouTube's maxresdefault only exists for HD uploads - when the chosen size
   // 404s, the next size down is the fallback that actually renders. Mirrors
   // only exist for Audius, so key-fallback is what saves yt artwork.
   const sizes: ImgSize[] = ["1000x1000", "480x480", "150x150"]
@@ -41,7 +41,7 @@ export function ArtworkImg({ art, size = "480x480", alt = "", className = "", ic
   const [loaded, setLoaded] = useState(false)
   const [retry, setRetry] = useState(0)
   // render-phase reset (React's recommended pattern): when `art` changes the
-  // old idx is stale for THIS paint — resetting in an effect let the broken
+  // old idx is stale for THIS paint - resetting in an effect let the broken
   // index flash the placeholder icon for a frame
   const [prevArt, setPrevArt] = useState(art)
   if (prevArt !== art) {
@@ -50,7 +50,7 @@ export function ArtworkImg({ art, size = "480x480", alt = "", className = "", ic
     if (loaded) setLoaded(false)
     if (retry !== 0) setRetry(0)
   }
-  // every candidate failed — often transient rate-limiting (429), which
+  // every candidate failed - often transient rate-limiting (429), which
   // lifts in seconds. Back off and retry the list a few times before
   // settling on the placeholder, then stop hammering.
   useEffect(() => {
@@ -75,7 +75,7 @@ export function ArtworkImg({ art, size = "480x480", alt = "", className = "", ic
     <img
       key={urls[idx]}
       ref={(el) => {
-        // cached images can finish loading before React attaches onLoad —
+        // cached images can finish loading before React attaches onLoad -
         // without this they stay opacity-0 forever ("a veces no salen")
         if (el?.complete && el.naturalWidth > 0) setLoaded(true)
       }}

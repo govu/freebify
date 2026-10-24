@@ -16,7 +16,7 @@ import { Equalizer } from "./Equalizer"
 
 interface TrackTableProps {
   tracks: Track[]
-  // optional wider context — e.g. Search renders two tables of slices but
+  // optional wider context - e.g. Search renders two tables of slices but
   // wants either row's play click to queue the FULL result set
   context?: Track[]
   showHeader?: boolean
@@ -27,7 +27,7 @@ interface TrackTableProps {
   removeLabel?: string
 }
 
-// rows are a fixed h-14 — windowing is just index math on the page
+// rows are a fixed h-14 - windowing is just index math on the page
 // scroller (#main-scroll). Only worth it on long lists: short tables keep
 // the plain path untouched.
 const ROW_H = 56
@@ -47,7 +47,7 @@ function useWindowed(total: number, enabled: boolean) {
     const measure = () => {
       raf = 0
       const sRect = scroller.getBoundingClientRect()
-      // distance from the scroll content's top to the first row — measured
+      // distance from the scroll content's top to the first row - measured
       // fresh each tick: header art/images above the table can finish
       // loading late and shift everything down
       const top = wrap.getBoundingClientRect().top - sRect.top + scroller.scrollTop
@@ -77,15 +77,15 @@ function useWindowed(total: number, enabled: boolean) {
 export function TrackTable({ tracks, context, showHeader = true, showPlays: wantPlays = true, numbered = true, numberOffset = 0, onRemove, removeLabel }: TrackTableProps) {
   const tt = useT()
   const playContext = usePlayer((s) => s.playContext)
-  // auto-hide the Plays column when NO row carries a count — a column of
-  // "—" is worse than none (yt playlists lack view data; Audius has it)
+  // auto-hide the Plays column when NO row carries a count - a column of
+  // "-" is worse than none (yt playlists lack view data; Audius has it)
   const showPlays = wantPlays && tracks.some((t) => (t.play_count ?? 0) > 0)
-  // keyed by row instance ("id-index"), not just id — a list can legitimately
+  // keyed by row instance ("id-index"), not just id - a list can legitimately
   // contain the same track twice and both menus would open at once
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const navigate = useNavigate()
 
-  // seeing a list is the strongest "about to play" signal — warm the top
+  // seeing a list is the strongest "about to play" signal - warm the top
   // rows through the low-priority lane so most clicks resolve from cache.
   // keyed on a stable id-signature: sliced props change identity every
   // render and would refire the whole warm set per keystroke
@@ -94,13 +94,13 @@ export function TrackTable({ tracks, context, showHeader = true, showPlays: want
     .map((t) => t.streamId ?? t.id)
     .join(",")
   useEffect(() => {
-    // top-3 only — 8 rows at once spawns an yt-dlp prefetch storm on every
+    // top-3 only - 8 rows at once spawns an yt-dlp prefetch storm on every
     // page mount; the rest warm on hover instead
     tracks.slice(0, 3).forEach(prefetchStream)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [warmKey])
 
-  // an open row menu dies on scroll/resize/Escape — otherwise it rides
+  // an open row menu dies on scroll/resize/Escape - otherwise it rides
   // along off-screen, or the invisible backdrop swallows the next click
   const menuAlive = menuFor !== null && tracks.some((t, i) => `${t.id}-${i}` === menuFor)
   useEffect(() => {
@@ -122,17 +122,17 @@ export function TrackTable({ tracks, context, showHeader = true, showPlays: want
     }
   }, [menuAlive, menuFor])
 
-  // window long lists — a 500-row playlist used to mount 500 rows' worth
+  // window long lists - a 500-row playlist used to mount 500 rows' worth
   // of motion.div/ArtworkImg/menu state; now only the visible slice exists
   const virtual = tracks.length > VIRTUAL_MIN
   const { wrapRef, start, end } = useWindowed(tracks.length, virtual)
 
-  // entrance animation is a FIRST-PAINT effect only. Rows mounted later —
-  // virtualization scroll, live inserts — must appear instantly; otherwise
+  // entrance animation is a FIRST-PAINT effect only. Rows mounted later -
+  // virtualization scroll, live inserts - must appear instantly; otherwise
   // every scroll through a long list replays a wave of fade-ins
   const entranceUntil = useRef(Date.now() + 800)
 
-  // the lg grid has an optional Plays column — without it the actions cell
+  // the lg grid has an optional Plays column - without it the actions cell
   // lands in the 5rem slot and overflows
   const lgCols = showPlays
     ? "lg:grid-cols-[1.75rem_minmax(0,1.4fr)_minmax(0,1fr)_5rem_6rem]"
@@ -185,9 +185,9 @@ export function TrackTable({ tracks, context, showHeader = true, showPlays: want
           <p className="px-3 py-10 text-center text-sm text-dim">{tt("table.empty")}</p>
         )}
       </div>
-      {/* outside-click catcher — sits above rows (z-20) but below the
+      {/* outside-click catcher - sits above rows (z-20) but below the
           TopBar/PlayerBar (z-30/40) so navigation still works. Only render
-          while the owning row still exists — a list mutation that removed
+          while the owning row still exists - a list mutation that removed
           it would leave a click-eating ghost backdrop */}
       {menuAlive && (
         <div
@@ -224,7 +224,7 @@ interface RowProps {
 function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuOpen, onMenu, closeMenu, onPlay, goArtist, onRemove, removeLabel, animateEntrance = true }: RowProps) {
   const tt = useT()
   const isCurrent = usePlayer((s) => s.current?.id === t.id)
-  // combined selector — plain s.isPlaying would re-render every row in the
+  // combined selector - plain s.isPlaying would re-render every row in the
   // table on each pause/play; this only flips for the current row
   const playingHere = usePlayer((s) => s.current?.id === t.id && s.isPlaying)
   const liked = useLibrary((s) => Boolean(s.liked[t.id]))
@@ -237,7 +237,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
   const createPlaylist = useLibrary((s) => s.createPlaylist)
   const addToPlaylist = useLibrary((s) => s.addToPlaylist)
   const [copied, setCopied] = useState(false)
-  // download state — primitive selector so progress ticks only re-render
+  // download state - primitive selector so progress ticks only re-render
   // the one row that's actually downloading
   const dlState = useDownloads((s) =>
     s.items[t.id] ? "done" : s.progress[t.id] !== undefined ? "busy" : "none",
@@ -251,12 +251,12 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
   const [flyOpen, setFlyOpen] = useState(false)
   const rowRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
-  // hover prefetch needs a dwell — brushing across rows would otherwise
+  // hover prefetch needs a dwell - brushing across rows would otherwise
   // spawn an yt-dlp process per row touched
   const warmTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => () => { if (warmTimer.current) clearTimeout(warmTimer.current) }, [])
 
-  // the scrollport bottom is ~88px above the window edge (PlayerBar) —
+  // the scrollport bottom is ~88px above the window edge (PlayerBar) -
   // measuring against innerHeight lets menus clip under it
   const menuWouldClip = (y: number) => {
     const bottom =
@@ -267,7 +267,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
   const openMenu = (e: React.MouseEvent) => {
     e.stopPropagation()
     const r = e.currentTarget.getBoundingClientRect()
-    // ~300px of menu + flyout — flip up if it would clip the scrollport
+    // ~300px of menu + flyout - flip up if it would clip the scrollport
     setFlipUp(menuWouldClip(r.bottom))
     setFlyOpen(false)
     onMenu()
@@ -275,7 +275,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
 
   const artistPath = `/artist/${encodeURIComponent(t.user.id)}?n=${encodeURIComponent(t.user.name)}`
   // yt-va / yt- / empty ids are fake owner ids (playlist "Various Artists",
-  // missing channel) — navigating there lands on a broken artist page
+  // missing channel) - navigating there lands on a broken artist page
   const artistOk = hasArtistPage(t.user)
 
   return (
@@ -285,7 +285,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: animateEntrance ? 0.25 : 0.12, delay: animateEntrance ? Math.min(index * 0.018, 0.25) : 0, ease: "easeOut" }}
       // the entrance transform creates a stacking context that traps the
-      // menu below the z-20 backdrop — strip it once motion is done
+      // menu below the z-20 backdrop - strip it once motion is done
       onAnimationComplete={() => {
         if (rowRef.current) rowRef.current.style.transform = "none"
       }}
@@ -363,7 +363,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
       )}
 
       {showPlays && (
-        <span className="hidden text-right text-sm tabular-nums text-dim lg:block">{t.play_count > 0 ? fmtCount(t.play_count) : "—"}</span>
+        <span className="hidden text-right text-sm tabular-nums text-dim lg:block">{t.play_count > 0 ? fmtCount(t.play_count) : "-"}</span>
       )}
 
       <span className="flex items-center justify-end gap-2">
@@ -391,7 +391,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
       </span>
 
       {menuOpen && (
-        // the container swallows clicks — hitting menu padding must not
+        // the container swallows clicks - hitting menu padding must not
         // bubble into the row and start playback
         <div
           role="menu"
@@ -418,7 +418,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
               closeMenu()
             }}
           />
-          {/* add-to-playlist flyout — opens on hover AND click (touch /
+          {/* add-to-playlist flyout - opens on hover AND click (touch /
               keyboard can't hover); the wrapper's pr-2 is the hover bridge
               so the gap between item and panel never collapses */}
           <div className="group/sub relative">
@@ -467,7 +467,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
                         aria-checked={has}
                         onClick={(e) => {
                           e.stopPropagation()
-                          // the check mark reads as toggleable — make it true
+                          // the check mark reads as toggleable - make it true
                           if (has) {
                             removeFromPlaylist(p.id, t.id)
                             notify(tt("table.removedFromPlaylist", { name: p.name }))
@@ -539,7 +539,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
                 e.stopPropagation()
                 closeMenu()
                 // yt album browseIds route through the playlist page's
-                // ytalb- branch — navigate() so this works under both
+                // ytalb- branch - navigate() so this works under both
                 // HashRouter (prod) and BrowserRouter (dev)
                 navigate(
                   t.album!.id.startsWith("ytalb-")
@@ -555,7 +555,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
               icon={copied ? <Check size={15} /> : <Link2 size={15} />}
               onClick={(e) => {
                 e.stopPropagation()
-                // only claim success on a real write — and close NOW: a
+                // only claim success on a real write - and close NOW: a
                 // delayed close would kill a menu another row opened since
                 void navigator.clipboard
                   ?.writeText(t.permalink!)

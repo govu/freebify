@@ -1,5 +1,5 @@
 export function fmtDuration(totalSeconds?: number | null): string {
-  // ?? doesn't catch NaN — corrupt persisted durations must not render "NaN:NaN"
+  // ?? doesn't catch NaN - corrupt persisted durations must not render "NaN:NaN"
   const s = Math.max(0, Math.floor(Number.isFinite(totalSeconds) ? (totalSeconds as number) : 0))
   const h = Math.floor(s / 3600)
   const m = Math.floor((s % 3600) / 60)

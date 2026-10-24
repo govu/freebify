@@ -1,8 +1,8 @@
-// Spotify playlist import — anonymous embed reader.
+// Spotify playlist import - anonymous embed reader.
 // Spotify's embed page publishes exactly the first 100 tracks of a public
 // playlist and nothing more (its own cap): reading beyond that requires a
 // Premium-gated Web API grant, which Freebify does not use. CSV import
-// (Exportify etc.) is the route for longer lists — it doesn't touch Spotify.
+// (Exportify etc.) is the route for longer lists - it doesn't touch Spotify.
 const fs = require("fs")
 const path = require("path")
 const { app } = require("electron")
@@ -15,7 +15,7 @@ function log(tag, msg) {
   } catch {}
 }
 
-// anonymous embed scrape — public playlists only, Spotify caps at 100
+// anonymous embed scrape - public playlists only, Spotify caps at 100
 async function embedPlaylist(id) {
   const res = await fetch(`https://open.spotify.com/embed/playlist/${id}`, {
     headers: { "User-Agent": "Mozilla/5.0", "Accept-Language": "en-US" },

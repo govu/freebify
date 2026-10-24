@@ -4,7 +4,7 @@ export interface Artwork {
   "1000x1000"?: string
   mirrors?: string[]
   // last-resort full URL (yt tracks derive i.ytimg.com/vi/<id>/hqdefault.jpg)
-  // — googleusercontent thumbs sit on a separate rate-limit budget, so a
+  // - googleusercontent thumbs sit on a separate rate-limit budget, so a
   // ytimg fallback keeps covers alive when the primary CDN throttles
   fallback?: string
 }
@@ -17,7 +17,7 @@ export interface CoverPhoto {
 
 export interface User {
   id: string
-  // yt artists: channelId without the "yt-" prefix — mirrors Track.streamId
+  // yt artists: channelId without the "yt-" prefix - mirrors Track.streamId
   streamId?: string
   handle: string
   name: string
@@ -77,7 +77,7 @@ export type RepeatMode = "off" | "all" | "one"
 export type TrendTime = "week" | "month" | "allTime"
 
 // "yt-va" (playlist Various Artists), "yt-" (missing channel) and empty
-// ids are fake owners — there is no artist page behind them, so links to
+// ids are fake owners - there is no artist page behind them, so links to
 // /artist/<id> would land on a broken view. Render them as plain text.
 export function hasArtistPage(u: Pick<User, "id"> | null | undefined): boolean {
   const id = u?.id ?? ""

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { en } from "./locales/en"
 import { es } from "./locales/es"
 
-// every namespace file is spread into one flat map — a duplicate key across
+// every namespace file is spread into one flat map - a duplicate key across
 // files would silently shadow. Count declared keys vs the merged result.
 const enMods = import.meta.glob("./locales/en/*.ts", { eager: true })
 const declared = Object.values(enMods).reduce<number>(

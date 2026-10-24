@@ -14,7 +14,7 @@ const hm = (ms: number) => {
   return h ? tt("rewind.durHm", { h, m }) : tt("rewind.durM", { m })
 }
 
-// per-slide auto-advance pacing — the outro stays until dismissed
+// per-slide auto-advance pacing - the outro stays until dismissed
 const SLIDE_MS = [4600, 5800, 6400, 8600]
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
@@ -25,7 +25,7 @@ const slideVar = {
   exit: { opacity: 0, y: -56, scale: 0.985, filter: "blur(10px)" },
 }
 
-// the Freebify mark drawn stroke by stroke — same geometry as Logo
+// the Freebify mark drawn stroke by stroke - same geometry as Logo
 function RewindMark({ size = 92 }: { size?: number }) {
   const s = { stroke: "#f4f4f5", strokeWidth: 5, strokeLinecap: "round" as const, fill: "none" }
   return (
@@ -63,7 +63,7 @@ function RewindMark({ size = 92 }: { size?: number }) {
   )
 }
 
-// char-by-char cascade — the lockup grammar from the brand piece
+// char-by-char cascade - the lockup grammar from the brand piece
 function Cascade({ text, delay = 0, className = "" }: { text: string; delay?: number; className?: string }) {
   return (
     <span className={className} aria-label={text}>
@@ -83,7 +83,7 @@ function Cascade({ text, delay = 0, className = "" }: { text: string; delay?: nu
   )
 }
 
-// centered tracked type needs text-indent == letter-spacing — the trailing
+// centered tracked type needs text-indent == letter-spacing - the trailing
 // space after the last char otherwise drags the line left of true center
 function Eyebrow({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
   return (
@@ -173,7 +173,7 @@ function RewindStory({ data, onClose }: { data: RewindData; onClose: () => void 
       aria-modal="true"
       aria-label={t("rewind.title", { month: data.full })}
     >
-      {/* ambient — two slow-drifting glows, nothing else moves behind the type */}
+      {/* ambient - two slow-drifting glows, nothing else moves behind the type */}
       <motion.div
         className="pointer-events-none absolute -left-40 -top-40 size-[560px] rounded-full"
         style={{ background: "radial-gradient(circle, rgba(255,255,255,0.07), transparent 62%)" }}
@@ -217,7 +217,7 @@ function RewindStory({ data, onClose }: { data: RewindData; onClose: () => void 
         </button>
       </div>
 
-      {/* tap zones — left third back, right two-thirds forward */}
+      {/* tap zones - left third back, right two-thirds forward */}
       <div className="absolute inset-0 z-10 flex">
         <button className="h-full w-[32%] cursor-w-resize" onClick={prev} aria-label={t("rewind.prevSlide")} />
         <button className="h-full flex-1 cursor-e-resize" onClick={next} aria-label={t("rewind.nextSlide")} />

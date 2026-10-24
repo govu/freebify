@@ -4,7 +4,7 @@ import { dateLocale } from "../i18n"
 import { monthKey, useStats } from "./stats"
 import { safeStorage } from "./storage"
 
-// Monthly Rewind — your own "Wrapped", derived entirely from local stats.
+// Monthly Rewind - your own "Wrapped", derived entirely from local stats.
 // A rewind unlocks the moment a calendar month closes; the current month
 // is peekable as a "so far" edition once there's enough listening to show.
 
@@ -61,7 +61,7 @@ export function buildRewind(key: string, partial = false): RewindData | null {
   }
 }
 
-// newest CLOSED month with enough data — what the monthly prompt fires for
+// newest CLOSED month with enough data - what the monthly prompt fires for
 export function latestRewind(): RewindData | null {
   const months = useStats.getState().months
   const cur = monthKey()
@@ -72,7 +72,7 @@ export function latestRewind(): RewindData | null {
   return key ? buildRewind(key) : null
 }
 
-// the month still running — the "so far" edition shown on demand
+// the month still running - the "so far" edition shown on demand
 export function currentRewind(): RewindData | null {
   return buildRewind(monthKey(), true)
 }

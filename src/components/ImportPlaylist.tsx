@@ -8,9 +8,9 @@ import { notify } from "../store/player"
 import { useLibrary } from "../store/library"
 
 // Import playlists: Spotify or YouTube Music links, or a CSV export
-// (each row re-matched by search). Best-effort matching — the top
+// (each row re-matched by search). Best-effort matching - the top
 // YouTube Music hit is taken; originals-only catalog means a few misses.
-// Spotify publishes only its first 100 tracks publicly (its own cap) —
+// Spotify publishes only its first 100 tracks publicly (its own cap) -
 // that's what the import reads; longer lists go through the CSV tab.
 
 const YT_LIST = /[?&]list=([A-Za-z0-9_-]+)/
@@ -20,7 +20,7 @@ interface ImportEntry {
   title: string
   artist: string
 }
-// minimal CSV cell parser — quoted fields, escaped "" quotes, comma sep
+// minimal CSV cell parser - quoted fields, escaped "" quotes, comma sep
 function csvRows(text: string): string[][] {
   const rows: string[][] = []
   let cur = "", inQ = false, row: string[] = []
@@ -45,8 +45,8 @@ function csvRows(text: string): string[][] {
 }
 
 // Spotify export headers look like: "Track Name","Artist Name(s)",...
-// (or TuneMyMusic/other tools with title,artist — map loosely).
-// Two passes: exact-ish headers first, then loose — otherwise a
+// (or TuneMyMusic/other tools with title,artist - map loosely).
+// Two passes: exact-ish headers first, then loose - otherwise a
 // "Songwriters"/"Album Name" column can steal the title slot
 function findCols(header: string[]): [number, number] {
   const h = header.map((s) => s.trim().toLowerCase())
@@ -78,7 +78,7 @@ export function ImportPlaylist() {
     navigate(`/playlist/${pid}`)
   }
 
-  // every entry is re-matched on YouTube Music — the top hit wins.
+  // every entry is re-matched on YouTube Music - the top hit wins.
   // batches of 4 so a long list doesn't hammer search in one burst
   const matchEntries = async (playlistName: string, entries: ImportEntry[]) => {
     setProgress({ done: 0, total: entries.length })
@@ -104,7 +104,7 @@ export function ImportPlaylist() {
       setProgress({ done: Math.min(i + BATCH, entries.length), total: entries.length })
     }
     if (found === 0) {
-      // every row failed to match — an empty playlist is worse than none
+      // every row failed to match - an empty playlist is worse than none
       deletePlaylist(pid)
       notify(t("import.noMatches"))
       setBusy(false)
@@ -168,7 +168,7 @@ export function ImportPlaylist() {
       const [ti, ai] = findCols(rows[0])
       const entries: ImportEntry[] = rows
         .slice(1)
-        .slice(0, 5000) // 1 search per row in batches of 4 — beyond this the churn dwarfs the payoff
+        .slice(0, 5000) // 1 search per row in batches of 4 - beyond this the churn dwarfs the payoff
         .map((r) => ({ title: r[ti]?.trim() ?? "", artist: r[ai]?.trim() ?? "" }))
       await matchEntries(file.name.replace(/\.[^.]+$/, ""), entries)
     } catch {
@@ -178,7 +178,7 @@ export function ImportPlaylist() {
     }
   }
 
-  // .freebify.json — our own export format; entries still re-match through
+  // .freebify.json - our own export format; entries still re-match through
   // search so the imported playlist holds real playable Track objects
   const importJson = async (file: File) => {
     setBusy(true)

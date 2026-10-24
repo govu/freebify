@@ -327,7 +327,7 @@
   <div class="feat-row rv"><span class="t">Silent auto-updates</span><span class="d">New versions download in the background and install when you quit. You never manage the app.</span><span class="arr">→</span></div>
   <div class="feat-row rv"><span class="t">Your library</span><span class="d">Likes, playlists, queue and history, stored locally on your machine, not our servers.</span><span class="arr">→</span></div>
   <div class="feat-row rv"><span class="t">No account</span><span class="d">Install and press play. No email, no login, no trial clock. That’s the entire signup flow.</span><span class="arr">→</span></div>
-<div class="feat-row rv"><span class="t">Import playlists</span><span class="d">Bring your Spotify or YouTube Music lists over. Spotify publishes its first 100 tracks publicly; longer lists come in through a CSV export — up to 5,000, no login anywhere.</span><span class="arr">→</span></div>
+<div class="feat-row rv"><span class="t">Import playlists</span><span class="d">Bring your Spotify or YouTube Music lists over. Spotify publishes its first 100 tracks publicly; longer lists come in through a CSV export, up to 5,000, no login anywhere.</span><span class="arr">→</span></div>
 </section>
 
 <section class="gallery" id="shots">
@@ -389,7 +389,7 @@
       <a href="https://github.com/govu/freebify/blob/main/PRIVACY.md" target="_blank" rel="noopener">Privacy</a>
     </div>
   </div>
-  <p class="legal">Freebify is an independent, non-commercial open-source project (GPL-3.0 + Freebify Attribution Clause — copies and forks must keep visible credit to the original author and may not reuse the Freebify name or logo). It is a media player, not a music service: it hosts, stores, uploads and sells nothing. All audio, metadata and artwork are requested by the user's own device, directly from the third-party platforms that serve them (YouTube / YouTube Music and the public Audius API), under those platforms' own terms; the software itself contains no copyrighted material. Not affiliated with, endorsed by, or sponsored by Spotify, YouTube, Google, Audius, or any label or rights holder; all trademarks belong to their respective owners. Intended for personal, non-commercial use; responsibility for complying with each platform's terms and local law rests with the user. Provided "as is", without warranty; the authors accept no liability for how the software is used.</p>
+  <p class="legal">Freebify is an independent, non-commercial open-source project (GPL-3.0 + Freebify Attribution Clause: copies and forks must keep visible credit to the original author and may not reuse the Freebify name or logo). It is a media player, not a music service: it hosts, stores, uploads and sells nothing. All audio, metadata and artwork are requested by the user's own device, directly from the third-party platforms that serve them (YouTube / YouTube Music and the public Audius API), under those platforms' own terms; the software itself contains no copyrighted material. Not affiliated with, endorsed by, or sponsored by Spotify, YouTube, Google, Audius, or any label or rights holder; all trademarks belong to their respective owners. Intended for personal, non-commercial use; responsibility for complying with each platform's terms and local law rests with the user. Provided "as is", without warranty; the authors accept no liability for how the software is used.</p>
 </footer>
 
 <script src="vendor/lenis.min.js"></script>
@@ -499,7 +499,7 @@
   /* ---------- gallery crossfade (GSAP) ---------- */
   if (!reduced && window.gsap) {
     gsap.registerPlugin(ScrollTrigger);
-    // Lenis smooth-scroll drives the native scroll — ScrollTrigger must be
+    // Lenis smooth-scroll drives the native scroll; ScrollTrigger must be
     // told on every frame or its pin positions drift out of sync (the
     // gallery stays fixed over the hero when scrolling back up)
     if (lenis) lenis.on("scroll", ScrollTrigger.update);
@@ -507,7 +507,7 @@
     const imgs = gsap.utils.toArray(".gal-stack .gimg");
     gsap.set(steps[0], { opacity: 1 });
     const N = imgs.length;
-    // pin only exists on desktop — resizing across the breakpoint must
+    // pin only exists on desktop; resizing across the breakpoint must
     // destroy it or a fixed-position clone survives into the mobile stack
     let galIdx = 0;
     gsap.matchMedia().add("(min-width: 901px)", () => {
@@ -530,7 +530,7 @@
         },
       });
     });
-    // fonts/images change section heights after first layout — refresh
+    // fonts/images change section heights after first layout; refresh
     // trigger positions once everything settles or pins land mid-section
     addEventListener("load", () => ScrollTrigger.refresh());
     document.fonts?.ready.then(() => ScrollTrigger.refresh());
@@ -582,7 +582,7 @@
   // "Linux", iPads masquerade as Mac (check touch), Windows is default.
   const _uap = (navigator.userAgentData?.platform || "").toLowerCase();
   const _ua = navigator.userAgent || "";
-  // iPadOS 13+ sends a "Macintosh" UA — only maxTouchPoints unmasks it
+  // iPadOS 13+ sends a "Macintosh" UA; only maxTouchPoints unmasks it
   const _ipadOS = /mac/i.test(_ua) && navigator.maxTouchPoints > 1;
   const OS =
     /android/.test(_uap) || /android/i.test(_ua) ? "android" :
@@ -592,7 +592,7 @@
     "windows";
   const isMac = OS === "mac", isLinux = OS === "linux";
   const OS_LABEL = { windows: "Windows", mac: "macOS", linux: "Linux", android: "Android", ios: "iOS" }[OS];
-  // every download routes through download.html — it resolves the asset,
+  // every download routes through download.html, it resolves the asset,
   // shows the disclaimer + platform notes, then starts the file
   const heroDl = document.getElementById("heroDl");
   const dlBtn0 = document.getElementById("dlBtn");

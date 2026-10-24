@@ -20,7 +20,7 @@ const fadeUp = {
   animate: { opacity: 1, y: 0 },
 }
 
-// time-of-day mood pick — the shelf feels curated instead of static
+// time-of-day mood pick - the shelf feels curated instead of static
 const MOOD_BY_HOUR: [number, string][] = [
   [5, "Workout"],
   [9, "Focus"],
@@ -35,7 +35,7 @@ function moodForNow() {
   return pick
 }
 
-// artist-name matching for the "new for you" shelf — stats store plain
+// artist-name matching for the "new for you" shelf - stats store plain
 // names while YTM releases may carry "- Topic"/"VEVO" channel suffixes
 function normArtistName(n: string) {
   return n
@@ -62,13 +62,13 @@ export function Home() {
   const [run, setRun] = useState(0)
 
   const recents = useLibrary((s) => s.recents)
-  // Rewind card — recompute when month buckets flush; newest edition wins
+  // Rewind card - recompute when month buckets flush; newest edition wins
   const months = useStats((s) => s.months)
   const rewind = useMemo(() => (Object.keys(months).length ? availableRewind() : null), [months])
   const openRewind = useRewind((s) => s.open)
 
-  // "New for you" — this week's releases filtered down to the artists the
-  // user actually plays (top 40 by listen time). Empty until stats exist —
+  // "New for you" - this week's releases filtered down to the artists the
+  // user actually plays (top 40 by listen time). Empty until stats exist -
   // the shelf only appears once there's a real signal to match against.
   const statArtists = useStats((s) => s.artists)
   const newForYou = useMemo(() => {
@@ -95,7 +95,7 @@ export function Home() {
         return v ?? []
       }
       // on refresh, an empty-but-successful response must NOT wipe a
-      // populated section — that causes a visible collapse + scroll jump
+      // populated section - that causes a visible collapse + scroll jump
       const fill = <T,>(set: (v: T[]) => void, v: T[] | null | undefined) => {
         if (v && v.length) set(mark(v))
       }
@@ -126,7 +126,7 @@ export function Home() {
               })
               .catch(() => {})
 
-          // page is interactive NOW — mood + "because you listened" fill in
+          // page is interactive NOW - mood + "because you listened" fill in
           // asynchronously instead of adding two serial RTTs to first paint
           if (live) setLoading(false)
           if (mo.status === "fulfilled" && mo.value.length) {
@@ -143,7 +143,7 @@ export function Home() {
               .catch(() => {})
           }
 
-          // "Because you listened" — seed the radio of the most recent
+          // "Because you listened" - seed the radio of the most recent
           // track. Read the store live: this closure is ~30min stale by
           // refresh time, and the seed should reflect what the user played
           // THIS session, not what was recent when Home mounted
@@ -153,7 +153,7 @@ export function Home() {
               .then((rel2) => {
                 if (live && rel2.length) {
                   setForYou(mark(rel2.slice(0, 10)))
-                  // strip video-era cruft — "ELLA | BLESSD (VIDEO OFICIAL)"
+                  // strip video-era cruft - "ELLA | BLESSD (VIDEO OFICIAL)"
                   // reads better as "ELLA"
                   setForYouName(
                     seed.title
@@ -185,7 +185,7 @@ export function Home() {
       } catch {
         /* fall through to Audius */
       }
-      // Audius fallback — keeps the app alive without YouTube
+      // Audius fallback - keeps the app alive without YouTube
       try {
         const [t, p] = await Promise.allSettled([
           apiClient.trendingTracks({ limit: 30 }),
@@ -203,7 +203,7 @@ export function Home() {
       }
     }
     void load(true)
-    // silent refresh — charts/trending rotate; re-paint every 30 min while
+    // silent refresh - charts/trending rotate; re-paint every 30 min while
     // the page is open without flashing skeletons
     const iv = setInterval(() => void load(false), 30 * 60 * 1000)
     return () => {
@@ -251,7 +251,7 @@ export function Home() {
       </div>
 
       <motion.div {...fadeUp} transition={{ duration: 0.5, delay: 0.14 }}>
-        {/* monthly Rewind — your own Wrapped, rebuilt from local stats */}
+        {/* monthly Rewind - your own Wrapped, rebuilt from local stats */}
         {rewind && (
           <section className="mx-6 mb-10">
             <button
@@ -291,7 +291,7 @@ export function Home() {
           </div>
         )}
 
-        {/* charts — the localized Top-100 the user's region actually listens
+        {/* charts - the localized Top-100 the user's region actually listens
             to, with real chart positions */}
         {(loading || chartTracks.length > 0) && (
           <section className="mb-10">
@@ -311,7 +311,7 @@ export function Home() {
           </section>
         )}
 
-        {/* top artists — the chart's artist cards */}
+        {/* top artists - the chart's artist cards */}
         {chartArtists.length > 0 && (
           <Section title={tt("home.topArtists")}>
             {chartArtists.map((u) => (
@@ -320,7 +320,7 @@ export function Home() {
           </Section>
         )}
 
-        {/* new releases — fresh albums & singles, OLAK/MPRE routed correctly */}
+        {/* new releases - fresh albums & singles, OLAK/MPRE routed correctly */}
         {(loading || releases.length > 0) && (
           <Section title={tt("home.newReleases")}>
             {loading && releases.length === 0 ? (
@@ -331,7 +331,7 @@ export function Home() {
           </Section>
         )}
 
-        {/* new for you — releases filtered to the user's top artists;
+        {/* new for you - releases filtered to the user's top artists;
             surfaces only once listening stats have a signal to match */}
         {newForYou.length > 0 && (
           <Section title={tt("home.newForYou")}>
@@ -341,7 +341,7 @@ export function Home() {
           </Section>
         )}
 
-        {/* personalized radio — seeded by the most recent listen */}
+        {/* personalized radio - seeded by the most recent listen */}
         {forYou.length > 0 && (
           <Section title={tt("home.becauseListened", { name: forYouName })}>
             {forYou.map((t) => (
@@ -350,7 +350,7 @@ export function Home() {
           </Section>
         )}
 
-        {/* time-aware mood shelf — Workout mornings, Chill nights… */}
+        {/* time-aware mood shelf - Workout mornings, Chill nights… */}
         {moodPls.length > 0 && (
           <Section title={tt("home.moodMixes", { name: moodName })}>
             {moodPls.map((p) => (
@@ -369,7 +369,7 @@ export function Home() {
           </Section>
         )}
 
-        {/* Audius path — only when YouTube is down entirely */}
+        {/* Audius path - only when YouTube is down entirely */}
         {audiusTrend.length > 0 && (
           <Section title={tt("home.trending")}>
             {audiusTrend.map((t) => (

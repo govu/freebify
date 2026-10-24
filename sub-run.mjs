@@ -1,5 +1,5 @@
 // Test-only shim: this IP is currently 429-blocked on youtube.com/api/timedtext
-// (the caption body endpoint — LRCLIB and -J work fine). Route ONLY timedtext
+// (the caption body endpoint - LRCLIB and -J work fine). Route ONLY timedtext
 // fetches through the r.jina.ai reader proxy; everything else goes direct.
 // Usage: node sub-run.mjs lyrics-matrix-sub.json
 const origFetch = globalThis.fetch

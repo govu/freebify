@@ -1,4 +1,4 @@
-// Web Audio bus — every audible <audio> element routes through a shared
+// Web Audio bus - every audible <audio> element routes through a shared
 // graph instead of straight to the speakers:
 //
 //   element → MediaElementSource → fadeGain → elGain ─┐
@@ -19,18 +19,18 @@ let eqNodes: BiquadFilterNode[] = []
 interface Port {
   src: MediaElementAudioSourceNode
   fade: GainNode
-  gain: GainNode // per-element loudness — each track keeps its own level mid-crossfade
+  gain: GainNode // per-element loudness - each track keeps its own level mid-crossfade
   meter: AnalyserNode
 }
 const ports = new Map<HTMLAudioElement, Port>()
 
-// EQ is serialized to a single string for persistence — "{db},{db},..."
+// EQ is serialized to a single string for persistence - "{db},{db},..."
 let eqGains: number[] = EQ_BANDS.map(() => 0)
 
 function ensure(): AudioContext {
   if (!ctx) {
     ctx = new AudioContext()
-    // EQ chain: lowshelf, peaking mids, highshelf — small Q so adjacent
+    // EQ chain: lowshelf, peaking mids, highshelf - small Q so adjacent
     // bands blend instead of ringing
     eqNodes = EQ_BANDS.map((f, i) => {
       const b = ctx!.createBiquadFilter()
@@ -42,7 +42,7 @@ function ensure(): AudioContext {
     })
     // chain: ports → eqNodes[0..n] → limiter → destination
     for (let i = 0; i < eqNodes.length - 1; i++) eqNodes[i].connect(eqNodes[i + 1])
-    // safety limiter — normalization boosts and EQ gain can push a signal
+    // safety limiter - normalization boosts and EQ gain can push a signal
     // past full scale at high user volume; compressing at -2 dB catches
     // the peaks transparently instead of hard-clipping the output
     const lim = ctx.createDynamicsCompressor()
@@ -56,9 +56,9 @@ function ensure(): AudioContext {
   }
   if (ctx.state === "suspended") void ctx.resume()
   // A play() that lands AFTER the click's transient activation expired
-  // (stream resolution takes seconds — IPC → extractor) leaves the context
+  // (stream resolution takes seconds - IPC → extractor) leaves the context
   // suspended forever: element "plays", graph outputs silence. Every real
-  // gesture is a fresh chance to wake it. Registered ONCE — ensure() runs
+  // gesture is a fresh chance to wake it. Registered ONCE - ensure() runs
   // per attach and anonymous listeners can't be removed.
   if (!gestureWired) {
     gestureWired = true
@@ -78,7 +78,7 @@ function ensure(): AudioContext {
 }
 let gestureWired = false
 
-/** Route an element into the bus. Safe to call once per element — later
+/** Route an element into the bus. Safe to call once per element - later
  *  calls return the existing port (MediaElementSource is 1:1 per element). */
 export function attach(el: HTMLAudioElement): Port {
   const c = ensure()
@@ -92,7 +92,7 @@ export function attach(el: HTMLAudioElement): Port {
   src.connect(fade)
   fade.connect(gain)
   gain.connect(eqNodes[0])
-  // meter taps the raw signal — a mid-fade measurement must not read the
+  // meter taps the raw signal - a mid-fade measurement must not read the
   // ramping level as the track's true loudness
   src.connect(meter)
   const p = { src, fade, gain, meter }
@@ -100,14 +100,14 @@ export function attach(el: HTMLAudioElement): Port {
   return p
 }
 
-/** Detach a discarded element — it goes silent; only for elements that will
+/** Detach a discarded element - it goes silent; only for elements that will
  *  never be used again (a detached element can't return to direct output). */
 export function detach(el: HTMLAudioElement) {
   const p = ports.get(el)
   if (!p) return
   try { p.src.disconnect() } catch { /* noop */ }
   try { p.fade.disconnect() } catch { /* noop */ }
-  // gain stays plugged into the EQ chain otherwise — a detached port would
+  // gain stays plugged into the EQ chain otherwise - a detached port would
   // pin the whole node chain in the graph
   try { p.gain.disconnect() } catch { /* noop */ }
   try { p.meter.disconnect() } catch { /* noop */ }
@@ -125,14 +125,14 @@ export function fadeTo(el: HTMLAudioElement, to: number, secs: number) {
   if (secs > 0) p.fade.gain.linearRampToValueAtTime(to, t + secs)
 }
 
-/** Equal-power fade — the one that sounds right. A linear ramp on both
+/** Equal-power fade - the one that sounds right. A linear ramp on both
  *  elements dips the summed loudness ~3dB at the midpoint (that's the
  *  "volume drops during the transition" effect); cosine out + sine in
  *  keeps the power constant so the mix stays level through the whole
  *  crossfade. From any current value toward `to`, along the circle arc.
  *
  *  `holdFrac` (fade-outs only): the element holds `from` for that share of
- *  the window, then cosine-decays. The outgoing track keeps its ending —
+ *  the window, then cosine-decays. The outgoing track keeps its ending -
  *  a fade-out over the whole window eats a hard outro, which reads as the
  *  song being "cut early". The incoming still sine-swells the full window,
  *  so the overlap never dips; it just crests slightly fuller mid-fade. */
@@ -161,7 +161,7 @@ export function fadeValue(el: HTMLAudioElement): number {
   return ports.get(el)?.fade.gain.value ?? 1
 }
 
-/** Set all seven EQ bands (dB). Applies live — first element attach builds
+/** Set all seven EQ bands (dB). Applies live - first element attach builds
  *  the graph with these values already in place. */
 export function setEq(db: number[]) {
   eqGains = EQ_BANDS.map((_, i) => Math.max(-24, Math.min(24, db[i] ?? 0)))
@@ -173,13 +173,13 @@ export function getEq(): number[] {
   return [...eqGains]
 }
 
-/** Per-element loudness gain (linear) — each element carries its own
+/** Per-element loudness gain (linear) - each element carries its own
  *  normalization so a crossfade blends two already-leveled signals.
  *
  *  The first-play correction lands ~8s into the song, so the way it MOVES
  *  matters: a setTargetAtTime approach in linear domain covers 63% of the
- *  jump in its first τ — a +8dB fix reads as an audible snap. Instead we
- *  ramp geometrically (constant dB/sec — the perceptually even trajectory)
+ *  jump in its first τ - a +8dB fix reads as an audible snap. Instead we
+ *  ramp geometrically (constant dB/sec - the perceptually even trajectory)
  *  and rate-limit to ≤3dB/s so big corrections glide instead of step. */
 export function setNormGain(el: HTMLAudioElement, linear: number) {
   const p = ports.get(el)
@@ -202,7 +202,7 @@ export function setNormGain(el: HTMLAudioElement, linear: number) {
   p.gain.gain.setValueCurveAtTime(curve, t, secs)
 }
 
-/** Integrated RMS (linear) of an element's signal — used by the loudness
+/** Integrated RMS (linear) of an element's signal - used by the loudness
  *  normalizer. Caller samples over time. */
 export function rmsOf(el: HTMLAudioElement): number {
   const p = ports.get(el)
@@ -214,7 +214,7 @@ export function rmsOf(el: HTMLAudioElement): number {
   return Math.sqrt(sum / buf.length)
 }
 
-/** crossOrigin=anonymous MUST be set before the first src assignment —
+/** crossOrigin=anonymous MUST be set before the first src assignment -
  *  this helper makes every audio element bus-compatible from birth.
  *  Only inside Electron: a plain browser gets no CORS injection, and a
  *  source without ACAO would hard-fail instead of just bypassing the bus. */
@@ -228,7 +228,7 @@ export function mkAudio(url?: string): HTMLAudioElement {
 /** Is the audio pipeline available? Browser fallback keeps direct output. */
 export const busAvailable = typeof window !== "undefined" && !!window.freebify
 
-/** AudioContext starts suspended before the first user gesture — retry on
+/** AudioContext starts suspended before the first user gesture - retry on
  *  every play so the first real playback unsuspends it. */
 export function resume() {
   if (ctx && ctx.state === "suspended") void ctx.resume()

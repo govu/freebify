@@ -4,9 +4,9 @@ import type { Track } from "../api/types"
 import { isObj, isValidTrack, safeStorage, slimTrack } from "./storage"
 import { usePlayer } from "./player"
 
-// Local listening stats — your own "Wrapped", no account, no server.
+// Local listening stats - your own "Wrapped", no account, no server.
 // Aggregated only (per-track and per-artist counters + daily minutes), not
-// raw event logs — stays small and private by design.
+// raw event logs - stays small and private by design.
 //
 // recordMs is called on every playback tick (~4Hz): writes are buffered in
 // memory and flushed on a timer / playback transition, so persist never
@@ -25,7 +25,7 @@ interface ArtistAgg {
   ms: number
 }
 
-// one bucket per calendar month — powers the monthly Rewind (top tracks /
+// one bucket per calendar month - powers the monthly Rewind (top tracks /
 // artists / minutes of THAT month, not the all-time aggregates)
 interface MonthAgg {
   ms: number
@@ -34,13 +34,13 @@ interface MonthAgg {
   artists: Record<string, ArtistAgg>
 }
 
-// caps keep a years-long library from outgrowing localStorage — entries are
+// caps keep a years-long library from outgrowing localStorage - entries are
 // evicted lowest-playtime-first, so the stats that survive are the ones
 // that actually matter
 const MAX_TRACKS = 300
 const MAX_ARTISTS = 200
 const MAX_DAYS = 120
-const MAX_MONTHS = 14 // a year + headroom — older months drop off the edge
+const MAX_MONTHS = 14 // a year + headroom - older months drop off the edge
 const MAX_MONTH_TRACKS = 60
 const MAX_MONTH_ARTISTS = 40
 const FLUSH_MS = 15_000
@@ -57,7 +57,7 @@ interface StatsState {
   flush: () => void
 }
 
-// LOCAL calendar day — toISOString() is UTC, which lands evening sessions
+// LOCAL calendar day - toISOString() is UTC, which lands evening sessions
 // (UTC+1/+2) on the next day and midnight sessions on the previous one
 export const dayKey = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
@@ -66,7 +66,7 @@ export const monthKey = (d = new Date()) =>
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0)
 
-// pending deltas — accumulated between flushes
+// pending deltas - accumulated between flushes
 let pendMs = new Map<string, number>() // trackId -> ms
 let pendTracks = new Map<string, Track>() // trackId -> slim track
 let pendDays = 0 // ms for the current day bucket
@@ -75,7 +75,7 @@ let pendTotal = 0
 function prune<T>(rec: Record<string, T>, cap: number, msOf: (v: T) => number): Record<string, T> {
   const keys = Object.keys(rec)
   if (keys.length <= cap) return rec
-  // keep the biggest `cap` by listening time — ties keep insertion order
+  // keep the biggest `cap` by listening time - ties keep insertion order
   const keep = new Set(keys.sort((a, b) => msOf(rec[b]) - msOf(rec[a])).slice(0, cap))
   const out: Record<string, T> = {}
   for (const k of keys) if (keep.has(k)) out[k] = rec[k]
@@ -85,7 +85,7 @@ function prune<T>(rec: Record<string, T>, cap: number, msOf: (v: T) => number): 
 function pruneDays(days: Record<string, number>): Record<string, number> {
   const keys = Object.keys(days)
   if (keys.length <= MAX_DAYS) return days
-  // ISO day keys sort chronologically — drop the oldest
+  // ISO day keys sort chronologically - drop the oldest
   const keep = new Set(keys.sort().slice(-MAX_DAYS))
   const out: Record<string, number> = {}
   for (const k of keys) if (keep.has(k)) out[k] = days[k]
@@ -101,7 +101,7 @@ function pruneMonths(months: Record<string, MonthAgg>): Record<string, MonthAgg>
   return out
 }
 
-// increment plays inside a month bucket — mirrors the all-time merge below
+// increment plays inside a month bucket - mirrors the all-time merge below
 function bumpMonthPlays(months: Record<string, MonthAgg>, mk: string, t: Track): Record<string, MonthAgg> {
   const m = months[mk] ?? { ms: 0, plays: 0, tracks: {}, artists: {} }
   const prevT = m.tracks[t.id]
@@ -113,7 +113,7 @@ function bumpMonthPlays(months: Record<string, MonthAgg>, mk: string, t: Track):
   return { ...months, [mk]: { ms: m.ms, plays: m.plays + 1, tracks, artists } }
 }
 
-// shared sanitizers — merge() validates the all-time records AND every
+// shared sanitizers - merge() validates the all-time records AND every
 // month bucket with the same rules
 function sanTracks(v: unknown, cap: number): Record<string, TrackAgg> {
   const out: Record<string, TrackAgg> = {}
@@ -181,7 +181,7 @@ export const useStats = create<StatsState>()(
       totalMs: 0,
       totalPlays: 0,
 
-      // hot path — buffer only; a set() here would serialize the whole
+      // hot path - buffer only; a set() here would serialize the whole
       // aggregate to localStorage four times a second
       recordMs: (t, ms) => {
         if (!t || !Number.isFinite(ms) || ms <= 0) return
@@ -226,7 +226,7 @@ export const useStats = create<StatsState>()(
           }
         }),
 
-      // merge the buffered deltas into state once — one serialization per
+      // merge the buffered deltas into state once - one serialization per
       // flush instead of one per tick
       flush: () =>
         set((s) => {
@@ -277,7 +277,7 @@ export const useStats = create<StatsState>()(
       name: "freebify-stats",
       storage: createJSONStorage(() => safeStorage),
       version: 2,
-      // functions drop out of JSON anyway — partialize keeps it explicit
+      // functions drop out of JSON anyway - partialize keeps it explicit
       partialize: (s) => ({
         tracks: s.tracks,
         artists: s.artists,
@@ -286,7 +286,7 @@ export const useStats = create<StatsState>()(
         totalMs: s.totalMs,
         totalPlays: s.totalPlays,
       }),
-      // validate every persisted field — a corrupt blob (NaN, wrong types,
+      // validate every persisted field - a corrupt blob (NaN, wrong types,
       // non-track values) must degrade to zeroed stats, never throw inside
       // a player listener that happens to trigger the merge
       merge: (persisted, current) => {
@@ -297,7 +297,7 @@ export const useStats = create<StatsState>()(
           return current
         }
       },
-      // v1 blobs used the same shape minus validation — plain merge suffices
+      // v1 blobs used the same shape minus validation - plain merge suffices
       migrate: (persisted) => persisted,
     },
   ),
@@ -332,7 +332,7 @@ usePlayer.subscribe((s, prev) => {
       return
     }
     if (t.id !== lastId) {
-      // track changed — settle the pending time before it scrolls off
+      // track changed - settle the pending time before it scrolls off
       if (flushTimer || pendTotal > 0) useStats.getState().flush()
       lastId = t.id
       countedFor = null
@@ -340,14 +340,14 @@ usePlayer.subscribe((s, prev) => {
     }
     if (!s.isPlaying) {
       lastT = s.currentTime
-      // paused/stopped — make the buffered time durable now rather than
+      // paused/stopped - make the buffered time durable now rather than
       // holding it until the timer (app could close in between)
       if (pendTotal > 0) useStats.getState().flush()
       return
     }
     const dt = s.currentTime - (prev?.currentTime ?? lastT)
     lastT = s.currentTime
-    if (dt <= 0 || dt > 6) return // seek / stale tick — not listening time
+    if (dt <= 0 || dt > 6) return // seek / stale tick - not listening time
     const ms = dt * 1000
     acc += ms
     useStats.getState().recordMs(t, ms)

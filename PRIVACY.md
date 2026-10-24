@@ -11,7 +11,7 @@ that could receive your data even if it wanted to.
 Everything the app remembers is stored locally on your computer and never
 transmitted to the authors:
 
-- liked songs, playlists, play history and queue — `localStorage` on your
+- liked songs, playlists, play history and queue: `localStorage` on your
   machine
 - playback preferences (volume, shuffle, repeat, autoplay)
 - temporary caches of artwork, lyrics and resolved stream URLs, so the app
@@ -25,13 +25,13 @@ lyrics cache", or delete the app's data directory entirely.
 ## What third parties see
 
 When you use Freebify, **your device makes direct requests** to the
-third-party services that actually provide the catalog and audio — the
+third-party services that actually provide the catalog and audio. The
 same way visiting their websites in a browser would:
 
-- **YouTube / YouTube Music** (Google) — receives the search/browse/stream
+- **YouTube / YouTube Music** (Google) receives the search/browse/stream
   requests needed to play music, from your IP address.
-- **Audius** — receives API and stream requests, from your IP address.
-- **GitHub** — receives a release-info request when the app checks for
+- **Audius** receives API and stream requests, from your IP address.
+- **GitHub** receives a release-info request when the app checks for
   updates or you open the project website.
 
 Those requests are governed by each service's own privacy policy, not this
@@ -48,7 +48,7 @@ Spotify playlist import never asks you to log in: Freebify reads only what
 Spotify shows to anonymous visitors (the first 100 tracks of a public
 playlist). No Spotify account, token or session ever touches Freebify. For
 longer lists, export a CSV (Exportify, TuneMyMusic, Spotify's own export)
-and import the file — that travel is between you and your machine only.
+and import the file. That travel is between you and your machine only.
 
 ## Changes
 

@@ -8,7 +8,7 @@ interface SliderProps {
   onCommit?: (v: number) => void
   className?: string
   // ease fill between external value ticks (e.g. the seek bar's ~4Hz
-  // timeupdate) instead of stepping — disable for scrub-driven sliders
+  // timeupdate) instead of stepping - disable for scrub-driven sliders
   smooth?: boolean
   ariaLabel?: string
   disabled?: boolean
@@ -24,7 +24,7 @@ export function Slider({ value, min = 0, max, onScrub, onCommit, className = "",
 
   const ratioFrom = (clientX: number) => {
     const rect = ref.current!.getBoundingClientRect()
-    if (!rect.width) return 0 // hidden/zero-size — 0/0 would be NaN
+    if (!rect.width) return 0 // hidden/zero-size - 0/0 would be NaN
     return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
   }
 
@@ -45,14 +45,14 @@ export function Slider({ value, min = 0, max, onScrub, onCommit, className = "",
       aria-disabled={disabled || undefined}
       aria-valuemin={min}
       aria-valuemax={max}
-      // clamp — a stale/out-of-range value must not lie to AT (e.g. seek
+      // clamp - a stale/out-of-range value must not lie to AT (e.g. seek
       // reporting position > duration while duration hasn't loaded yet)
       aria-valuenow={Math.round(Math.min(max, Math.max(min, dragRatio !== null ? min + dragRatio * span : value)) * 10) / 10}
       className={`group relative flex h-4 items-center outline-none select-none ${
         disabled ? "cursor-default opacity-50" : "cursor-pointer"
       } ${className}`}
       // touch-none: the browser must not steal horizontal drags as scroll
-      // pans — that fires pointercancel and half-commits a seek
+      // pans - that fires pointercancel and half-commits a seek
       style={{ touchAction: "none" }}
       onKeyDown={(e) => {
         if (disabled) return
@@ -77,12 +77,12 @@ export function Slider({ value, min = 0, max, onScrub, onCommit, className = "",
               : 0
         if (!d) return
         e.preventDefault()
-        e.stopPropagation() // App-level arrow shortcuts seek — don't double-fire
+        e.stopPropagation() // App-level arrow shortcuts seek - don't double-fire
         const v = Math.min(max, Math.max(min, value + d * span))
         onCommit ? onCommit(v) : onScrub?.(v)
       }}
       onPointerDown={(e) => {
-        // primary button + single active pointer only — a right-click or a
+        // primary button + single active pointer only - a right-click or a
         // second touch must not start/steal a drag
         if (disabled || e.button !== 0 || !e.isPrimary || dragRatio !== null) return
         try {
@@ -105,14 +105,14 @@ export function Slider({ value, min = 0, max, onScrub, onCommit, className = "",
       onPointerUp={(e) => {
         if (e.isPrimary) endDrag(true)
       }}
-      // pointercancel = the OS stole the gesture (touch→scroll, stylus) —
+      // pointercancel = the OS stole the gesture (touch→scroll, stylus) -
       // drop the drag WITHOUT committing the half-finished position
       onPointerCancel={() => endDrag(false)}
-      // capture can also be lost silently (window blur mid-drag) — clean up
+      // capture can also be lost silently (window blur mid-drag) - clean up
       onLostPointerCapture={() => endDrag(false)}
     >
       <div className="relative h-1 w-full overflow-visible rounded-full bg-white/10">
-        {/* scaleX is compositor-only — animating `width` forced a layout
+        {/* scaleX is compositor-only - animating `width` forced a layout
             pass every 4Hz tick for the entire playback session */}
         <div
           className={`absolute inset-y-0 left-0 w-full origin-left rounded-full bg-white group-hover:bg-ink ${

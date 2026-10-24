@@ -2,7 +2,7 @@ import { Copy, Minus, Square, X } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useT } from "../i18n"
 
-// Floating window controls — no dedicated titlebar strip. The drag regions
+// Floating window controls - no dedicated titlebar strip. The drag regions
 // live on the TopBar band and the sidebar header so the window chrome is
 // invisible (like Spotify's frameless top area). This cluster overlays the
 // top-right corner above every layer (NowPlaying is z-50).
@@ -20,7 +20,7 @@ export function TitleBar() {
   if (!bridge) return null
 
   return (
-    // sits over plain (non-app-region) space — the TopBar drag band stops
+    // sits over plain (non-app-region) space - the TopBar drag band stops
     // before this x-range so every click is a plain DOM event, no
     // app-region hit-test roundtrip through the renderer
     <div className="absolute right-0 top-0 z-[60] flex h-12 items-stretch">

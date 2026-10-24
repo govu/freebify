@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* latin-only Inter variable — the full fontsource bundle ships cyrillic,
+/* latin-only Inter variable - the full fontsource bundle ships cyrillic,
    greek and vietnamese woff2s (~4MB) we never render */
 @font-face {
   font-family: "Inter Variable";
@@ -34,7 +34,7 @@
   --color-line: rgb(255 255 255 / 0.08);
   --color-ink: #ffffff;
   --color-dim: #a3a3a3;
-  /* was #666 (3.45:1 on bg — fails WCAG AA at the 9-11px sizes it's used
+  /* was #666 (3.45:1 on bg - fails WCAG AA at the 9-11px sizes it's used
      for: column headers, placeholders, badges). #858585 ≈ 5.6:1 passes */
   --color-faint: #858585;
   --color-accent: #ffffff;
@@ -107,7 +107,7 @@ body {
 .eq > span:nth-child(2) { animation-delay: 0.22s; }
 .eq > span:nth-child(3) { animation-delay: 0.1s; animation-duration: 0.7s; }
 .eq > span:nth-child(4) { animation-delay: 0.32s; }
-/* paused bars must rest at the same low level — pausing the animation
+/* paused bars must rest at the same low level - pausing the animation
    freezes each bar mid-bounce at whatever height it had, which looked
    like a broken random equalizer */
 .eq.paused > span {
@@ -154,23 +154,23 @@ body {
 input[type="text"] {
   outline: none;
 }
-/* a bare color-shift is a weak focus cue — give text inputs a real ring.
+/* a bare color-shift is a weak focus cue - give text inputs a real ring.
    The ring inherits the element's own radius so it hugs pills and
    rounded-lg rename fields instead of painting a 6px square.
    :where() keeps it at near-zero specificity, and :not(.bg-transparent)
    skips bare inputs living INSIDE an already-ringed container (the search
-   pill, the playlist filter) — there the inner ring reads as a second
+   pill, the playlist filter) - there the inner ring reads as a second
    squished pill on top of the placeholder text */
 :where(input[type="text"]:not(.bg-transparent)):focus-visible {
   box-shadow: 0 0 0 2px rgb(255 255 255 / 0.35);
   border-radius: inherit;
 }
-/* Tailwind preflight gives buttons no pointer cursor — every clickable
+/* Tailwind preflight gives buttons no pointer cursor - every clickable
    element in the app was showing a plain arrow */
 button:not(:disabled) {
   cursor: pointer;
 }
-/* keyboard navigation needs a visible cue on non-input interactives too —
+/* keyboard navigation needs a visible cue on non-input interactives too -
    default outline is invisible on #0a0a0a */
 button:focus-visible,
 a:focus-visible,
@@ -182,7 +182,7 @@ a:focus-visible,
 }
 
 /* ------- reduced motion ------- */
-/* MotionConfig reducedMotion="user" covers JS-driven animation — these are
+/* MotionConfig reducedMotion="user" covers JS-driven animation - these are
    the CSS-animated pieces (equalizer bars, skeleton shimmer, spinners) */
 @media (prefers-reduced-motion: reduce) {
   .eq > span {

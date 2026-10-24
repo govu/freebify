@@ -1,5 +1,5 @@
 // Offline matrix: runs the REAL alignment functions (extracted+compiled to
-// lyrics-pure.mjs by extract.mjs) against real data — LRCLIB sheets and
+// lyrics-pure.mjs by extract.mjs) against real data - LRCLIB sheets and
 // yt-dlp captions. Ground truth = each lyric line's best caption anchor.
 import { readFileSync } from "node:fs"
 import { execFileSync } from "node:child_process"
@@ -117,7 +117,7 @@ function evalAligned(aligned, caps) {
 
 const matrix = JSON.parse(readFileSync(process.argv.find((a) => a.endsWith(".json")) ?? "lyrics-matrix.json", "utf8"))
 for (const m of matrix) {
-  const out = { song: `${m.artist} — ${m.title}` }
+  const out = { song: `${m.artist} - ${m.title}` }
   try {
     const cap = await getCaps(m.vid, m.dur)
     const sheet = await getSheet(m.artist, m.title, m.dur)

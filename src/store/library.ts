@@ -35,7 +35,7 @@ interface LibraryState {
 const newId = () =>
   `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
 
-// serialize a playlist for sharing — the .freebify.json counterpart of the
+// serialize a playlist for sharing - the .freebify.json counterpart of the
 // importer's Spotify/CSV paths (entries re-match on YouTube at import)
 export function playlistExportJson(p: Pick<LocalPlaylist, "name" | "tracks">): string {
   return JSON.stringify(
@@ -59,7 +59,7 @@ export function playlistExportJson(p: Pick<LocalPlaylist, "name" | "tracks">): s
   )
 }
 
-// write through the native save dialog — returns true only on a real write
+// write through the native save dialog - returns true only on a real write
 export async function exportPlaylistToFile(p: Pick<LocalPlaylist, "name" | "tracks">): Promise<boolean> {
   const save = window.freebify?.app?.saveJson
   if (!save) return false
@@ -71,7 +71,7 @@ export async function exportPlaylistToFile(p: Pick<LocalPlaylist, "name" | "trac
   }
 }
 
-// smallest unused "My Playlist #N" — avoids duplicate names after deletions
+// smallest unused "My Playlist #N" - avoids duplicate names after deletions
 function nextPlaylistName(playlists: LocalPlaylist[]): string {
   const taken = new Set(
     playlists
@@ -83,7 +83,7 @@ function nextPlaylistName(playlists: LocalPlaylist[]): string {
   return `My Playlist #${n}`
 }
 
-// shared by migrate + merge — corrupted blobs could carry duplicate ids,
+// shared by migrate + merge - corrupted blobs could carry duplicate ids,
 // and likedTracks() maps this straight into React keys. Works for any id
 // map (liked tracks, followed artists).
 function cleanOrder(v: unknown, map: Record<string, unknown>): string[] {
@@ -131,7 +131,7 @@ export const useLibrary = create<LibraryState>()(
             delete followed[u.id]
             return { followed, followedOrder: s.followedOrder.filter((id) => id !== u.id) }
           }
-          // hard cap — a runaway "follow everything" session shouldn't grow
+          // hard cap - a runaway "follow everything" session shouldn't grow
           // localStorage without bound
           if (s.followedOrder.length >= 500) return s
           return {
@@ -155,7 +155,7 @@ export const useLibrary = create<LibraryState>()(
           playlists: [
             {
               id,
-              // lowest free N — `length+1` reuses a number after deleting
+              // lowest free N - `length+1` reuses a number after deleting
               // an earlier playlist (two "My Playlist #3" would coexist)
               name: name?.trim() || nextPlaylistName(s.playlists),
               tracks: [],
@@ -186,14 +186,14 @@ export const useLibrary = create<LibraryState>()(
           ),
         })),
 
-      // bulk add in ONE set() — the per-track loop serialized the whole
+      // bulk add in ONE set() - the per-track loop serialized the whole
       // store to localStorage on every call (O(n²) freeze on a big queue)
       addTracksToPlaylist: (id, tracks) =>
         set((s) => ({
           playlists: s.playlists.map((p) => {
             if (p.id !== id) return p
             const have = new Set(p.tracks.map((t) => t.id))
-            // `have` doubles as the seen-set — the incoming array itself can
+            // `have` doubles as the seen-set - the incoming array itself can
             // carry duplicates (e.g. a queue with the same song twice), and
             // each kept id must close the door behind it
             const add = tracks.filter((t) => {
@@ -228,7 +228,7 @@ export const useLibrary = create<LibraryState>()(
       name: "freebify-library",
       version: 1,
       storage: createJSONStorage(() => safeStorage),
-      // write slimmed snapshots — strips unbounded fields (descriptions,
+      // write slimmed snapshots - strips unbounded fields (descriptions,
       // bios, cover photos) so thousands of tracks don't eat the quota
       partialize: (s) => ({
         liked: Object.fromEntries(Object.entries(s.liked).map(([k, t]) => [k, slimTrack(t)])),
@@ -271,12 +271,12 @@ export const useLibrary = create<LibraryState>()(
           followedOrder: cleanOrder(s.followedOrder, followed),
         }
       },
-      // every hydration (any version) — validate the shape, never trust it
+      // every hydration (any version) - validate the shape, never trust it
       merge: (persisted, current) => {
         if (!isObj(persisted)) return current
         const liked = isObj(persisted.liked)
           ? Object.fromEntries(
-              // repairTrack: legacy yt-* ids predate the streamId field —
+              // repairTrack: legacy yt-* ids predate the streamId field -
               // without the backfill they validate fine but can never play
               Object.entries(persisted.liked)
                 .filter(([, v]) => isValidTrack(v))

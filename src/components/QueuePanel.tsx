@@ -25,10 +25,10 @@ export function QueuePanel() {
   const moveInQueue = usePlayer((s) => s.moveInQueue)
   const startRadio = usePlayer((s) => s.startRadio)
   const [saved, setSaved] = useState(false)
-  // two-click arm instead of a modal — one accidental trash click used to
+  // two-click arm instead of a modal - one accidental trash click used to
   // wipe a hand-built queue with no way back
   const [armClear, setArmClear] = useState(false)
-  // drag-to-reorder — indices are absolute queue indices, not upNext-local
+  // drag-to-reorder - indices are absolute queue indices, not upNext-local
   const [dragI, setDragI] = useState<number | null>(null)
   const [overI, setOverI] = useState<number | null>(null)
 
@@ -37,7 +37,7 @@ export function QueuePanel() {
   const saveAsPlaylist = () => {
     if (saved) return // double-click would create two identical playlists
     const pid = createPlaylist()
-    // only what you'd actually hear next — already-played history isn't
+    // only what you'd actually hear next - already-played history isn't
     // part of "the queue" in the user's mental model. One bulk set():
     // the per-track loop serialized the store on every call.
     addTracksToPlaylist(pid, queue.slice(Math.max(0, index)))
@@ -52,14 +52,14 @@ export function QueuePanel() {
       animate={{ width: 320, opacity: 1 }}
       exit={{ width: 0, opacity: 0 }}
       transition={{ type: "spring", stiffness: 320, damping: 34 }}
-      // below lg the layout row disappears entirely — the queue becomes a
+      // below lg the layout row disappears entirely - the queue becomes a
       // fixed overlay on the right edge (min window 940px < lg breakpoint).
       // top-12 keeps the header clear of the invisible drag band + the
       // floating window controls in the top-right corner
       // (top-0 would bury the header buttons under window controls)
       className="fixed bottom-[88px] right-0 top-12 z-[45] w-80 shrink-0 overflow-hidden border-l border-line bg-panel shadow-2xl shadow-black/60 lg:relative lg:bottom-auto lg:top-auto lg:z-auto lg:shadow-none"
     >
-      {/* lg:relative puts the panel flush against the window's top edge —
+      {/* lg:relative puts the panel flush against the window's top edge -
           its header row would sit under the floating min/max/close
           controls; pt-11 clears that strip (in overlay mode top-12 on the
           aside already provides the clearance) */}
@@ -75,7 +75,7 @@ export function QueuePanel() {
                     setArmClear(false)
                   } else {
                     setArmClear(true)
-                    // auto-disarm — a half-remembered armed state clearing
+                    // auto-disarm - a half-remembered armed state clearing
                     // the queue 10s later would be its own surprise
                     setTimeout(() => setArmClear(false), 3000)
                   }
@@ -112,7 +112,7 @@ export function QueuePanel() {
           </div>
         </div>
 
-        {/* autoplay toggle — Spotify's "similar content will keep playing" */}
+        {/* autoplay toggle - Spotify's "similar content will keep playing" */}
         <button
           onClick={() => setAutoplay(!autoplay)}
           aria-pressed={autoplay}
@@ -133,7 +133,7 @@ export function QueuePanel() {
           </span>
         </button>
 
-        {/* "Go to song radio" — Spotify's radio action: replaces NEXT UP with
+        {/* "Go to song radio" - Spotify's radio action: replaces NEXT UP with
             genre-similar songs instead of leaving a same-title context list */}
         {queue[index]?.source === "yt" && (
           <button
@@ -237,7 +237,7 @@ function QueueRow({
 }) {
   const tt = useT()
   const rowRef = useRef<HTMLDivElement>(null)
-  // HTML5 drag handlers can't go through motion.div's props — motion
+  // HTML5 drag handlers can't go through motion.div's props - motion
   // consumes onDrag*/draggable as its own gesture API. Bind them
   // imperatively on the real element instead.
   useEffect(() => {

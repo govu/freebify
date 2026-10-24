@@ -1,5 +1,5 @@
 export default {
-  "error.body": "Esta vista falló. Tu música y tus playlists están a salvo — inténtalo de nuevo.",
+  "error.body": "Esta vista falló. Tu música y tus playlists están a salvo. Inténtalo de nuevo.",
   "error.reload": "Recargar Freebify",
   "error.title": "Algo salió mal",
   "np.accuracyNote": "La letra puede no ser exacta en algunas canciones",
@@ -31,8 +31,8 @@ export default {
   "rewind.close": "Cerrar rewind",
   "rewind.durHm": "{h} h {m} min",
   "rewind.durM": "{m} min",
-  "rewind.introLine": "Un mes tuyo — cada reproducción, contada en este dispositivo.",
-  "rewind.introLinePartial": "Tu mes hasta ahora — cada reproducción, contada en este dispositivo.",
+  "rewind.introLine": "Un mes tuyo: cada reproducción, contada en este dispositivo.",
+  "rewind.introLinePartial": "Tu mes hasta ahora: cada reproducción, contada en este dispositivo.",
   "rewind.introTag": "Freebify · mensual",
   "rewind.introTagPartial": "Freebify · aún contando",
   "rewind.keepListening": "Seguir escuchando",
@@ -43,7 +43,7 @@ export default {
   "rewind.onRepeat": "en bucle",
   "rewind.playAgain": "Escuchar de nuevo",
   "rewind.playTop": "Escuchar las más escuchadas",
-  "rewind.playsAcross": "{time} — {plays} reproducciones en {tracks} canciones",
+  "rewind.playsAcross": "{time} · {plays} reproducciones en {tracks} canciones",
   "rewind.prev": "Anterior",
   "rewind.prevSlide": "Diapositiva anterior",
 

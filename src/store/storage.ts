@@ -1,7 +1,7 @@
 import type { Track, User } from "../api/types"
 
 // ---- resilient localStorage for zustand persist ----
-// - skips redundant writes (persist serializes on EVERY setState — with
+// - skips redundant writes (persist serializes on EVERY setState - with
 //   partialize the payload is identical on high-frequency ticks like
 //   currentTime, so comparing strings kills 4Hz writes for free)
 // - swallows quota errors so a full disk never throws inside a user action
@@ -21,7 +21,7 @@ export const safeStorage = {
       localStorage.setItem(k, v)
       lastWrites.set(k, v)
     } catch {
-      /* quota exhausted — session state stays alive, persistence degrades */
+      /* quota exhausted - session state stays alive, persistence degrades */
     }
   },
   removeItem: (k: string) => {
@@ -60,7 +60,7 @@ export function repairTrack(t: Track): Track {
   const art = out.artwork
   if (art) {
     // i.ytimg URLs persisted with signed context params (?sqp=…&rs=…) go
-    // dead when the signature expires — strip them so stored artwork
+    // dead when the signature expires - strip them so stored artwork
     // keeps loading forever (cleanThumb already does this for new fetches)
     const keys = ["150x150", "480x480", "1000x1000"] as const
     const next = { ...art }
@@ -72,7 +72,7 @@ export function repairTrack(t: Track): Track {
         fixed = true
       }
     }
-    // older persisted yt tracks predate the i.ytimg fallback key — backfill
+    // older persisted yt tracks predate the i.ytimg fallback key - backfill
     // so every stored track survives googleusercontent throttling
     const vid = out.streamId ?? (out.id.startsWith("yt-") ? out.id.slice(3) : null)
     if (vid && !next.fallback) {
@@ -85,7 +85,7 @@ export function repairTrack(t: Track): Track {
 }
 
 // Strip heavy fields that don't need persisting (Audius descriptions/bios
-// are unbounded) — keeps storage small so quota lasts.
+// are unbounded) - keeps storage small so quota lasts.
 export function slimTrack(t: Track): Track {
   return {
     ...t,
@@ -94,7 +94,7 @@ export function slimTrack(t: Track): Track {
   }
 }
 
-// Slim a User for persistence — same idea as slimTrack: bios and cover
+// Slim a User for persistence - same idea as slimTrack: bios and cover
 // photos are unbounded fields we don't need on disk.
 export function slimUser(u: User): User {
   return { ...u, bio: null, cover_photo: null }

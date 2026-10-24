@@ -39,7 +39,7 @@ export function PlayerBar() {
 
   const liked = useLibrary((s) => (current ? Boolean(s.liked[current.id]) : false))
   const toggleLike = useLibrary((s) => s.toggleLike)
-  // pulse only when the user actually likes — a track change to an
+  // pulse only when the user actually likes - a track change to an
   // already-liked song shouldn't replay the burst every time
   const [pop, setPop] = useState(0)
 
@@ -91,7 +91,7 @@ export function PlayerBar() {
                       {current.user.name}
                     </Link>
                   ) : (
-                    // fake owner ids (yt-va / yt-) have no artist page —
+                    // fake owner ids (yt-va / yt-) have no artist page -
                     // a link would navigate to a broken view
                     <span className="block truncate text-xs text-dim">{current.user.name}</span>
                   )}
@@ -178,7 +178,7 @@ export function PlayerBar() {
             {repeat === "one" ? <Repeat1 size={16} /> : <Repeat size={16} />}
           </CtlBtn>
         </div>
-        {/* SeekBar subscribes to currentTime itself — the ~4Hz tick used to
+        {/* SeekBar subscribes to currentTime itself - the ~4Hz tick used to
             re-render this whole footer (and its layoutId'd artwork) */}
         <SeekBar />
       </div>
@@ -197,7 +197,7 @@ export function PlayerBar() {
         <button onClick={toggleMute} aria-label={muted ? t("player.unmute") : t("player.mute")} aria-pressed={muted} className="text-dim transition hover:text-ink">
           <VolumeIcon size={18} />
         </button>
-        {/* value stays the real volume while muted — keyboard arrows then
+        {/* value stays the real volume while muted - keyboard arrows then
             resume from the user's volume (not 0), matching the global
             ArrowUp/Down shortcut behavior */}
         <Slider

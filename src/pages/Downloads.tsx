@@ -18,7 +18,7 @@ export function DownloadsPage() {
   const playContext = usePlayer((s) => s.playContext)
   const canDl = Boolean(window.freebify?.dl)
 
-  // newest first — the manifest returns insertion order, not recency
+  // newest first - the manifest returns insertion order, not recency
   const tracks = useMemo(
     () =>
       Object.values(items)
@@ -37,7 +37,7 @@ export function DownloadsPage() {
 
   return (
     <div className="-mt-12 pb-10">
-      {/* compact section header — a storage view, not a playlist cover */}
+      {/* compact section header - a storage view, not a playlist cover */}
       <div className="flex items-center justify-between gap-4 px-6 pb-6 pt-20">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
           <p className="text-xs font-semibold text-faint">{tt("downloads.kicker")}</p>
@@ -75,7 +75,7 @@ export function DownloadsPage() {
                   <p className="truncate text-sm font-medium">{track?.title ?? id}</p>
                   <p className="truncate text-xs text-dim">{track?.user?.name}</p>
                 </div>
-                {/* thin progress line under the row content is overkill —
+                {/* thin progress line under the row content is overkill -
                     a pill + percent reads cleaner and matches the table */}
                 {isQueued ? (
                   <span className="rounded-full border border-line px-2.5 py-0.5 text-[10px] font-semibold text-faint">

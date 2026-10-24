@@ -58,7 +58,7 @@ const capsOf = (vid) => {
 const SONGS = JSON.parse(fs.readFileSync("lyrics-songs.json", "utf8"))
 const results = []
 for (const s of SONGS) {
-  console.log(`\n=== ${s.artist} — ${s.title} (${s.vid}, ${s.dur}s) ===`)
+  console.log(`\n=== ${s.artist} - ${s.title} (${s.vid}, ${s.dur}s) ===`)
   const logLen = fs.existsSync(LOG) ? fs.statSync(LOG).size : 0
   await ev(`window.__player.getState().playTrack(${JSON.stringify(s.track)})`)
   await sleep(2500)
@@ -103,7 +103,7 @@ for (const s of SONGS) {
     errs.sort((a, b) => a - b)
     err = errs.length ? { n: errs.length, med: errs[Math.floor(errs.length / 2)], p90: errs[Math.floor(errs.length * 0.9)] } : null
   }
-  const res = { song: `${s.artist} — ${s.title}`, vid: s.vid, walkDone, lines: samples[0]?.n ?? 0, samples: samples.length, litSamples: samples.filter((x) => x.lit >= 0).length, captionCues: caps?.length ?? 0, err }
+  const res = { song: `${s.artist} - ${s.title}`, vid: s.vid, walkDone, lines: samples[0]?.n ?? 0, samples: samples.length, litSamples: samples.filter((x) => x.lit >= 0).length, captionCues: caps?.length ?? 0, err }
   results.push(res)
   console.log("  RESULT:", JSON.stringify(res))
 }

@@ -3,7 +3,7 @@ import { t } from "../i18n"
 
 interface Props {
   children: ReactNode
-  /** optional key — change it to reset the boundary after a retry */
+  /** optional key - change it to reset the boundary after a retry */
   resetKey?: string
 }
 
@@ -44,7 +44,7 @@ export class ErrorBoundary extends Component<Props, State> {
             onClick={() => {
               this.setState({ crashed: false })
               // HashRouter reads the hash; dev BrowserRouter would just
-              // reload the same crashing path — send it home instead
+              // reload the same crashing path - send it home instead
               if (window.location.protocol === "file:") {
                 window.location.hash = "#/"
                 window.location.reload()

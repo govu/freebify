@@ -1,5 +1,5 @@
 export default {
-  "error.body": "This view crashed. Your music and playlists are safe — try again.",
+  "error.body": "This view crashed. Your music and playlists are safe. Try again.",
   "error.reload": "Reload Freebify",
   "error.title": "Something went wrong",
   "np.accuracyNote": "Lyrics may not be accurate for some songs",
@@ -31,8 +31,8 @@ export default {
   "rewind.close": "Close rewind",
   "rewind.durHm": "{h}h {m}m",
   "rewind.durM": "{m}m",
-  "rewind.introLine": "A month of yours — every play, counted on this device.",
-  "rewind.introLinePartial": "Your month so far — every play, counted on this device.",
+  "rewind.introLine": "A month of yours: every play, counted on this device.",
+  "rewind.introLinePartial": "Your month so far: every play, counted on this device.",
   "rewind.introTag": "Freebify · monthly",
   "rewind.introTagPartial": "Freebify · still counting",
   "rewind.keepListening": "Keep listening",
@@ -43,7 +43,7 @@ export default {
   "rewind.onRepeat": "on repeat",
   "rewind.playAgain": "Play it again",
   "rewind.playTop": "Play your top tracks",
-  "rewind.playsAcross": "{time} — {plays} plays across {tracks} tracks",
+  "rewind.playsAcross": "{time} · {plays} plays across {tracks} tracks",
   "rewind.prev": "Previous",
   "rewind.prevSlide": "Previous slide",
 

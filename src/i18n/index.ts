@@ -41,19 +41,19 @@ const applyHtmlLang = (l: Lang) => {
 applyHtmlLang(useI18n.getState().lang)
 useI18n.subscribe((s) => applyHtmlLang(s.lang))
 
-// locale for Intl/toLocale* calls — follows the app language, not the OS
+// locale for Intl/toLocale* calls - follows the app language, not the OS
 export const dateLocale = () => (useI18n.getState().lang === "es" ? "es-ES" : "en-US")
 
 const interpolate = (s: string, vars?: Record<string, string | number>) =>
   vars ? s.replace(/\{(\w+)\}/g, (m, k) => (vars[k] != null ? String(vars[k]) : m)) : s
 
-// non-reactive lookup — toasts, event handlers, anything outside render
+// non-reactive lookup - toasts, event handlers, anything outside render
 export const t = (key: string, vars?: Record<string, string | number>) => {
   const lang = useI18n.getState().lang
   return interpolate(LOCALES[lang][key] ?? en[key] ?? key, vars)
 }
 
-// reactive hook — consumers re-render when the language switches
+// reactive hook - consumers re-render when the language switches
 export function useT() {
   const lang = useI18n((s) => s.lang)
   return (key: string, vars?: Record<string, string | number>) =>

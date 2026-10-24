@@ -7,7 +7,7 @@ import { Slider } from "./Slider"
 
 const BAND_LABELS = ["60", "250", "500", "1K", "4K", "8K", "14K"]
 
-// keys are locale keys (eq.preset.<id>), not display names — chips and the
+// keys are locale keys (eq.preset.<id>), not display names - chips and the
 // readout translate through useT
 const PRESETS: Record<string, number[]> = {
   flat: [0, 0, 0, 0, 0, 0, 0],
@@ -36,12 +36,12 @@ export function EqPopover() {
   const setSleepTimer = usePlayer((s) => s.setSleepTimer)
   const queueOpen = usePlayer((s) => s.queueOpen)
   const [readout, setReadout] = useState<number | null>(null)
-  // which preset armed the timer — sleepAt is a deadline, not a duration,
+  // which preset armed the timer - sleepAt is a deadline, not a duration,
   // so the picked chip would otherwise lose its highlight as time passes
   const [sleepMins, setSleepMins] = useState<number | null>(null)
   const [, force] = useState(0)
   // the queue owns the right 320px of the window whenever it's open (inline
-  // at lg+, overlay below it) — the popover must dodge it either way; clamped
+  // at lg+, overlay below it) - the popover must dodge it either way; clamped
   // so a very narrow window never pushes it off the LEFT edge instead
   const [vw, setVw] = useState(() => window.innerWidth)
   useEffect(() => {
@@ -60,7 +60,7 @@ export function EqPopover() {
     return () => window.removeEventListener("pointerdown", close)
   }, [open])
 
-  // re-render on a slow beat so the "in X min" readout counts down —
+  // re-render on a slow beat so the "in X min" readout counts down -
   // armed timers outlive the popover, so only tick while it's open
   useEffect(() => {
     if (!open || sleepAt === null) return
@@ -73,7 +73,7 @@ export function EqPopover() {
   const activePreset = Object.entries(PRESETS).find(([, p]) => p.every((v, i) => v === eq[i]))?.[0]
 
   return (
-    // flex kills the inline-baseline gap — a bare div wrapper would sit the
+    // flex kills the inline-baseline gap - a bare div wrapper would sit the
     // button on the text baseline and the icon rides visibly high next to
     // its sibling buttons
     <div ref={ref} className="relative flex items-center">
@@ -95,11 +95,11 @@ export function EqPopover() {
             exit={{ opacity: 0, y: 10, scale: 0.96 }}
             transition={{ type: "spring", stiffness: 460, damping: 34 }}
             // fixed (not absolute): anchored to the window so it can dodge
-            // the queue panel — absolute inside the bar would clip under it
+            // the queue panel - absolute inside the bar would clip under it
             style={{ transformOrigin: "bottom right", right: popRight }}
             className="fixed bottom-[96px] w-[324px] rounded-2xl border border-line bg-panel p-5 shadow-2xl shadow-black/70 transition-[right] duration-200"
           >
-            {/* header: title+reset on one row, preset chips wrap below —
+            {/* header: title+reset on one row, preset chips wrap below -
                 5 chips + the label don't fit one line at 324px (V-shape
                 used to overflow the panel's right edge) */}
             <div className="mb-4">
@@ -131,7 +131,7 @@ export function EqPopover() {
               </div>
             </div>
 
-            {/* vertical bands over a zero line — the classic EQ look */}
+            {/* vertical bands over a zero line - the classic EQ look */}
             <div className="relative mb-1 flex justify-between px-1" onPointerLeave={() => setReadout(null)}>
               <div className="pointer-events-none absolute inset-x-1 top-1/2 h-px bg-white/10" />
               {BAND_LABELS.map((label, i) => (
@@ -146,7 +146,7 @@ export function EqPopover() {
               ))}
             </div>
 
-            {/* live readout — the touched band gets a precise dB value */}
+            {/* live readout - the touched band gets a precise dB value */}
             <div className="mb-3 h-4 text-center text-[10px] tabular-nums text-faint">
               {readout !== null
                 ? `${BAND_LABELS[readout]} Hz · ${(eq[readout] ?? 0) > 0 ? "+" : ""}${(eq[readout] ?? 0).toFixed(1)} dB`
@@ -218,7 +218,7 @@ export function EqPopover() {
   )
 }
 
-// bipolar vertical fader — center is 0 dB, drag to ±12 in 0.5 steps
+// bipolar vertical fader - center is 0 dB, drag to ±12 in 0.5 steps
 function VBand({
   label,
   value,
@@ -242,7 +242,7 @@ function VBand({
     return Math.round((t * RANGE * 2 - RANGE) * 2) / 2
   }
 
-  // window-level listeners instead of setPointerCapture — pointer capture
+  // window-level listeners instead of setPointerCapture - pointer capture
   // drops move events on some macOS/Linux builds, freezing the fader mid-drag
   useEffect(() => {
     if (!drag) return
@@ -256,7 +256,7 @@ function VBand({
       window.removeEventListener("pointerup", up)
       window.removeEventListener("pointercancel", up)
     }
-  }, [drag]) // eslint-disable-line react-hooks/exhaustive-deps — fromY reads the rect fresh each event
+  }, [drag]) // eslint-disable-line react-hooks/exhaustive-deps - fromY reads the rect fresh each event
 
   return (
     <div className="flex w-8 flex-col items-center gap-1.5">
@@ -269,7 +269,7 @@ function VBand({
         aria-valuemax={RANGE}
         aria-valuenow={value}
         className="group relative h-24 w-8 cursor-pointer touch-none outline-none focus-visible:ring-1 focus-visible:ring-white/60"
-        // role=slider needs tab focus + arrow keys to be a real slider —
+        // role=slider needs tab focus + arrow keys to be a real slider -
         // without them the faders are mouse-only (a11y dead zone)
         tabIndex={0}
         onKeyDown={(e) => {

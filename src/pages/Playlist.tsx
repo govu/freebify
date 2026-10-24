@@ -27,7 +27,7 @@ function RemotePlaylistView({ id }: { id: string }) {
   const [tracks, setTracks] = useState<Track[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
-  // tracks fetch can fail independently of the playlist shell — "empty"
+  // tracks fetch can fail independently of the playlist shell - "empty"
   // would then be a lie (it isn't empty, it didn't load)
   const [tracksError, setTracksError] = useState(false)
   const [retry, setRetry] = useState(0)
@@ -53,7 +53,7 @@ function RemotePlaylistView({ id }: { id: string }) {
     void (async () => {
       if (id.startsWith("ytalb-") || id.startsWith("ytpl-")) {
         // an IPC rejection (reload mid-call, missing handler) would leave
-        // the page on skeletons forever — catch like the Artist page does
+        // the page on skeletons forever - catch like the Artist page does
         try {
           const res = id.startsWith("ytalb-")
             ? await yt.album(id.slice(6))
@@ -118,7 +118,7 @@ function RemotePlaylistView({ id }: { id: string }) {
         (t) => t.title.toLowerCase().includes(q) || t.user.name.toLowerCase().includes(q)
       )
     : tracks
-  // editorial playlists credit "YouTube Music" — yt-va/yt-/null owners are
+  // editorial playlists credit "YouTube Music" - yt-va/yt-/null owners are
   // fake ids that would route to a random artist search result
   const ownerLinkable = hasArtistPage(playlist.user)
 
@@ -134,7 +134,7 @@ function RemotePlaylistView({ id }: { id: string }) {
         <motion.div initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4 }}>
           {playlist.id.startsWith("ytpl-") ? (
             // editorial playlist covers ship with the YouTube Music logo
-            // baked into the artwork — collage the loaded tracks instead
+            // baked into the artwork - collage the loaded tracks instead
             // (the same treatment the cards get); albums keep real art
             <PlaylistCover
               tracks={tracks}

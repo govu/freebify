@@ -15,7 +15,7 @@ import { fmtCount } from "../utils/format"
 
 export function ArtistPage() {
   const { id } = useParams<{ id: string }>()
-  // ?n= carries the display name — dead channel ids (private/deleted/browse
+  // ?n= carries the display name - dead channel ids (private/deleted/browse
   // ids that merely LOOK like UC…) get a name-search rescue in the backend
   const nameHint = useSearchParams()[0].get("n") ?? undefined
   const [artist, setArtist] = useState<User | null>(null)
@@ -25,11 +25,11 @@ export function ArtistPage() {
   const [allTracks, setAllTracks] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
-  // track fetch fails independently — "hasn't uploaded tracks" is a lie
+  // track fetch fails independently - "hasn't uploaded tracks" is a lie
   // when the request simply didn't come back
   const [tracksError, setTracksError] = useState(false)
   const [retry, setRetry] = useState(0)
-  // a dead CDN cover URL shouldn't leave a broken-image hero — and the
+  // a dead CDN cover URL shouldn't leave a broken-image hero - and the
   // component isn't remounted between artists, so all image state must
   // reset when the route param changes (below, inside the effect)
   const [coverFailed, setCoverFailed] = useState(false)
@@ -75,7 +75,7 @@ export function ArtistPage() {
       const [u, t, a] = await Promise.allSettled([
         apiClient.user(id),
         apiClient.userTracks(id, 50),
-        // Audius albums/singles ship as playlist objects — same card surface
+        // Audius albums/singles ship as playlist objects - same card surface
         apiClient.userAlbums(id),
       ])
       if (!live) return
@@ -94,7 +94,7 @@ export function ArtistPage() {
   if (loading) {
     return (
       <div className="-mt-12">
-        {/* artist heroes are cover banners, not square art — cover={false}
+        {/* artist heroes are cover banners, not square art - cover={false}
             so the skeleton doesn't promise a layout that never arrives */}
         <HeroSkeleton cover={false} />
         <div className="px-6">
@@ -138,7 +138,7 @@ export function ArtistPage() {
     ),
   ]
   const avatar = avatars[Math.min(avatarIdx, avatars.length - 1)] ?? null
-  // ordered candidates — a dead googleusercontent token shouldn't kill the
+  // ordered candidates - a dead googleusercontent token shouldn't kill the
   // hero when another size of the same banner still serves
   const covers = [
     ...new Set(
@@ -238,7 +238,7 @@ export function ArtistPage() {
           </div>
         ) : tracks.length > 0 ? (
           <>
-            {/* the table caps at 15 rows — a 100-song list would bury the
+            {/* the table caps at 15 rows - a 100-song list would bury the
                 discography; context= keeps the play queue on the FULL list
                 so row clicks queue everything, not just the slice */}
             <TrackTable tracks={allTracks ? tracks : tracks.slice(0, 15)} context={tracks} />
@@ -279,7 +279,7 @@ export function ArtistPage() {
 
 // A transient CDN failure (googleusercontent rate-limits hot sessions with
 // 429s, flaky wifi, DNS hiccup) would mark the hero dead for the whole
-// mount — retry with fresh img elements before giving up to the fallback.
+// mount - retry with fresh img elements before giving up to the fallback.
 function HeroImg({
   src,
   onGiveUp,
@@ -311,7 +311,7 @@ function HeroImg({
           onGiveUp()
         }
       }}
-      // invisible until a successful decode — a retrying element would
+      // invisible until a successful decode - a retrying element would
       // otherwise flash the browser's broken-image glyph over the hero
       style={{ opacity: loaded ? 1 : 0 }}
       className={className}

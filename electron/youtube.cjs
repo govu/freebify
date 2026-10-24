@@ -6,7 +6,7 @@ const path = require("path")
 const fs = require("fs")
 const { app } = require("electron")
 
-// mirror of main.cjs logLine — same file so a grep reads the whole story
+// mirror of main.cjs logLine - same file so a grep reads the whole story
 function log(tag, msg) {
   try {
     const dir = path.join(app.getPath("userData"), "logs")
@@ -19,7 +19,7 @@ function log(tag, msg) {
 let execBin = null // set by ensureExecutable when the bundled path can't run
 function binPath() {
   if (execBin) return execBin
-  // unix builds ship the bare binary as "yt-dlp" — no .exe outside win32
+  // unix builds ship the bare binary as "yt-dlp" - no .exe outside win32
   const name = process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp"
   const rel = app?.isPackaged
     ? path.join(process.resourcesPath, "bin", name)
@@ -36,12 +36,12 @@ function ytdlpAvailable() {
 }
 
 // On macOS a downloaded .app carries com.apple.quarantine on EVERY bundled
-// file — Gatekeeper intercepts spawn() of the unsigned yt-dlp binary and
+// file - Gatekeeper intercepts spawn() of the unsigned yt-dlp binary and
 // kills it (EACCES/dialog), which reads as "no song ever plays". Strip the
 // attribute from the whole bundle once, re-assert the exec bit, and PROBE
 // the binary: if it still can't run (App Translocation mounts a read-only
 // path when launched straight from the dmg), copy it into the writable
-// userData dir — files we write and de-quarantine ourselves are ours.
+// userData dir - files we write and de-quarantine ourselves are ours.
 let dequarantineP = null
 function ensureExecutable() {
   if (process.platform === "win32" || !app?.isPackaged) return Promise.resolve()
@@ -52,7 +52,7 @@ function ensureExecutable() {
       const bundled = binPath()
       try {
         fs.chmodSync(bundled, 0o755)
-      } catch { /* read-only bundle — probe may still pass */ }
+      } catch { /* read-only bundle - probe may still pass */ }
       if (process.platform === "darwin") {
         const bundle = path.join(process.resourcesPath, "..", "..")
         // hung xattr would pend dequarantineP forever → every yt-dlp call
@@ -79,7 +79,7 @@ function ensureExecutable() {
         log("ytdlp", `exec fallback failed: ${e?.message ?? e}`)
       }
     })()
-    // a failed de-quarantine must not poison the session — transient
+    // a failed de-quarantine must not poison the session - transient
     // Gatekeeper/lock errors retry on the next call instead of caching
     // a dead bundled path forever
     dequarantineP.catch(() => null).then(() => {
@@ -96,7 +96,7 @@ function ensureExecutable() {
   return dequarantineP
 }
 
-// spawn (not execFile) so a caller can kill the process mid-flight — a lost
+// spawn (not execFile) so a caller can kill the process mid-flight - a lost
 // fast-host race or a stale lyrics probe must not burn a Python extractor to
 // completion for a result nobody reads
 function runYtdlp(args, timeout = 18000, signal) {
@@ -143,21 +143,21 @@ function runYtdlp(args, timeout = 18000, signal) {
 }
 
 // stream url cache: videoId -> { url, expiresAt }. googlevideo URLs live
-// ~6h, so we persist them to disk — a replay/resume after relaunch hits a
+// ~6h, so we persist them to disk - a replay/resume after relaunch hits a
 // still-valid URL and starts instantly instead of re-running yt-dlp.
 const streamCache = new Map()
 const inflight = new Map()
-// keys whose job actually started running (holds a dlp slot) — an on-demand
+// keys whose job actually started running (holds a dlp slot) - an on-demand
 // click may join a STARTED prefetch, but must never queue behind a waiting one
 const inflightStarted = new Set()
-// videoIds whose last served URL was invalidated as dead — if the fast
+// videoIds whose last served URL was invalidated as dead - if the fast
 // probes handed us an IP-bound URL once, don't let them poison the retry
 const probeBad = new Set()
 let cacheDirty = false
 
 const cacheFile = () => path.join(app.getPath("userData"), "stream-cache.json")
 
-// lazy load — module scope runs before app.setName("Freebify"), and getPath
+// lazy load - module scope runs before app.setName("Freebify"), and getPath
 // resolves the pre-rename dir there. First use is always post-ready.
 let cacheLoaded = false
 function loadStreamCache() {
@@ -171,7 +171,7 @@ function loadStreamCache() {
         if (v?.url && v.expiresAt > now + 60_000) streamCache.set(k, v)
       }
     }
-  } catch { /* first run / corrupt — start empty */ }
+  } catch { /* first run / corrupt - start empty */ }
 }
 
 function persistStreamCache() {
@@ -181,7 +181,7 @@ function persistStreamCache() {
     const tmp = cacheFile() + ".tmp"
     fs.writeFileSync(tmp, JSON.stringify(obj))
     fs.renameSync(tmp, cacheFile())
-    // only clear after the write lands — a failed rename with the flag
+    // only clear after the write lands - a failed rename with the flag
     // already reset would silently drop every entry since the last flush
     cacheDirty = false
   } catch { /* cache is best-effort */ }
@@ -191,7 +191,7 @@ app?.once?.("before-quit", persistStreamCache)
 
 // ---------- opportunistic third-party resolvers ----------
 // Public Piped/Invidious instances are flaky but when one answers it
-// returns a direct googlevideo URL in <1s — versus ~5s for yt-dlp. We race
+// returns a direct googlevideo URL in <1s - versus ~5s for yt-dlp. We race
 // them alongside yt-dlp on real playback clicks only: first non-null audio
 // URL wins. Zero cost when they're down (which is often).
 const FAST_HOSTS = [
@@ -202,14 +202,14 @@ const FAST_HOSTS = [
   { kind: "inv", base: "https://invidious.nerdvpn.de" },
 ]
 
-// accepts an optional parent signal — when the race resolves, losers are
+// accepts an optional parent signal - when the race resolves, losers are
 // aborted instead of burning bandwidth on requests nobody reads
 async function probeHost({ kind, base }, videoId, parentSignal) {
   const ctl = new AbortController()
   const timer = setTimeout(() => ctl.abort(), 6000)
   const onParentAbort = () => ctl.abort()
   parentSignal?.addEventListener("abort", onParentAbort, { once: true })
-  // an unreachable/erroring host is marked dead for a while — a video-level
+  // an unreachable/erroring host is marked dead for a while - a video-level
   // miss (200 but no audio streams) doesn't count against the host
   const markBad = () => hostBadUntil.set(base, Date.now() + HOST_BAD_TTL)
   try {
@@ -233,7 +233,7 @@ async function probeHost({ kind, base }, videoId, parentSignal) {
     const url = streams[0]?.url
     if (typeof url !== "string") return null
     // substring-matching googlevideo.com would admit evil.tld/googlevideo.com
-    // or googlevideo.com.evil.tld — the URL becomes <audio>.src AND lands in
+    // or googlevideo.com.evil.tld - the URL becomes <audio>.src AND lands in
     // the persisted cache, so it must be a real googlevideo host
     let host = null
     try {
@@ -271,17 +271,17 @@ function firstNonNull(promises) {
 // ---------- in-process stream resolution ----------
 // One HTTPS POST to /player with the VISIONOS client context (~300ms)
 // instead of a ~5s yt-dlp.exe spawn per track. VISIONOS is the client
-// yt-dlp itself lands on — it's the only one still serving direct
+// yt-dlp itself lands on - it's the only one still serving direct
 // adaptiveFormats urls to anonymous sessions; every other client went
 // SABR-only in 2025. Three details are load-bearing, all verified against
 // yt-dlp's own request shape:
-//   - clientVersion/osVersion/UA must be CURRENT — stale values get
+//   - clientVersion/osVersion/UA must be CURRENT - stale values get
 //     playabilityStatus LOGIN_REQUIRED on licensed music while harmless
 //     videos still pass (verified empirically, per-video gating)
 //   - the User-Agent HEADER must match the context (field alone →
 //     "Video unavailable")
 //   - playbackContext.contentPlaybackContext.signatureTimestamp must be a
-//     REAL sts from the current player — without it, music returns
+//     REAL sts from the current player - without it, music returns
 //     LOGIN_REQUIRED. It's embedded as "STS" in every page's ytcfg, so one
 //     homepage fetch per session provides both sts and visitorData.
 const VISIONOS_CTX = {
@@ -385,7 +385,7 @@ async function visionosResolve(videoId) {
       if (!url) return null
       const host = new URL(url).hostname
       if (host !== "googlevideo.com" && !host.endsWith(".googlevideo.com")) return null
-      // 1-byte range probe — a bot-guarded/throttled URL answers 403 here,
+      // 1-byte range probe - a bot-guarded/throttled URL answers 403 here,
       // cheap proof before the URL lands in <audio> and the persisted cache
       const probe = await fetch(url, { headers: { Range: "bytes=0-0" }, signal: ctl.signal })
       return probe.status === 200 || probe.status === 206 ? url : null
@@ -399,13 +399,13 @@ async function visionosResolve(videoId) {
 }
 
 // on-demand resolves that exhausted the whole chain get a short negative
-// TTL — otherwise every retry (yt:invalidate, failAdvance, hover re-entry)
+// TTL - otherwise every retry (yt:invalidate, failAdvance, hover re-entry)
 // re-runs the full resolve for a video that simply can't play
 const resolveFailAt = new Map() // videoId -> ts
 const RESOLVE_FAIL_TTL = 3 * 60 * 1000
 const RESOLVE_FAIL_CAP = 200
 
-// dead fast hosts remember for 15min — otherwise every cold resolve burns
+// dead fast hosts remember for 15min - otherwise every cold resolve burns
 // 5 TLS handshakes on public instances that are down ~always
 const hostBadUntil = new Map() // base -> ts
 const HOST_BAD_TTL = 15 * 60 * 1000
@@ -413,7 +413,7 @@ const HOST_BAD_TTL = 15 * 60 * 1000
 // Cap concurrent yt-dlp.exe spawns with a two-tier semaphore: prefetches
 // (hover/visibility warm-up) may hold at most 2 slots, while real playback
 // clicks always have ≥3 free slots and jump ahead of queued prefetches.
-// A mouse sweep over a track table can fire dozens of prefetches — without
+// A mouse sweep over a track table can fire dozens of prefetches - without
 // this they'd starve the resolve that actually matters.
 let activeDlp = 0
 let activePrefetch = 0
@@ -433,7 +433,7 @@ function pumpDlp() {
       if (q.prefetch) activePrefetch--
       pumpDlp()
     }
-    // armor against a synchronous throw inside job() — the slot is already
+    // armor against a synchronous throw inside job() - the slot is already
     // claimed at this point, so a sync throw would leak it permanently
     void Promise.resolve()
       .then(q.job)
@@ -448,7 +448,7 @@ function withDlpSlot(job, prefetch) {
     const entry = { prefetch, drop: () => resolve(null), job: () => job().then(resolve, reject) }
     if (prefetch) {
       // a mouse sweep across a table can queue dozens of prefetches for
-      // tracks never played — keep only the freshest handful, oldest first
+      // tracks never played - keep only the freshest handful, oldest first
       while (dlpQueue.filter((q) => q.prefetch).length >= MAX_QUEUED_PREFETCH) {
         const i = dlpQueue.findIndex((q) => q.prefetch)
         if (i === -1) break
@@ -465,7 +465,7 @@ function withDlpSlot(job, prefetch) {
   })
 }
 
-// sweep expired + cap growth — the cache would otherwise grow for the
+// sweep expired + cap growth - the cache would otherwise grow for the
 // process lifetime (radio autoplay can resolve hundreds of urls a day)
 const STREAM_CACHE_CAP = 600
 setInterval(() => {
@@ -483,16 +483,16 @@ async function resolveStreamUrl(videoId, prefetch = false) {
   loadStreamCache()
   const hit = streamCache.get(videoId)
   if (hit && hit.expiresAt > Date.now() + 60_000) return hit.url
-  // short negative TTL — a track that just exhausted every resolver
+  // short negative TTL - a track that just exhausted every resolver
   // shouldn't re-run the whole chain on each retry
   if (!prefetch && Date.now() - (resolveFailAt.get(videoId) ?? 0) < RESOLVE_FAIL_TTL) return null
   const key = prefetch ? `${videoId}:lo` : videoId
   if (inflight.has(key)) return inflight.get(key)
-  // a live on-demand resolve already covers this prefetch — and a prefetch
+  // a live on-demand resolve already covers this prefetch - and a prefetch
   // must never steal a slot an actual click needs, so it gets its own key
   if (prefetch && inflight.has(videoId)) return inflight.get(videoId)
   // a click landing mid-prefetch joins the already-running job instead of
-  // spawning a second yt-dlp — but only once it's started; joining a queued
+  // spawning a second yt-dlp - but only once it's started; joining a queued
   // prefetch would wait behind MAX_PREFETCH
   const loKey = `${videoId}:lo`
   if (!prefetch && inflight.has(loKey) && inflightStarted.has(loKey)) return inflight.get(loKey)
@@ -500,7 +500,7 @@ async function resolveStreamUrl(videoId, prefetch = false) {
   const job = (async () => {
     try {
       // the optional signal kills the spawn the moment a fast host wins the
-      // race — without it every lucky <1s probe still left a full ~5s Python
+      // race - without it every lucky <1s probe still left a full ~5s Python
       // extraction running to completion in the background
       const dlpResolve = (signal) =>
         withDlpSlot(
@@ -512,7 +512,7 @@ async function resolveStreamUrl(videoId, prefetch = false) {
               "-g",
               "--no-playlist",
               "--no-warnings",
-              // skips a HEAD probe per track — a dead URL is caught by the
+              // skips a HEAD probe per track - a dead URL is caught by the
               // <audio> error path anyway, and the iframe still backs it up
               "--no-check-formats",
               "--socket-timeout", "10",
@@ -527,7 +527,7 @@ async function resolveStreamUrl(videoId, prefetch = false) {
           return url.startsWith("http") ? url : null
         })
 
-      // in-process first — a ~300ms /player POST replaces the whole spawn.
+      // in-process first - a ~300ms /player POST replaces the whole spawn.
       // Prefetches stop here: they must stay free, so a VISIONOS miss just
       // leaves the cache cold and the real click runs the full chain.
       // On-demand clicks then race the healthy fast hosts against yt-dlp;
@@ -579,10 +579,10 @@ async function resolveStreamUrl(videoId, prefetch = false) {
 
 // ---------- Innertube (metadata) ----------
 let ytPromise = null
-let ParserRef = null // captured from the same module import — lets us parse
+let ParserRef = null // captured from the same module import - lets us parse
                      // arbitrary /browse pages (charts, moods, new releases)
                      // that the Music client has no method for
-// consecutive request failures — a session created with generate_session_
+// consecutive request failures - a session created with generate_session_
 // locally can go stale mid-run (visitor-data expiry, flagging). Without a
 // reset every metadata call fails until the app restarts.
 let ytFails = 0
@@ -598,7 +598,7 @@ function ytOk() {
 }
 function getYt() {
   if (!ytPromise) {
-    // Innertube.create has no internal timeout — a dead-but-silent network
+    // Innertube.create has no internal timeout - a dead-but-silent network
     // would leave it pending forever and every getYt() would return that
     // same never-settling promise (metadata dead for the whole session).
     // The race frees ytPromise so the next call retries cleanly.
@@ -607,7 +607,7 @@ function getYt() {
         ParserRef = Parser
         return Innertube.create({
           generate_session_locally: true,
-          // we never decipher streams here (yt-dlp does that) — skipping the
+          // we never decipher streams here (yt-dlp does that) - skipping the
           // remote player fetch makes init faster and removes a failure mode
           retrieve_player: false,
         })
@@ -616,7 +616,7 @@ function getYt() {
         setTimeout(() => reject(new Error("innertube init timeout")), 15000)
       ),
     ]).catch(() => {
-      // don't cache the failure — a launch-while-offline should recover
+      // don't cache the failure - a launch-while-offline should recover
       // on the next call instead of disabling YouTube for the session
       ytPromise = null
       return null
@@ -644,18 +644,18 @@ const thumbList = (item) =>
   (Array.isArray(item.thumbnail) ? item.thumbnail : item.thumbnail?.contents) ??
   []
 const cleanThumb = (url) =>
-  // i.ytimg thumbs carry signed context params (?sqp=…&rs=…) — those
+  // i.ytimg thumbs carry signed context params (?sqp=…&rs=…) - those
   // signatures can expire and take a persisted artwork URL with them.
   // The bare path always serves the image.
   url ? url.replace(/(ytimg\.com\/[^?]+)\?.*$/, "$1") : null
 const thumbAt = (item) => {
   const thumbs = thumbList(item)
-  // pick by declared width — ytimg lists ascend small→large but
+  // pick by declared width - ytimg lists ascend small→large but
   // googleusercontent artist thumbs descend (last = a 60px sliver)
   const best = [...thumbs].sort((a, b) => (b?.width ?? 0) - (a?.width ?? 0))[0]
   return cleanThumb(best?.url ?? thumbs[thumbs.length - 1]?.url ?? thumbs[0]?.url ?? null)
 }
-// smallest thumb ≥150px — lists render this key at ~40px and were
+// smallest thumb ≥150px - lists render this key at ~40px and were
 // downloading/decoding 1200px bitmaps per row
 const smallThumb = (item) => {
   const thumbs = thumbList(item)
@@ -666,7 +666,7 @@ const smallThumb = (item) => {
 const bigThumb = (url) =>
   url ? url.replace(/=w\d+-h\d+[^,]*/, "=w544-h544-l90-rj") : null
 
-// same transform for an arbitrary size — used where only a URL is in scope
+// same transform for an arbitrary size - used where only a URL is in scope
 const urlThumb = (url, size) =>
   url ? url.replace(/=w\d+-h\d+[^,]*/, `=w${size}-h${size}-l90-rj`) : null
 
@@ -677,7 +677,7 @@ const text = (v) => {
   if (typeof v.text === "string") return v.text
   if (typeof v.content === "string") return v.content
   if (Array.isArray(v.runs)) return v.runs.map((r) => text(r)).join("")
-  // anything else would stringify to "[object Object]" — return empty
+  // anything else would stringify to "[object Object]" - return empty
   return ""
 }
 
@@ -697,9 +697,9 @@ function artistFromSubtitle(sub) {
   return parts[0] ?? ""
 }
 
-// item_type can be album/artist/playlist/podcast_show — those carry a
+// item_type can be album/artist/playlist/podcast_show - those carry a
 // browseId (MPREb…, UC…, VL…) in `id`, NOT a videoId. Real videoIds are
-// ALWAYS exactly 11 chars; browse ids are longer — length is the reliable
+// ALWAYS exactly 11 chars; browse ids are longer - length is the reliable
 // discriminator (a prefix regex would reject the ~0.2% of songs whose
 // videoId legitimately starts RD/PL/UC…)
 
@@ -722,7 +722,7 @@ function mapSong(item) {
     const runs = (item.flex_columns ?? [])
       .slice(1)
       .flatMap((c) => c?.title?.runs ?? [])
-    // artist runs carry channel browseIds (UC/MPLA/FE) — accepting ANY
+    // artist runs carry channel browseIds (UC/MPLA/FE) - accepting ANY
     // browse run would bind the album's MPRE… or playlist's VL… id as the
     // artist and make the artist link a guaranteed dead end
     const artistRun = runs.find((r) => /^(UC|MPLA|FE)/.test(r.endpoint?.payload?.browseId ?? ""))
@@ -736,7 +736,7 @@ function mapSong(item) {
         runs.find((r) => /views|plays|reproducciones|reproducci|vistas/i.test(r.text ?? ""))?.text
       ) ??
       // some lists carry the count as a bare compact number ("1.1B")
-      // with no word — never matches durations (3:14) or years (2020)
+      // with no word - never matches durations (3:14) or years (2020)
       parseCount(runs.find((r) => /^\d[\d.,]*\s*[KMB]$/i.test((r.text ?? "").trim()))?.text)
   }
 
@@ -752,7 +752,7 @@ function mapSong(item) {
     source: "yt",
     streamId: videoId,
     title,
-    // lyric-detection upstream must see the RAW uploader title — "(lyric
+    // lyric-detection upstream must see the RAW uploader title - "(lyric
     // video)" gets stripped above for display but marks a stripped-intro
     // upload that must never vote in offset measurement
     origTitle: rawTitle,
@@ -767,7 +767,7 @@ function mapSong(item) {
           "150x150": smallThumb(item) ?? thumb,
           "480x480": bigThumb(thumb) ?? thumb,
           "1000x1000": bigThumb(thumb) ?? thumb,
-          // separate CDN budget — survives googleusercontent throttling
+          // separate CDN budget - survives googleusercontent throttling
           fallback: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
         }
       : null,
@@ -811,7 +811,7 @@ function audienceFrom(item) {
   return parseCount(seg) ?? 0
 }
 
-// real verification badge — never hardcode it; search artist items and
+// real verification badge - never hardcode it; search artist items and
 // artist page headers carry MusicInlineBadge nodes with the checkmark
 function hasVerifiedBadge(item) {
   for (const b of collect(item, ["MusicInlineBadge"])) {
@@ -827,7 +827,7 @@ function hasVerifiedBadge(item) {
 function mapArtist(item) {
   const channelId = item.id ?? item.endpoint?.payload?.browseId
   // a song/album row sneaking into artist results hands us a videoId or
-  // MPRE… — clicking it routes a junk id/name into yt:artist → null page
+  // MPRE… - clicking it routes a junk id/name into yt:artist → null page
   if (typeof channelId !== "string" || !/^(UC|MPLA|FE)/.test(channelId)) return null
   const name = text(item.title) || text(item.name) || "Artist"
   const thumb = thumbAt(item)
@@ -847,8 +847,8 @@ function mapArtist(item) {
 }
 
 // Raw musicTwoRowItemRenderer → same Playlist shape as mapAlbum. The
-// artist discography browse (MPAD…) returns unparsed JSON — the Parser
-// leaves it inside Memo nodes — so the raw renderer is mapped directly.
+// artist discography browse (MPAD…) returns unparsed JSON - the Parser
+// leaves it inside Memo nodes - so the raw renderer is mapped directly.
 // kind comes from the subtitle ("Single • 2023" / "EP • 2021" vs "Album").
 function mapRawAlbumRow(r, artistName) {
   const browseId = r?.navigationEndpoint?.browseEndpoint?.browseId
@@ -887,11 +887,11 @@ function mapAlbum(item) {
   if (!browseId) return null
   const name = text(item.title) || "Album"
   const thumb = thumbAt(item)
-  // subtitle is "Album • Artist" — pull the artist part (and its channel
+  // subtitle is "Album • Artist" - pull the artist part (and its channel
   // id when the run carries a browse endpoint) instead of the whole string
   const sub = text(item.subtitle)
   // v18 album rows set `item.author = {name, channel_id}` instead of
-  // artists/subtitle runs — without it every album card is "Various Artists"
+  // artists/subtitle runs - without it every album card is "Various Artists"
   const candidates = item.artists ?? item.subtitle?.runs ?? (item.author ? [item.author] : [])
   const artistRun = candidates.find?.((r) => r?.endpoint?.payload?.browseId ?? r?.channel_id) ?? candidates[0]
   const artistName =
@@ -929,10 +929,10 @@ const songsOf = (res) =>
 // PlaylistPanelVideo items (from getUpNext / radio autoplay)
 function mapPanelVideo(item) {
   const videoId = item.video_id ?? item.id ?? item.endpoint?.payload?.videoId
-  // videoIds are exactly 11 chars — anything else (a browseId leaking
+  // videoIds are exactly 11 chars - anything else (a browseId leaking
   // through) resolves to a guaranteed stream failure downstream
   if (typeof videoId !== "string" || !/^[\w-]{11}$/.test(videoId)) return null
-  // PlaylistPanelVideo stores the byline as the plain-string `author` —
+  // PlaylistPanelVideo stores the byline as the plain-string `author` -
   // the short/long_byline fields don't exist on this class
   const runs = item.artists ?? []
   const artistRun = runs.find((r) => r.endpoint?.payload?.browseId) ?? runs[0]
@@ -943,7 +943,7 @@ function mapPanelVideo(item) {
     parseDuration(text(item.duration)) ??
     parseDuration(text(item.length_text?.text ?? item.length_text)) ??
     0
-  // panel thumbs are 4:3 i.ytimg URLs — derive stable sizes from the videoId
+  // panel thumbs are 4:3 i.ytimg URLs - derive stable sizes from the videoId
   const vi = `https://i.ytimg.com/vi/${videoId}`
   const rawTitle = text(item.title?.text ?? item.title) || "Untitled"
   const title = rawTitle.replace(
@@ -978,7 +978,7 @@ function mapPanelVideo(item) {
       profile_picture: null,
       cover_photo: null,
     },
-    // the panel class carries {id, name, year} — free album data
+    // the panel class carries {id, name, year} - free album data
     album: item.album ? { id: item.album.id, name: text(item.album.name) } : null,
   }
 }
@@ -989,7 +989,7 @@ function mapYPlaylist(item) {
     item.id ??
     item.endpoint?.payload?.browseId ??
     item.navigation_endpoint?.browse_endpoint?.browse_id
-  // OLAK release ids DO resolve — but as VL playlists (getPlaylist
+  // OLAK release ids DO resolve - but as VL playlists (getPlaylist
   // auto-prepends VL → VLOLAK…), not via getAlbum (which wants MPR*).
   // Route them through the playlist path, keep the "Album" label.
   if (!browseId || !/^(VL|PL|RD|OLAK|MPRE)/.test(browseId)) return null
@@ -1014,7 +1014,7 @@ function mapYPlaylist(item) {
       : `https://music.youtube.com/playlist?list=${browseId}`,
     user: {
       id: "yt-va",
-      // "YouTube Music" is the literal curator credit — but the user doesn't
+      // "YouTube Music" is the literal curator credit - but the user doesn't
       // want the brand stamped under every card; "Editorial" reads cleaner
       name: (owner.replace(/^playlist\s*•?\s*/i, "").split("•")[0].trim() || "Editorial").replace(
         /^YouTube Music$/i,
@@ -1043,7 +1043,7 @@ async function search(query) {
   if (songs.status === "rejected" && artists.status === "rejected" && albums.status === "rejected")
     ytFail(songs.reason)
   else ytOk()
-  // `?.` on value — a fulfilled-but-null search would TypeError and reject
+  // `?.` on value - a fulfilled-but-null search would TypeError and reject
   // the whole Promise.allSettled result, nuking sections that succeeded
   const content = (r) =>
     r.status === "fulfilled" ? (r.value?.contents ?? r.value?.results ?? r.value) : null
@@ -1060,7 +1060,7 @@ async function search(query) {
   }
 }
 
-// general YouTube search (videos, not the music catalog) — caption source
+// general YouTube search (videos, not the music catalog) - caption source
 // for lyrics alignment: fan lyric videos almost always carry ASR/manual
 // subs while official audio uploads often ship none at all
 async function videoSearch(query) {
@@ -1079,11 +1079,11 @@ async function videoSearch(query) {
     .slice(0, 10)
 }
 
-// Spotify embed scraping moved to spotify.cjs — its OAuth import path
+// Spotify embed scraping moved to spotify.cjs - its OAuth import path
 // wraps this same embed as fallback, and the read-only API fetches the
 // FULL track list paginated (the embed caps at 100)
 
-// last-resort imagery: any artist with songs has cover art — an artist page
+// last-resort imagery: any artist with songs has cover art - an artist page
 // should never render as a blank header just because YouTube ships no photos
 const trackArtwork = (tracks) =>
   tracks.find((t) => t?.artwork?.["480x480"] || t?.artwork?.["150x150"])?.artwork ?? null
@@ -1100,7 +1100,7 @@ const artToCover = (art) =>
 
 const headerArtList = (header) => {
   // immersive headers carry a bare thumbnails array; older layouts wrap it
-  // in MusicThumbnail nodes — cover both, dedup, biggest first
+  // in MusicThumbnail nodes - cover both, dedup, biggest first
   const direct = thumbList(header)
   const nodes = collect(header, ["MusicThumbnail"]).flatMap((n) =>
     Array.isArray(n.contents) ? n.contents : [n]
@@ -1115,7 +1115,7 @@ const headerArtList = (header) => {
 
 const headerArt = (header, minWidth = 0) => {
   const all = headerArtList(header)
-  // smallest thumb that still clears the bar — sorted desc so the last
+  // smallest thumb that still clears the bar - sorted desc so the last
   // qualifying entry is the tightest fit; fall back to the biggest
   const pick = [...all].reverse().find((t) => t.width >= minWidth) ?? all[0]
   return pick?.url ?? null
@@ -1125,7 +1125,7 @@ async function artist(channelIdOrName, nameHint) {
   const yt = await getYt()
   if (!yt) return null
   let id = channelIdOrName
-  // MPLA wraps the WHOLE channel id (MPLA + UCxxx = MPLAUCxxx) — strip the
+  // MPLA wraps the WHOLE channel id (MPLA + UCxxx = MPLAUCxxx) - strip the
   // prefix, don't re-add UC (UC${id.slice(4)} produced the invalid UCUCxxx)
   if (id?.startsWith("MPLA")) id = id.slice(4)
   const searchArtists = async (query) => {
@@ -1136,13 +1136,13 @@ async function artist(channelIdOrName, nameHint) {
   }
   let searchHit = null
   if (!id || !/^UC[\w-]{8,}/.test(id)) {
-    // resolve by name — the caller's display name beats the raw id token
+    // resolve by name - the caller's display name beats the raw id token
     const a = await searchArtists(nameHint ?? channelIdOrName)
     if (!a) return null
     searchHit = a
     id = a.streamId
   }
-  // nameHint rescue runs in PARALLEL with the channel fetch — a dead UC id
+  // nameHint rescue runs in PARALLEL with the channel fetch - a dead UC id
   // would otherwise burn most of the IPC timeout before the rescue started
   const hitP = !searchHit && nameHint ? searchArtists(nameHint).catch(() => null) : Promise.resolve(null)
   const degrade = async (hit) => {
@@ -1156,7 +1156,7 @@ async function artist(channelIdOrName, nameHint) {
       .filter((t) => t?.streamId)
       .slice(0, 30)
     // mapArtist can come back as bare "Artist" when the row's title lives in
-    // flex_columns — the caller's display name is the better label
+    // flex_columns - the caller's display name is the better label
     const art = trackArtwork(tracks)
     return {
       user: {
@@ -1175,14 +1175,14 @@ async function artist(channelIdOrName, nameHint) {
   if (!searchHit) searchHit = hit0
   log("artist", `'${channelIdOrName}' hint=${nameHint ?? "-"} → page ${page ? "y" : "n"}, hit ${searchHit?.name ?? "null"}`)
   if (page) {
-    // getArtist resolves "valid but empty" pages for garbage channel ids —
+    // getArtist resolves "valid but empty" pages for garbage channel ids -
     // no header name AND no shelves means the channel is a phantom; treat it
     // as dead so the nameHint rescue below can find the real artist
     const hdr = page.header?.contents ?? page.header ?? {}
     if (!text(hdr.title ?? hdr.name) && !collect(page, ["MusicShelf"]).length) page = null
   }
   if (!page) {
-    // channel-shaped but dead (private/deleted/bogus browseId) — the artist
+    // channel-shaped but dead (private/deleted/bogus browseId) - the artist
     // still exists; recover by name before giving up on them entirely
     if (!searchHit) return null
     // re-resolve: the search hit's real channel may load a full page
@@ -1208,7 +1208,7 @@ async function artist(channelIdOrName, nameHint) {
   const avatar = headerArt(header, 240)
 
   // The "Top songs" shelf links to a playlist with the full list; in parallel
-  // resolve the monthly audience AND the square avatar from artist search —
+  // resolve the monthly audience AND the square avatar from artist search -
   // the immersive header only carries wide banner crops, and a circle avatar
   // center-cropped from a banner usually beheads the face
   let tracks = []
@@ -1220,7 +1220,7 @@ async function artist(channelIdOrName, nameHint) {
     ])
       .map(mapArtist)
       .filter(Boolean)
-    // no `?? items[0]` — a shared/stylized name would attribute a
+    // no `?? items[0]` - a shared/stylized name would attribute a
     // DIFFERENT artist's audience to this page; wrong data beats no data
     return items.find((a) => a.streamId === id) ?? null
   })()
@@ -1248,7 +1248,7 @@ async function artist(channelIdOrName, nameHint) {
 
   // Full discography: the Albums/Singles carousels ship only ~10 rows, but
   // their more_content button carries an MPAD browseId. Calling the RAW
-  // browseId returns the complete release grid — the endpoint's own params
+  // browseId returns the complete release grid - the endpoint's own params
   // answer "No results". One browse covers both sections; subtitle text
   // splits singles from albums. Carousel rows merge after as a safety net.
   const discog = { albums: [], singles: [] }
@@ -1289,13 +1289,13 @@ async function artist(channelIdOrName, nameHint) {
     collect(shelf, ["MusicTwoRowItem"])
       .map(mapAlbum)
       .filter(Boolean)
-      // discography subtitles are "Album • year" — mapAlbum degrades to
+      // discography subtitles are "Album • year" - mapAlbum degrades to
       // "Various Artists" there; these are THIS artist's own releases
       .forEach((pl) => pushRel(bucket, { ...pl, user: { ...pl.user, name } }))
   }
 
   const self = await metaP
-  // square-crop any googleusercontent url — artist avatars are circles, and
+  // square-crop any googleusercontent url - artist avatars are circles, and
   // a 544 square pulled from a banner center beats a landscape sliver
   const sq = (u, s) => (u ? u.replace(/=w\d+-h\d+[^,]*/, `=w${s}-h${s}-l90-rj`) : null)
   const pic = self?.profile_picture ?? (avatar ?? banner
@@ -1312,7 +1312,7 @@ async function artist(channelIdOrName, nameHint) {
       track_count: tracks.length,
       profile_picture: pic,
       cover_photo: banner
-        ? // distinct fallbacks — one googleusercontent token can 404/429 while
+        ? // distinct fallbacks - one googleusercontent token can 404/429 while
           // another size of the same banner still works
           { "2000x": banner, "640x": bannerList.find((u) => u !== banner) ?? banner }
         : (pic ? { "640x": pic["480x480"], "2000x": pic["1000x1000"] } : null) ?? artToCover(trackArtwork(tracks)),
@@ -1322,7 +1322,7 @@ async function artist(channelIdOrName, nameHint) {
     singles: discog.singles,
   }
   } catch (e) {
-    // a malformed shelf/header shouldn't nuke a whole artist page — degrade
+    // a malformed shelf/header shouldn't nuke a whole artist page - degrade
     // to the search hit instead of "Artist not found"
     log("artist", `post-process failed for '${channelIdOrName}': ${e?.message ?? e}`)
     if (searchHit) return degrade(searchHit)
@@ -1383,7 +1383,7 @@ async function trending() {
   return []
 }
 
-// Autoplay radio — the "up next" recommendations YouTube Music generates
+// Autoplay radio - the "up next" recommendations YouTube Music generates
 // for a video. Powers continuous playback when the queue runs out.
 async function upNext(videoId) {
   const yt = await getYt()
@@ -1415,7 +1415,7 @@ async function homePlaylists() {
         if (out.length >= 14) return out
       }
     } catch (e) {
-      // session-level failures count toward rotation like the rest —
+      // session-level failures count toward rotation like the rest -
       // a catalog dying only on these paths used to never reset
       ytFail(e)
     }
@@ -1428,7 +1428,7 @@ async function playlist(browseId) {
   const yt = await getYt()
   if (!yt) return null
   // getPlaylist auto-prepends VL, so for "VLabc" candidates 1&2 were
-  // identical and for "PLabc" all three resolved to VLPLabc — a dead
+  // identical and for "PLabc" all three resolved to VLPLabc - a dead
   // playlist cost 3 sequential RTTs. Dedupe to ≤2 real candidates.
   const stripped = browseId.replace(/^VL/, "")
   const candidates = [...new Set([stripped, browseId])]
@@ -1440,7 +1440,7 @@ async function playlist(browseId) {
   if (!page) return null
   // the first page carries ~100 rows; walk the MusicPlaylistShelfContinuation
   // (Playlist.getContinuation re-wraps each batch) until the shelf ends so a
-  // 500-song playlist imports whole. Guards: page count and a sane row cap —
+  // 500-song playlist imports whole. Guards: page count and a sane row cap -
   // a malformed shelf must never loop forever
   const rows = songsOf(page)
   const seen = new Set(rows.map((t) => t.streamId))
@@ -1461,7 +1461,7 @@ async function playlist(browseId) {
   const tracks = rows
   const header = page.header?.contents ?? page.header ?? {}
   const name = text(header.title ?? header.name) || "Playlist"
-  // the playlist's own header art first — not the first track's cover
+  // the playlist's own header art first - not the first track's cover
   const thumb = headerArt(header) ?? thumbAt(item0(page))
   return {
     playlist: {
@@ -1495,7 +1495,7 @@ const item0 = (res) => collect(res, ["MusicResponsiveListItem"])[0]
 
 // ---------- generic /browse pages (charts, moods, new releases) ----------
 // The Music client has no methods for these, but they're regular browse
-// endpoints — fetch raw and run the response through the library's parser
+// endpoints - fetch raw and run the response through the library's parser
 // so the same node shapes (MusicShelf/TwoRowItem/ResponsiveListItem) appear.
 async function browsePage(browseId, params) {
   const yt = await getYt()
@@ -1530,7 +1530,7 @@ async function charts() {
   if (!yt || !page) return null
   const root = pageRoot(page)
 
-  // chart playlists — ordered, first VLPL is the songs chart for the region
+  // chart playlists - ordered, first VLPL is the songs chart for the region
   const plIds = []
   for (const ep of collect(root, ["NavigationEndpoint"])) {
     const bid = ep.payload?.browseId
@@ -1555,7 +1555,7 @@ async function charts() {
       /^UC[\w-]{8,}/.test(e.payload?.browseId ?? "")
     )
     if (!ep) continue
-    // chart shelf items are MusicResponsiveListItem — their getters return
+    // chart shelf items are MusicResponsiveListItem - their getters return
     // undefined; the real name/subscriber text lives in flex_columns
     const a = mapArtist({
       id: ep.payload.browseId,
@@ -1570,7 +1570,7 @@ async function charts() {
   return { tracks, artists }
 }
 
-// New albums & singles — the explore landing links to FEmusic_new_releases
+// New albums & singles - the explore landing links to FEmusic_new_releases
 async function newReleases() {
   const page = await browsePage("FEmusic_new_releases")
   if (!page) return []
@@ -1580,7 +1580,7 @@ async function newReleases() {
     .slice(0, 16)
 }
 
-// Mood/genre category directory — each MusicNavigationButton carries the
+// Mood/genre category directory - each MusicNavigationButton carries the
 // opaque `params` token that unlocks its category page
 async function moods() {
   const page = await browsePage("FEmusic_moods_and_genres")
@@ -1594,7 +1594,7 @@ async function moods() {
   return out
 }
 
-// A single mood category page — playlists + featured songs
+// A single mood category page - playlists + featured songs
 async function mood(params) {
   const page = await browsePage("FEmusic_moods_and_genres_category", params)
   if (!page) return null
@@ -1608,11 +1608,11 @@ async function mood(params) {
   return { name, playlists, tracks }
 }
 
-// Collage art for playlist cards — the editorial covers have the YouTube
+// Collage art for playlist cards - the editorial covers have the YouTube
 // Music logo baked in (ugly). The first 4 track artworks make a proper
-// Spotify-style collage instead. Cached — every card on Home asks for one.
+// Spotify-style collage instead. Cached - every card on Home asks for one.
 const plArtCache = new Map()
-// a full getPlaylist/getAlbum fetch per card just for 4 thumbs is heavy —
+// a full getPlaylist/getAlbum fetch per card just for 4 thumbs is heavy -
 // cap at 2 concurrent so a Home mount can't fire 30 Innertube parses at once
 let plArtActive = 0
 const plArtQueue = []
@@ -1629,7 +1629,7 @@ function pumpPlArt() {
   }
 }
 async function playlistArts(browseId) {
-  // cache stores the in-flight PROMISE too — cards mounting together share
+  // cache stores the in-flight PROMISE too - cards mounting together share
   // one fetch instead of N
   if (plArtCache.has(browseId)) return plArtCache.get(browseId)
   const p = new Promise((resolve) => {
@@ -1637,12 +1637,12 @@ async function playlistArts(browseId) {
       try {
         const yt = await getYt()
         if (!yt) return resolve([])
-        // MPRE ids are albums — getPlaylist would 404 them; getAlbum returns
+        // MPRE ids are albums - getPlaylist would 404 them; getAlbum returns
         // the same node tree with a track list under .items
         const req = browseId.startsWith("MPR")
           ? yt.music.getAlbum(browseId)
           : yt.music.getPlaylist(browseId)
-        // no timeout in youtubei.js — a silent network would pin a queue
+        // no timeout in youtubei.js - a silent network would pin a queue
         // slot forever; two such jobs would starve the whole collage queue
         const res = await Promise.race([
           req.catch((e) => (ytFail(e), null)),
@@ -1657,7 +1657,7 @@ async function playlistArts(browseId) {
             : [],
         )
       } catch {
-        // a throwing getter inside songsOf must never reject the job —
+        // a throwing getter inside songsOf must never reject the job -
         // the cached promise would never settle and the queue would stall
         resolve([])
       }
@@ -1671,10 +1671,10 @@ async function playlistArts(browseId) {
 
 // ---------- captions → synced lyrics ----------
 // Last-resort synced lyrics: the video's own caption tracks (manual subs on
-// lyric videos, otherwise ASR — which exists for nearly every music upload).
+// lyric videos, otherwise ASR - which exists for nearly every music upload).
 // `yt-dlp -J` exposes every caption format's URL without downloading media.
 
-// emit each cue's newest row only — rolling ASR windows repeat the previous
+// emit each cue's newest row only - rolling ASR windows repeat the previous
 // line as their first row, so last-row + dedupe reconstructs the lyric sheet
 function captionLines(body, ext) {
   const out = []
@@ -1695,14 +1695,14 @@ function captionLines(body, ext) {
           .map((r) => r.trim())
           .filter(Boolean)
         if (!rows.length) continue
-        // append events carry continuation words for the PREVIOUS cue —
+        // append events carry continuation words for the PREVIOUS cue -
         // as standalone lines they'd fragment the pool into false matches
         if (ev.aAppend && out.length) {
           out.at(-1).text = `${out.at(-1).text} ${rows.at(-1)}`
           continue
         }
         // rolling captions repeat the previous cue as the first row for
-        // context — drop it only when it really IS the previous line.
+        // context - drop it only when it really IS the previous line.
         // Stacked multi-row captions (common in manual subs) carry two
         // real sung lines; taking just the last halves every match.
         if (rows.length > 1 && out.length && out.at(-1).text === rows.at(-2)) {
@@ -1723,7 +1723,7 @@ function captionLines(body, ext) {
     }
     return out
   }
-  // vtt — inline <mm:ss.mmm> karaoke markers + <c> tags get stripped
+  // vtt - inline <mm:ss.mmm> karaoke markers + <c> tags get stripped
   const re = /(\d{2}):(\d{2}):(\d{2})[.,](\d{3})\s*-->[^\n]*\n([\s\S]*?)(?=\r?\n\s*\r?\n|$)/g
   while ((m = re.exec(body))) {
     const t = Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) + Number(m[4]) / 1000
@@ -1739,14 +1739,14 @@ function captionLines(body, ext) {
 const CAP_LANGS = ["es", "en", "pt", "it", "fr", "de"]
 function pickCaptionFmt(dict) {
   if (!dict || typeof dict !== "object") return null
-  // live_chat streams sit inside `subtitles` — they are chat replays, not
+  // live_chat streams sit inside `subtitles` - they are chat replays, not
   // a lyric transcript, and would poison every alignment check
   let keys = Object.keys(dict).filter(
     (k) => Array.isArray(dict[k]) && dict[k].length && !k.startsWith("live_chat")
   )
   if (!keys.length) return null
   // automatic_captions lists ~150 machine-TRANSLATED targets alongside the
-  // one real track — picking a CAP_LANGS member here hands back e.g. a
+  // one real track - picking a CAP_LANGS member here hands back e.g. a
   // Spanish translation of English audio, which then never matches the
   // lyrics. The "*-orig" key is the ASR of the actual audio: always first
   const orig = keys.filter((k) => k.endsWith("-orig"))
@@ -1758,7 +1758,7 @@ function pickCaptionFmt(dict) {
     }
     keys.sort((a, b) => rank(a) - rank(b))
   }
-  // walk languages in preference order — the top pick may only carry a
+  // walk languages in preference order - the top pick may only carry a
   // format we can't parse (ttml) while a lower one has json3/vtt
   for (const k of keys) {
     const fmts = dict[k]
@@ -1768,17 +1768,17 @@ function pickCaptionFmt(dict) {
   return null
 }
 
-// resolved results (null included — a video with no caption tracks shouldn't
+// resolved results (null included - a video with no caption tracks shouldn't
 // re-run a 5s yt-dlp -J every time the lyrics panel reopens)
 const capCache = new Map()
 const capInflight = new Map()
 // a FAILED caption download (429 PoToken wall, network blip) is not the
-// same as "this video has no captions" — it gets a short negative TTL so
+// same as "this video has no captions" - it gets a short negative TTL so
 // the next play retries instead of poisoning the track for the session
 const capFailAt = new Map()
 const CAP_FAIL_RETRY_MS = 4 * 60 * 1000
 // once youtube.com/api/timedtext answers 429 every timedtext URL on this
-// network will too — remember the block so the twin-walk stops spawning
+// network will too - remember the block so the twin-walk stops spawning
 // fetches that can only fail. manifest.googlevideo.com HLS caption
 // playlists live on the stream CDN (NOT throttled) and still get tried.
 let timedtextBlockedUntil = 0
@@ -1787,7 +1787,7 @@ const TIMEDTEXT_BLOCK_MS = 10 * 60 * 1000
 const capSleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const isManifestCap = (url) => /manifest\.googlevideo\.com|hls_timedtext/.test(url ?? "")
 
-// { body } on success, { status } on failure — caption content from either
+// { body } on success, { status } on failure - caption content from either
 // a timedtext URL or an HLS timedtext playlist (m3u8 of VTT segments)
 async function fetchCaptionBody(url) {
   if (isManifestCap(url)) {
@@ -1825,7 +1825,7 @@ async function captions(videoId) {
   if (failAt && Date.now() - failAt < CAP_FAIL_RETRY_MS) return null
   if (capInflight.has(videoId)) return capInflight.get(videoId)
   const job = (async () => {
-    // only cache once -J succeeds — a thrown yt-dlp/network error is
+    // only cache once -J succeeds - a thrown yt-dlp/network error is
     // transient and must retry next time, not stick as a false negative
     const done = (result) => {
       capCache.set(videoId, result)
@@ -1834,7 +1834,7 @@ async function captions(videoId) {
     }
     try {
       // -J is the heaviest yt-dlp call (full player response + subs manifest
-      // walk) — route it through the background lane so a lyrics twin-walk
+      // walk) - route it through the background lane so a lyrics twin-walk
       // can never stack Python processes over a real playback click
       const out = await withDlpSlot(
         () =>
@@ -1853,7 +1853,7 @@ async function captions(videoId) {
       const sub = pickCaptionFmt(info.subtitles)
       const asr = pickCaptionFmt(info.automatic_captions)
       // manual subs in a DIFFERENT language than the audio are translated
-      // subtitles — they'd fail every lyric-content check anyway; the
+      // subtitles - they'd fail every lyric-content check anyway; the
       // original-language ASR is the truthful transcript
       const origLang = Object.keys(info.automatic_captions ?? {})
         .find((k) => k.endsWith("-orig"))
@@ -1862,7 +1862,7 @@ async function captions(videoId) {
         sub && asr && origLang && !sub.lang.startsWith(origLang) ? asr : sub ?? asr
       // attempt order: the picked fmt first (timedtext gives word-timed
       // json3), then every manifest-hosted HLS caption playlist ordered by
-      // language affinity — googlevideo is the fallback path when
+      // language affinity - googlevideo is the fallback path when
       // timedtext is under the PoToken wall
       const attempts = []
       if (fmt?.url) attempts.push(fmt)
@@ -1875,7 +1875,7 @@ async function captions(videoId) {
           }
         }
       }
-      if (!attempts.length) return done(null) // genuinely zero tracks — cache for good
+      if (!attempts.length) return done(null) // genuinely zero tracks - cache for good
       const langRank = (a) =>
         a.lang === fmt?.lang ? 0
           : a.lang === origLang || a.lang === `${origLang}-orig` ? 1
@@ -1890,7 +1890,7 @@ async function captions(videoId) {
         }
         let r = await fetchCaptionBody(a.url).catch(() => ({ status: 0 }))
         if (!manifest && r.status === 429) {
-          // PoToken wall — one retry in case it's a transient blip, then
+          // PoToken wall - one retry in case it's a transient blip, then
           // stop trusting timedtext for a while
           timedtextBlockedUntil = Date.now() + TIMEDTEXT_BLOCK_MS
           await capSleep(1200)
@@ -1903,14 +1903,14 @@ async function captions(videoId) {
         const lines = captionLines(r.body, manifest ? "vtt" : a.ext)
         if (lines.length < 4) continue
         // wrong-language ASR (e.g. a Spanish song whose `en-orig` track
-        // hallucinates English) emits short noise fragments — flag the
+        // hallucinates English) emits short noise fragments - flag the
         // track so the renderer can refuse to let it VETO a good DB sheet
         const wordy = lines.filter(
           (l) => (String(l.text).toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).length >= 3
         ).length
         return done({ lines, wordy: lines.length ? wordy / lines.length : 0 })
       }
-      // every attempt failed — NOT the same as "no captions": short TTL,
+      // every attempt failed - NOT the same as "no captions": short TTL,
       // and a `blocked` flag so the renderer can stop burning twin probes
       // once the wall is confirmed (each probe is a yt-dlp -J spawn)
       capFailAt.set(videoId, Date.now())
@@ -1928,7 +1928,7 @@ async function captions(videoId) {
   return job
 }
 
-// minimal MP4 atom walker — enough to reach moov/trak/mdia and moof/traf/trun
+// minimal MP4 atom walker - enough to reach moov/trak/mdia and moof/traf/trun
 function mp4Children(buf, start, end) {
   const atoms = []
   let p = start
@@ -1949,7 +1949,7 @@ function mp4Children(buf, start, end) {
 }
 const mp4Find = (buf, box, type) => mp4Children(buf, box.off, box.end).find((a) => a.type === type)
 
-// media timescale from the head moov's mdhd — needed to turn trun frame
+// media timescale from the head moov's mdhd - needed to turn trun frame
 // counts into seconds. v0: verflags(4)+ctime(4)+mtime(4)+timescale(4);
 // v1 uses 8-byte times so timescale sits at +20
 function mp4Timescale(buf) {
@@ -1967,12 +1967,12 @@ function mp4Timescale(buf) {
   return 0
 }
 
-// scan a tail buffer for 'moof' signatures and parse EACH one's trun —
+// scan a tail buffer for 'moof' signatures and parse EACH one's trun -
 // every sample's byte size. Silent AAC frames compress to a few dozen
 // bytes vs hundreds for music, so the trailing run of tiny frames is the
 // dead-air tail. Signature hits are validated by structure (mfhd+traf
 // children whose sizes stay in bounds) so mdat content can't spoof one.
-// A ~400KB window holds 2-3 fragments (~25s) — walking them backwards
+// A ~400KB window holds 2-3 fragments (~25s) - walking them backwards
 // measures tails longer than one fragment.
 function tailTruns(buf) {
   const hits = []
@@ -2025,7 +2025,7 @@ function tailTruns(buf) {
 
 // fetch audio for waveform-boundary analysis: the head range feeds the
 // renderer's leading-dead-air decode, and a tail range feeds trun frame
-// sizes — the dead-air tail measurement needs no multi-MB download.
+// sizes - the dead-air tail measurement needs no multi-MB download.
 async function audioProbe(videoId) {
   const url = await resolveStreamUrl(videoId)
   if (!url) return null
@@ -2055,15 +2055,15 @@ async function audioProbe(videoId) {
   return { head, tail }
 }
 
-// Line-timed lyrics straight from YouTube Music — official LyricFind data
+// Line-timed lyrics straight from YouTube Music - official LyricFind data
 // bound to the exact videoId (no search heuristics, no wrong-song risk).
 // Two hops: /next resolves the lyrics tab's browseId, then /browse with an
-// ANDROID_MUSIC context returns timedLyricsData — the web client hides it.
+// ANDROID_MUSIC context returns timedLyricsData - the web client hides it.
 async function timedLyrics(videoId) {
   const yt = await getYt()
   if (!yt) return null
   try {
-    // raw responses have no .type — walk by key name instead of collect()
+    // raw responses have no .type - walk by key name instead of collect()
     const findKey = (o, key, out = []) => {
       if (!o || typeof o !== "object" || out.length > 50) return out
       if (o[key]) out.push(o[key])
@@ -2081,7 +2081,7 @@ async function timedLyrics(videoId) {
     }
     if (!browseId) return null
     // actions.execute can't forge an ANDROID_MUSIC context (client_name is
-    // rejected) — raw POST with the mobile client shape instead
+    // rejected) - raw POST with the mobile client shape instead
     const res = await fetch("https://music.youtube.com/youtubei/v1/browse?prettyPrint=false", {
       method: "POST",
       headers: {
@@ -2125,7 +2125,7 @@ async function lyrics(videoId) {
   }
 }
 
-// Search autocomplete — bolded prefix runs map to a plain suggestion list
+// Search autocomplete - bolded prefix runs map to a plain suggestion list
 async function suggestions(query) {
   const yt = await getYt()
   if (!yt) return []
@@ -2189,7 +2189,7 @@ async function qqLyrics(query) {
 }
 
 // ---- Musixmatch timed lyrics ----
-// The catalog Spotify itself displays — the anonymous client API
+// The catalog Spotify itself displays - the anonymous client API
 // (token.get needs no account since 2024) serves human-curated timed LRC
 // via track.subtitle.get. Single best-quality free source; the renderer's
 // gates still decide what to trust.
@@ -2219,7 +2219,7 @@ async function mxmLyrics(title, artist) {
       })
       const code = s?.message?.header?.status_code
       if (code === 401 || code === 419) {
-        mxmToken = null // expired guest token — one refresh, then bail
+        mxmToken = null // expired guest token - one refresh, then bail
         continue
       }
       const list = Array.isArray(s?.message?.body?.track_list) ? s.message.body.track_list : []
@@ -2254,7 +2254,7 @@ async function mxmLyrics(title, artist) {
 }
 
 // ---------- registration ----------
-// validate every argument crossing the IPC boundary — the renderer is our
+// validate every argument crossing the IPC boundary - the renderer is our
 // own code, but defense in depth is cheap here
 const VID = /^[\w-]{6,20}$/
 const BID = /^[\w-]{4,64}$/
@@ -2287,7 +2287,7 @@ function register(ipcMain) {
   // homepage fetch) so the first click skips the bootstrap round-trip
   ytSessionCreds().catch(() => {})
 
-  // no raw available() here — Innertube.create() has no timeout of its own
+  // no raw available() here - Innertube.create() has no timeout of its own
   // and on a dead-but-silent network the promise never settles, hanging
   // every page's first ytAvailable() await (skeletons forever, no Audius
   // fallback). Timeout → report unavailable so pages degrade gracefully.
@@ -2308,7 +2308,7 @@ function register(ipcMain) {
       ? withTimeout(resolveStreamUrl(videoId), 25000)
       : null
   )
-  // warm-up lane — same cache, but queued behind real playback clicks
+  // warm-up lane - same cache, but queued behind real playback clicks
   ipcMain.handle("yt:prefetch", (_e, videoId) =>
     typeof videoId === "string" && VID.test(videoId)
       ? withTimeout(resolveStreamUrl(videoId, true), 25000)
@@ -2317,7 +2317,7 @@ function register(ipcMain) {
   ipcMain.handle("yt:invalidate", (_e, videoId) => {
     if (typeof videoId === "string" && VID.test(videoId)) {
       streamCache.delete(videoId)
-      // the delete must reach disk — before-quit flushes skip clean caches,
+      // the delete must reach disk - before-quit flushes skip clean caches,
       // so an invalidated dead URL would resurrect on relaunch
       cacheDirty = true
       // if a fast-probe URL was the dead one (IP-bound to the instance's
@@ -2325,7 +2325,7 @@ function register(ipcMain) {
       probeBad.add(videoId)
       if (probeBad.size > 200) probeBad.delete(probeBad.keys().next().value)
       // an invalidation means "the URL we served died", not "can't resolve"
-      // — don't let a prior chain-failure TTL block the fresh attempt
+      // - don't let a prior chain-failure TTL block the fresh attempt
       resolveFailAt.delete(videoId)
     }
     return true
@@ -2347,14 +2347,14 @@ function register(ipcMain) {
   ipcMain.handle("yt:upnext", (_e, videoId) =>
     typeof videoId === "string" && VID.test(videoId) ? withTimeout(upNext(videoId), 20000).then((r) => r ?? [], () => []) : []
   )
-  // REAL YouTube web search via yt-dlp ytsearch — Innertube's music client
+  // REAL YouTube web search via yt-dlp ytsearch - Innertube's music client
   // ranks official-video reuploads (the caption+intro twins the lyrics
   // aligner needs) out of its top results; web search surfaces them
   ipcMain.handle("yt:ytsearch", (_e, q, n) => {
     if (typeof q !== "string" || !q.trim()) return []
     const count = Math.min(20, Math.max(1, typeof n === "number" ? n : 10))
     return withTimeout(
-      // lyrics-twin search — background work, never allowed to queue ahead
+      // lyrics-twin search - background work, never allowed to queue ahead
       // of or beside real playback spawns
       withDlpSlot(() => runYtdlp(["--flat-playlist", "-J", `ytsearch${count}:${q}`], 25000), true)
         .then((out) => {
@@ -2414,7 +2414,7 @@ function register(ipcMain) {
     typeof q === "string" && q.length < 100 ? withTimeout(suggestions(Q(q)), 8000).then((r) => r ?? [], () => []) : []
   )
 
-  // keep yt-dlp updated — YouTube changes frequently. Skip inside the
+  // keep yt-dlp updated - YouTube changes frequently. Skip inside the
   // portable exe (temp-extracted) and at most once per day.
   if (ytdlpAvailable() && !process.env.PORTABLE_EXECUTABLE_DIR) {
     const stamp = path.join(app.getPath("userData"), "ytdlp-update.txt")
@@ -2426,7 +2426,7 @@ function register(ipcMain) {
       }
     })()
     if (Date.now() - last > 24 * 60 * 60 * 1000) {
-      // stamp BEFORE the attempt — a persistent failure (offline, AV lock)
+      // stamp BEFORE the attempt - a persistent failure (offline, AV lock)
       // would otherwise retry a 30s self-update on every single launch
       try {
         fs.writeFileSync(stamp, String(Date.now()))

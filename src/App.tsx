@@ -20,7 +20,7 @@ import { isRewindSeen, latestRewind, useRewind } from "./store/rewind"
 
 // Route-level splitting: pages lazy-load off the initial bundle (~40%
 // lighter first paint), then idle-prefetch warms every chunk while the
-// user is still reading Home — navigation stays instant anyway.
+// user is still reading Home - navigation stays instant anyway.
 const ArtistPage = lazy(() => import("./pages/Artist").then((m) => ({ default: m.ArtistPage })))
 const DownloadsPage = lazy(() => import("./pages/Downloads").then((m) => ({ default: m.DownloadsPage })))
 const GenrePage = lazy(() => import("./pages/Genre").then((m) => ({ default: m.GenrePage })))
@@ -49,7 +49,7 @@ function ScrollReset() {
   return null
 }
 
-// held arrow keys scrub volume — commit to the persisted store only once
+// held arrow keys scrub volume - commit to the persisted store only once
 // the mashing stops (a set() per repeat tick serializes the whole queue)
 let volCommitTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -60,10 +60,10 @@ function useShortcuts() {
       const el = e.target as HTMLElement
       const typing = el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable
       const p = usePlayer.getState()
-      // the Rewind story owns the keyboard while it's open — Space/arrows
+      // the Rewind story owns the keyboard while it's open - Space/arrows
       // navigate slides, not playback
       if (useRewind.getState().active) return
-      // Ctrl/Cmd+F — Spotify's in-app find: jump to search AND focus the
+      // Ctrl/Cmd+F - Spotify's in-app find: jump to search AND focus the
       // input (navigating to the same route wouldn't remount/focus it)
       if ((e.ctrlKey || e.metaKey) && e.code === "KeyF") {
         e.preventDefault()
@@ -71,10 +71,10 @@ function useShortcuts() {
         document.getElementById("search-input")?.focus()
         return
       }
-      // Escape must work from inside inputs too — it has no input-level
+      // Escape must work from inside inputs too - it has no input-level
       // default, so hoist it above the typing guard
       if (e.code === "Escape") {
-        // an open ⋯ row menu owns Escape first — its own listener closes
+        // an open ⋯ row menu owns Escape first - its own listener closes
         // it; collapsing the queue/NP under it would swallow the dismiss
         if (document.querySelector('[role="menu"]')) return
         if (p.npOpen) p.setNpOpen(false)
@@ -83,7 +83,7 @@ function useShortcuts() {
         return
       }
       if (typing) return
-      // modified keys belong to the OS/browser — Ctrl+N must not toggle
+      // modified keys belong to the OS/browser - Ctrl+N must not toggle
       // Now Playing, Alt+L must not like, etc.
       if (e.ctrlKey || e.metaKey || e.altKey) return
       // key-repeat: holding Space strobes play/pause 30x/s; holding L spams
@@ -92,7 +92,7 @@ function useShortcuts() {
       switch (e.code) {
         case "Space":
           // don't hijack a focused button's native activation. Anchors are
-          // NOT exempt — Space on a link natively scrolls the page, not
+          // NOT exempt - Space on a link natively scrolls the page, not
           // activates it, so a focused link would scroll instead of pausing
           if (el.tagName === "BUTTON") return
           e.preventDefault()
@@ -120,7 +120,7 @@ function useShortcuts() {
           if (p.current) useLibrary.getState().toggleLike(p.current)
           break
         case "KeyN":
-          // no point opening Now Playing for an empty player — it would
+          // no point opening Now Playing for an empty player - it would
           // linger armed and pop open on the first track played later
           if (p.current) p.setNpOpen(!p.npOpen)
           break
@@ -134,7 +134,7 @@ function useShortcuts() {
   }, [navigate])
 }
 
-// global offline indicator — page-level retry cards can't explain a dead
+// global offline indicator - page-level retry cards can't explain a dead
 // network mid-session; this pins a banner the moment connectivity drops
 function OfflineBanner() {
   const tt = useT()
@@ -165,7 +165,7 @@ function OfflineBanner() {
   )
 }
 
-// fires the monthly Rewind once per month — the story opens by itself the
+// fires the monthly Rewind once per month - the story opens by itself the
 // first launch after a month closes (and stays replayable from Home/Stats)
 function RewindAutoOpen() {
   useEffect(() => {
@@ -197,10 +197,10 @@ export default function App() {
     return () => off?.()
   }, [navigate])
 
-  // (update banner mounts itself — it listens for the ready event AND
+  // (update banner mounts itself - it listens for the ready event AND
   // re-asks on mount for updates that landed while the window was hidden)
 
-  // below lg the queue is a fixed overlay — reserve space so its panel
+  // below lg the queue is a fixed overlay - reserve space so its panel
   // doesn't sit on top of content (row actions, card menus, text)
   const [narrow, setNarrow] = useState(() => window.innerWidth < 1024)
   useEffect(() => {
@@ -209,7 +209,7 @@ export default function App() {
     return () => window.removeEventListener("resize", onResize)
   }, [])
 
-  // after first paint, warm the lazy route chunks in the background —
+  // after first paint, warm the lazy route chunks in the background -
   // Electron reads them from disk so this is cheap, and the first real
   // navigation to any page then hits an already-resolved module
   useEffect(() => {
@@ -225,7 +225,7 @@ export default function App() {
 
   return (
     <div className="relative flex h-full flex-col">
-      {/* no dedicated titlebar strip — window chrome is invisible; drag
+      {/* no dedicated titlebar strip - window chrome is invisible; drag
           regions live on the top band, controls float top-right */}
       <TitleBar />
       <div className="flex min-h-0 flex-1">
@@ -250,7 +250,7 @@ export default function App() {
                 {/* a render-time crash in any page gets contained to a
                     recoverable panel instead of blanking the whole app */}
                 <ErrorBoundary resetKey={location.pathname}>
-                  {/* lazy routes: no fallback chrome — the fetch is a local
+                  {/* lazy routes: no fallback chrome - the fetch is a local
                       file read in Electron, and pages paint their own
                       skeletons the moment the chunk lands */}
                   <Suspense fallback={null}>
@@ -286,7 +286,7 @@ export default function App() {
   )
 }
 
-// persistent "update ready" card — one click installs. The download itself
+// persistent "update ready" card - one click installs. The download itself
 // already happened in the background (autoDownload); a transient toast was
 // too easy to miss and the tray item is one menu too deep.
 function UpdateBanner() {
@@ -295,7 +295,7 @@ function UpdateBanner() {
   const [dismissed, setDismissed] = useState(false)
   useEffect(() => {
     const off = window.freebify?.app?.onUpdateReady?.((p) => {
-      // payload is {version, manual} — tolerate a bare string from older builds
+      // payload is {version, manual} - tolerate a bare string from older builds
       setUpd(typeof p === "string" ? { version: p, manual: false } : p)
       setDismissed(false)
     })

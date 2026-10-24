@@ -34,7 +34,7 @@ export function StatsPage() {
     .sort((a, b) => b.ms - a.ms)
     .slice(0, 10)
 
-  // last 7 days — local day keys matching what recordMs writes
+  // last 7 days - local day keys matching what recordMs writes
   const todayKey = dayKey()
   const week = [...Array(7)].map((_, i) => {
     const d = new Date()

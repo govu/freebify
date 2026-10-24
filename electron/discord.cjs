@@ -1,20 +1,20 @@
-// Discord Rich Presence — "Listening to Freebify" on the user's profile,
+// Discord Rich Presence - "Listening to Freebify" on the user's profile,
 // same as Spotify. Talks to the running Discord client's local IPC socket;
 // when Discord isn't open we retry quietly in the background.
 //
 // CLIENT_ID comes from the app's Discord Developer Portal application.
-const CLIENT_ID = "1556360210031841291" // Freebify — discord.com/developers application id
+const CLIENT_ID = "1556360210031841291" // Freebify - discord.com/developers application id
 const ACTIVITY_TYPE_LISTENING = 2
 
 let client = null
 let connecting = false
 let retryTimer = null
-let lastJson = null // last activity we pushed — resend after a reconnect
+let lastJson = null // last activity we pushed - resend after a reconnect
 
 // Re-push lastJson unchanged: the timestamps are ABSOLUTE (Discord computes
 // progress itself from startTimestamp), so the stored copy still renders the
 // correct position. The old version shifted them forward by the elapsed
-// delta — every heartbeat visibly REWOUND the bar by a minute.
+// delta - every heartbeat visibly REWOUND the bar by a minute.
 // Only guard: don't resurrect an activity whose end already passed.
 function rebased() {
   if (!lastJson) return null
@@ -57,12 +57,12 @@ async function connect() {
       log("disconnected")
       scheduleRetry()
     })
-    // a dead Discord pipe can leave login() pending forever — without the
+    // a dead Discord pipe can leave login() pending forever - without the
     // timeout `connecting` stays true and every retry early-returns, so the
     // presence never recovers until app restart
     await withTimeout(c.login(), 10000, "discord login")
     client = c
-    c = null // ownership transferred — failure path won't destroy it
+    c = null // ownership transferred - failure path won't destroy it
     log("connected")
     const resend = rebased()
     if (resend) await push(resend).catch(() => {})
@@ -88,7 +88,7 @@ function scheduleRetry() {
   retryTimer.unref?.()
 }
 
-// Heartbeat — Discord can drop the IPC socket without firing "disconnected"
+// Heartbeat - Discord can drop the IPC socket without firing "disconnected"
 // (client restart, sleep, network blip). Pushes only happen on track
 // transitions, so a quietly-dead socket left the presence stuck off until
 // the next song. Re-pushing every 60s both revives the presence and forces
@@ -105,7 +105,7 @@ async function push(activity) {
   try {
     // user.setActivity sends the SET_ACTIVITY command over the IPC socket
     await withTimeout(c.user.setActivity(activity), 8000, "setActivity")
-    log(`push ok: ${activity.details ?? "?"} — ${activity.state ?? "?"}`)
+    log(`push ok: ${activity.details ?? "?"} - ${activity.state ?? "?"}`)
   } catch (e) {
     log(`setActivity failed: ${e?.message ?? e}`)
     client = null
@@ -117,7 +117,7 @@ async function push(activity) {
 }
 
 // ytimg video thumbs: hqdefault.jpg is a 4:3 frame with letterbox bars baked
-// in. maxresdefault is true 16:9 without them — but it 404s on some videos,
+// in. maxresdefault is true 16:9 without them - but it 404s on some videos,
 // so HEAD-check and keep the original when missing.
 async function bestArt(url) {
   if (!/i\.ytimg\.com\/vi\//.test(url)) return url
@@ -132,7 +132,7 @@ async function bestArt(url) {
 }
 
 // payload from the renderer: {playing, title, artist, artwork, durationMs,
-// positionMs, url} — null clears the presence
+// positionMs, url} - null clears the presence
 let presenceSeq = 0
 async function setPresence(payload) {
   const seq = ++presenceSeq
@@ -156,12 +156,12 @@ async function setPresence(payload) {
   let art = typeof payload.artwork === "string" && /^https:/.test(payload.artwork) ? payload.artwork : null
   if (art) {
     art = await bestArt(art)
-    // bestArt can take up to 3s — if a newer track's presence arrived
+    // bestArt can take up to 3s - if a newer track's presence arrived
     // meanwhile, pushing now would resurrect the OLD song on the profile
     if (seq !== presenceSeq) return
   }
   // Discord's IPC rewrites external https in large_image to mp:external/*
-  // automatically — no dev-portal assets or OAuth needed. Clicks go to our
+  // automatically - no dev-portal assets or OAuth needed. Clicks go to our
   // own page, not the source video (that's free user acquisition).
   if (art) activity.largeImageKey = art
   activity.largeImageUrl = "https://govu.github.io/freebify/"
@@ -190,5 +190,5 @@ function setEnabled(v) {
   } else void connect()
 }
 
-// presence dies with the Discord socket or the app — nothing to persist
+// presence dies with the Discord socket or the app - nothing to persist
 module.exports = { setPresence, setEnabled }

@@ -7,13 +7,13 @@ import { CardsRowSkeleton } from "../components/Skeletons"
 import { t, useT } from "../i18n"
 import { moodNames } from "./Search"
 
-// YouTube Music mood/genre category page — the browse token lives in the
+// YouTube Music mood/genre category page - the browse token lives in the
 // URL; display name arrives via router state or the cached lookup.
 export function MoodPage() {
   const tt = useT()
   const { params } = useParams<{ params: string }>()
   const location = useLocation()
-  // React Router already decodes params — a second decodeURIComponent
+  // React Router already decodes params - a second decodeURIComponent
   // would mangle (or URIError on) tokens containing %
   const [name, setName] = useState(
     (location.state as { name?: string } | null)?.name ??
@@ -31,7 +31,7 @@ export function MoodPage() {
     let live = true
     setLoading(true)
     setFailed(false)
-    // mood→mood nav reuses the route — reset so the previous category's
+    // mood→mood nav reuses the route - reset so the previous category's
     // title and shelves don't linger under the new skeletons
     setPlaylists([])
     setTracks([])

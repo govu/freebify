@@ -19,7 +19,7 @@ const TIMES: { id: TrendTime; labelKey: string }[] = [
 export function GenrePage() {
   const tt = useT()
   const { name = "" } = useParams<{ name: string }>()
-  // useParams already decodes — decoding AGAIN throws URIError on names
+  // useParams already decodes - decoding AGAIN throws URIError on names
   // containing a literal % (e.g. "/genre/100%")
   const genre = name
   const [time, setTime] = useState<TrendTime>("week")
@@ -68,7 +68,7 @@ export function GenrePage() {
       <div
         className="px-6 pb-8 pt-20"
         style={{
-          // neutral hero glow — the design language is strictly grayscale;
+          // neutral hero glow - the design language is strictly grayscale;
           // the old per-genre tinted gradient was the odd one out
           background:
             "radial-gradient(70% 100% at 20% 0%, rgb(255 255 255 / 0.08), transparent 60%)",

@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs"
 const src = readFileSync("src/components/NowPlaying.tsx", "utf8")
-// pure fns all live at column 0 — end boundary = next top-level `const`/`function`
+// pure fns all live at column 0 - end boundary = next top-level `const`/`function`
 const names = ["simTokens", "simBigrams", "dice", "lineSim", "capText", "alignOffset", "alignLines", "lrcContentOk", "timingOk"]
 const got = []
 for (const n of names) {

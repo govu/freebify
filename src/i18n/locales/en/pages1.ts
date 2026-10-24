@@ -9,7 +9,7 @@ export default {
   "downloads.playAll": "Play all",
   "downloads.queued": "Queued",
   "downloads.removeLabel": "Delete download",
-  "downloads.subtitle": "{n} tracks — stored on this device, playable offline",
+  "downloads.subtitle": "{n} tracks, stored on this device, playable offline",
   "downloads.title": "Downloads",
   "genre.kicker": "Genre",
   "genre.loadError": "Couldn't load this genre right now.",

@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "motion/react"
 import { usePlayer } from "../store/player"
 
-// Transient bottom toast — surfaces errors the player can recover from
+// Transient bottom toast - surfaces errors the player can recover from
 // (e.g. the circuit breaker stopping after repeated stream failures).
 export function Toast() {
   const notice = usePlayer((s) => s.notice)

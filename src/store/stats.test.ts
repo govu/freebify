@@ -26,7 +26,7 @@ const mkTrack = (id: string, over: Partial<Track> = {}): Track => ({
 
 beforeEach(() => {
   localStorage.clear()
-  // drain the module-level pending buffer before zeroing state — buffered
+  // drain the module-level pending buffer before zeroing state - buffered
   // ms from a previous test must not leak into the next one
   useStats.getState().flush()
   useStats.setState({ tracks: {}, artists: {}, days: {}, months: {}, totalMs: 0, totalPlays: 0 })
@@ -36,7 +36,7 @@ describe("recordMs + flush", () => {
   it("buffers ms until flush lands it in every bucket", () => {
     const t = mkTrack("t1")
     useStats.getState().recordMs(t, 5000)
-    // nothing is in state yet — recordMs only buffers
+    // nothing is in state yet - recordMs only buffers
     expect(useStats.getState().totalMs).toBe(0)
     useStats.getState().recordMs(t, 3000)
     useStats.getState().flush()

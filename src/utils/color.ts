@@ -1,4 +1,4 @@
-// LRU-ish cap — a long session samples hundreds of artworks; the map
+// LRU-ish cap - a long session samples hundreds of artworks; the map
 // would otherwise grow for the process lifetime
 const cache = new Map<string, Promise<[number, number, number] | null>>()
 const CACHE_CAP = 300
@@ -10,13 +10,13 @@ export function dominantColor(url?: string | null): Promise<[number, number, num
   if (!cache.has(url)) {
     const p = extract(url).then((c) => {
       // a CORS-tainted or transiently-broken image would otherwise stay
-      // gray for the whole session — only remember successful samples
+      // gray for the whole session - only remember successful samples
       if (c === null) cache.delete(url)
       return c
     })
     cache.set(url, p)
     if (cache.size > CACHE_CAP) {
-      // Map iterates in insertion order — drop the oldest entries
+      // Map iterates in insertion order - drop the oldest entries
       for (const k of cache.keys()) {
         cache.delete(k)
         if (cache.size <= CACHE_CAP * 0.8) break

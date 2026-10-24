@@ -63,7 +63,7 @@ beforeEach(() => {
 
 describe("buildRewind", () => {
   it("builds a sorted rewind for a qualifying month", () => {
-    // six tracks — only the top 5 by listening time make the card
+    // six tracks - only the top 5 by listening time make the card
     const tracks: Record<string, ReturnType<typeof mkTrackAgg>> = {}
     for (let i = 1; i <= 6; i++) tracks[`t${i}`] = mkTrackAgg(`t${i}`, i, i * 100000)
     seedMonths({ "2020-09": mkMonth({ tracks }) })

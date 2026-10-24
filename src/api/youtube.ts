@@ -110,14 +110,14 @@ export function ytAvailable(): Promise<boolean> {
     availability = b
       ? b
           .available()
-          // gate the CATALOG on meta only — a missing/quarantined
+          // gate the CATALOG on meta only - a missing/quarantined
           // yt-dlp.exe used to disable all YouTube metadata too, silently
           // downgrading to Audius-only. Stream resolution handles a dead
           // binary itself (iframe engine fallback).
           .then((a) => a.meta)
           .catch(() => false)
           .then((ok) => {
-            if (!ok) availability = null // transient failure — retry next time
+            if (!ok) availability = null // transient failure - retry next time
             return ok
           })
       : Promise.resolve(false)
@@ -159,17 +159,17 @@ export const yt = {
   suggest: (q: string) => ytBridge()?.suggest(q) ?? Promise.resolve([]),
 }
 
-// Resolve a YouTube track's stream url ahead of the click — hovering or
+// Resolve a YouTube track's stream url ahead of the click - hovering or
 // seeing a row warms the yt-dlp cache so play() starts in milliseconds.
 // Uses the low-priority lane so warm-up never delays a real playback click.
 // Renderer-side dedup: re-renders and pointer events can fire this for the
-// same track many times — the main-process inflight map would merge them
+// same track many times - the main-process inflight map would merge them
 // anyway, but each call still costs an IPC round-trip.
 const prefetched = new Set<string>()
 export function prefetchStream(t: Track) {
   if (t.source !== "yt" || !t.streamId || prefetched.has(t.streamId)) return
   prefetched.add(t.streamId)
-  // cap the set — a long session resolves hundreds of ids
+  // cap the set - a long session resolves hundreds of ids
   if (prefetched.size > 800) {
     const first = prefetched.values().next().value
     if (first) prefetched.delete(first)

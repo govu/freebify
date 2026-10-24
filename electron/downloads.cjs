@@ -1,4 +1,4 @@
-// Downloaded-track store — the "offline" layer.
+// Downloaded-track store - the "offline" layer.
 // Audio files + a JSON manifest live in userData/downloads. The renderer
 // plays them through the fbx:// scheme (privileges registered before app
 // ready in main.cjs): file:// urls would trip webSecurity on the dev
@@ -10,7 +10,7 @@ const { pathToFileURL } = require("url")
 const { app, shell, BrowserWindow, protocol, net } = require("electron")
 const { binPath, ytdlpAvailable, ensureExecutable } = require("./youtube.cjs")
 
-// mirror of main.cjs logLine — same file so a grep reads the whole story
+// mirror of main.cjs logLine - same file so a grep reads the whole story
 function log(tag, msg) {
   try {
     const dir = path.join(app.getPath("userData"), "logs")
@@ -22,22 +22,22 @@ function log(tag, msg) {
 const dlDir = () => path.join(app.getPath("userData"), "downloads")
 const manifestFile = () => path.join(dlDir(), "downloads.json")
 
-// trackId -> { file, track, addedAt } — track is the renderer's slim track
+// trackId -> { file, track, addedAt } - track is the renderer's slim track
 // object, stored whole so the Downloads page needs zero network to render
-let manifest = null // lazy — userData path isn't valid before app ready
+let manifest = null // lazy - userData path isn't valid before app ready
 let dirty = false
 const inFlight = new Map() // id -> { kill: () => void, base?: string }
-// batch downloads (album/playlist "download all") queue here — spawning a
+// batch downloads (album/playlist "download all") queue here - spawning a
 // yt-dlp per track unthrottled would torch CPU + rate limits
-// each download is a full Python extractor + file fetch held for minutes —
+// each download is a full Python extractor + file fetch held for minutes -
 // two lanes keep disk I/O moving without stacking yt-dlp.exe processes on
 // top of whatever the player is already spawning
 const MAX_PARALLEL = 2
 const pending = [] // [{id, start}] FIFO
-// ids the user removed while a job was still running — a killed job's
+// ids the user removed while a job was still running - a killed job's
 // completion path must not re-commit it into the manifest
 const abortedIds = new Set()
-// basenames claimed by jobs whose output file doesn't exist yet — without
+// basenames claimed by jobs whose output file doesn't exist yet - without
 // this two same-title tracks starting in the same tick both get `base`
 // and share one .part file (uniqueBase's readdir can't see either)
 const reservedBases = new Set()
@@ -48,8 +48,8 @@ function loadManifest() {
   try {
     const raw = JSON.parse(fs.readFileSync(manifestFile(), "utf8"))
     if (raw && typeof raw === "object") manifest = raw
-  } catch { /* first run / corrupt — start empty */ }
-  // prune entries whose file disappeared — the user can clean the folder
+  } catch { /* first run / corrupt - start empty */ }
+  // prune entries whose file disappeared - the user can clean the folder
   // in Explorer; a dead manifest entry would serve a 404 forever
   for (const [id, it] of Object.entries(manifest)) {
     if (!it?.file || !fs.existsSync(path.join(dlDir(), it.file))) {
@@ -72,7 +72,7 @@ function saveManifest() {
 setInterval(saveManifest, 30 * 1000).unref?.()
 app?.once?.("before-quit", () => {
   saveManifest()
-  // Node does not reap child processes on exit — a running yt-dlp would
+  // Node does not reap child processes on exit - a running yt-dlp would
   // keep writing .part files long after the app died. Kill every job.
   for (const { kill } of inFlight.values()) {
     try { kill() } catch {}
@@ -85,7 +85,7 @@ const emit = (ev) => {
   }
 }
 
-// manifest keys are track ids — filenames should read like a music folder,
+// manifest keys are track ids - filenames should read like a music folder,
 // not a cache: "Artist - Title.ext", sanitized for the filesystem, deduped
 // against existing downloads so two same-titled tracks don't overwrite
 const safe = (id) => String(id).replace(/[^\w-]/g, "_").slice(0, 80)
@@ -104,7 +104,7 @@ function uniqueBase(id, track) {
   try {
     for (const f of fs.readdirSync(dlDir())) taken.add(f.replace(/\.[^.]+(\.part)?$/, ""))
   } catch {}
-  // this id's own previous file isn't a collision — redownloads overwrite it
+  // this id's own previous file isn't a collision - redownloads overwrite it
   const own = manifest?.[id]?.file?.replace(/\.[^.]+$/, "")
   if (own) taken.delete(own)
   let cand = base
@@ -115,7 +115,7 @@ function uniqueBase(id, track) {
 }
 
 // yt-dlp's -o template ends in %(ext)s so the real extension is only known
-// after the fact — scan for the finished file (.part = still writing)
+// after the fact - scan for the finished file (.part = still writing)
 const findOutput = (base) =>
   fs
     .readdirSync(dlDir())
@@ -144,7 +144,7 @@ function drain() {
 // YouTube track → yt-dlp writes the file itself; progress parsed from the
 // "[download]  42.3%" lines it prints on stderr
 async function downloadYt(id, streamId, track) {
-  // mac de-quarantine / exec bit must land before the binary can spawn —
+  // mac de-quarantine / exec bit must land before the binary can spawn -
   // a queued download during the first seconds of a session would
   // otherwise EPERM against Gatekeeper
   await ensureExecutable()
@@ -153,7 +153,7 @@ async function downloadYt(id, streamId, track) {
     "-f", "bestaudio[ext=m4a]/bestaudio",
     "--no-playlist",
     "--no-warnings",
-    // one progress line per update — parseable without a pty
+    // one progress line per update - parseable without a pty
     "--newline",
     "--socket-timeout", "15",
     "--retries", "3",
@@ -174,7 +174,7 @@ async function downloadYt(id, streamId, track) {
   inFlight.set(id, { kill: () => { try { child.kill() } catch {} }, base })
   let buf = ""
   let lastData = Date.now()
-  // a wedged child (post-extract stall, dead pipe) emits nothing forever —
+  // a wedged child (post-extract stall, dead pipe) emits nothing forever -
   // every in-flight slot it holds blocks the queue; kill on silence
   const wd = setInterval(() => {
     if (Date.now() - lastData > 90000) {
@@ -202,7 +202,7 @@ async function downloadYt(id, streamId, track) {
     inFlight.delete(id)
     reservedBases.delete(base)
     if (abortedIds.delete(id)) {
-      // user removed it mid-flight — sweep the orphan .part and drain
+      // user removed it mid-flight - sweep the orphan .part and drain
       sweepPart(base)
       drain()
       return
@@ -216,7 +216,7 @@ async function downloadYt(id, streamId, track) {
   child.on("close", (code) => finish(code === 0))
 }
 
-// leftover .part from a killed/removed job — matches every ext variant
+// leftover .part from a killed/removed job - matches every ext variant
 function sweepPart(base) {
   try {
     for (const f of fs.readdirSync(dlDir())) {
@@ -256,7 +256,7 @@ async function downloadHttp(id, url, track) {
       if (done) break
       got += value.byteLength
       if (!out.write(Buffer.from(value))) {
-        // an errored stream never emits 'drain' — without the error race
+        // an errored stream never emits 'drain' - without the error race
         // this await hangs forever and the row freezes mid-write
         await new Promise((r, j) => {
           out.once("drain", r)
@@ -268,7 +268,7 @@ async function downloadHttp(id, url, track) {
     await new Promise((r, j) => out.end((e) => (e ? j(e) : r())))
     out = null
     if (abortedIds.delete(id)) {
-      // removed while the file was committing — undo the rename target
+      // removed while the file was committing - undo the rename target
       try { fs.unlinkSync(part) } catch {}
       return
     }
@@ -277,7 +277,7 @@ async function downloadHttp(id, url, track) {
     part = null
     commit(id, file, track)
   } catch (e) {
-    // destroy the stream BEFORE unlink — Windows EPERMs on an open handle
+    // destroy the stream BEFORE unlink - Windows EPERMs on an open handle
     try { out?.destroy() } catch {}
     if (part) { try { fs.unlinkSync(part) } catch {} }
     const aborted = abortedIds.delete(id)
@@ -295,7 +295,7 @@ async function downloadHttp(id, url, track) {
 function register(ipcMain) {
   loadManifest()
 
-  // fbx://dl/<file> — serves downloaded audio to <audio>.src. Basename-only
+  // fbx://dl/<file> - serves downloaded audio to <audio>.src. Basename-only
   // resolution inside dlDir: no traversal, no absolute paths over IPC.
   protocol.handle("fbx", async (req) => {
     try {
@@ -306,7 +306,7 @@ function register(ipcMain) {
       if (!file.startsWith(dlDir()) || !fs.existsSync(file)) {
         return new Response("not found", { status: 404 })
       }
-      // ACAO:* — downloaded tracks route through Web Audio (EQ/normalize)
+      // ACAO:* - downloaded tracks route through Web Audio (EQ/normalize)
       // in the renderer; custom-scheme media is cross-origin by default
       const res = await net.fetch(pathToFileURL(file).toString())
       const headers = new Headers(res.headers)
@@ -318,7 +318,7 @@ function register(ipcMain) {
   })
 
   // Files can vanish mid-session (the user cleans the folder in Explorer
-  // while the app runs) — re-verify on every list call and push removals
+  // while the app runs) - re-verify on every list call and push removals
   // so a ghost row never renders.
   function pruneMissing() {
     loadManifest()
@@ -337,7 +337,7 @@ function register(ipcMain) {
     return removed
   }
 
-  // watch the downloads dir — Explorer deletes reach the UI without a
+  // watch the downloads dir - Explorer deletes reach the UI without a
   // page reload (Windows reports them as 'rename' events; debounce the
   // burst a folder-wipe produces)
   try {
@@ -350,7 +350,7 @@ function register(ipcMain) {
         pruneMissing()
       }, 400)
     })
-  } catch { /* watcher is best-effort — dl:list still prunes on read */ }
+  } catch { /* watcher is best-effort - dl:list still prunes on read */ }
 
   ipcMain.handle("dl:list", () => {
     pruneMissing()
@@ -359,7 +359,7 @@ function register(ipcMain) {
       .sort((a, b) => (b.addedAt ?? 0) - (a.addedAt ?? 0))
   })
 
-  // existence probe for the play path — the store may hold an entry for a
+  // existence probe for the play path - the store may hold an entry for a
   // file the user deleted since the last refresh
   ipcMain.handle("dl:exists", (_e, id) => {
     loadManifest()
@@ -378,7 +378,7 @@ function register(ipcMain) {
     const { id, source, streamId, url, track } = p
     if (typeof id !== "string" || !id || id.length > 120) return false
     if (!track || typeof track !== "object") return false
-    // dedup — but TELL the renderer: its items map can be stale (refresh
+    // dedup - but TELL the renderer: its items map can be stale (refresh
     // hasn't landed yet) and it just set a "queued" state that waits on an
     // event. Emitting done reconciles it instead of leaving a stuck row.
     if (manifest[id]) {
@@ -393,7 +393,7 @@ function register(ipcMain) {
     }
     emit({ type: "queued", id })
     const start = () => {
-      emit({ type: "progress", id, pct: 0 }) // a real start — distinguishes "downloading" from "waiting in queue"
+      emit({ type: "progress", id, pct: 0 }) // a real start - distinguishes "downloading" from "waiting in queue"
       if (source === "yt" && typeof streamId === "string" && /^[\w-]{6,20}$/.test(streamId)) {
         if (!ytdlpAvailable()) {
           emit({ type: "error", id, msg: "yt-dlp unavailable" })
@@ -420,11 +420,11 @@ function register(ipcMain) {
     if (qi >= 0) pending.splice(qi, 1)
     const job = inFlight.get(id)
     if (job) {
-      // mark BEFORE kill — the job's own completion path checks this flag;
+      // mark BEFORE kill - the job's own completion path checks this flag;
       // without it a close-event racing the remove re-commits the file
       abortedIds.add(id)
       try { job.kill() } catch {}
-      // the .part has no manifest entry — without this sweep every removed
+      // the .part has no manifest entry - without this sweep every removed
       // in-flight download leaks its partial file (and its basename)
       if (job.base) {
         sweepPart(job.base)
@@ -453,7 +453,7 @@ function register(ipcMain) {
   })
 }
 
-// MUST run before app.whenReady — standard+stream privileges let <audio>
+// MUST run before app.whenReady - standard+stream privileges let <audio>
 // elements (and the media pipeline) fetch fbx:// urls like https ones
 function privilege() {
   protocol.registerSchemesAsPrivileged([

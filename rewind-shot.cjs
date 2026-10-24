@@ -1,4 +1,4 @@
-// Rewind e2e — seeds a finished month of stats, reloads, and captures the
+// Rewind e2e - seeds a finished month of stats, reloads, and captures the
 // story slides as the auto-prompt fires. Usage: electron rewind-shot.cjs
 // (vite dev must be running on :5173)
 const { app, BrowserWindow } = require("electron")
@@ -8,7 +8,7 @@ app.commandLine.appendSwitch("force-device-scale-factor", "1")
 require("./electron/main.cjs")
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-// last month's key, local time — latestRewind() only fires for CLOSED months
+// last month's key, local time - latestRewind() only fires for CLOSED months
 const prev = new Date(); prev.setDate(1); prev.setMonth(prev.getMonth() - 1)
 const MK = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`
 
@@ -72,7 +72,7 @@ app.whenReady().then(async () => {
   const key = (code) => js(`window.dispatchEvent(new KeyboardEvent("keydown",{code:"${code}"}))`)
 
   try {
-    // seed a finished month through the store itself — a raw localStorage
+    // seed a finished month through the store itself - a raw localStorage
     // write gets clobbered by the app's own beforeunload flush persist
     const seeded = await js(`(() => {
       window.__stats.setState(${JSON.stringify(seed.state)})
