@@ -44,11 +44,14 @@ client *running on your own computer* what you're listening to so it can
 show on your Discord profile. This data goes to Discord under Discord's
 privacy policy; you can turn it off at any time.
 
-Spotify playlist import never asks you to log in: Freebify reads only what
-Spotify shows to anonymous visitors (the first 100 tracks of a public
-playlist). No Spotify account, token or session ever touches Freebify. For
-longer lists, export a CSV (Exportify, TuneMyMusic, Spotify's own export)
-and import the file. That travel is between you and your machine only.
+Spotify playlist import never asks you to log in. Freebify reads the public
+playlist page Spotify serves any anonymous visitor, and that page carries a
+short-lived token Spotify's own web player uses. That token is used to read
+the track list and is then dropped: it never reaches the UI, never touches
+disk, and never outlives the import. No Spotify account, password or stored
+session is involved. If Spotify withholds the full list, the import keeps what
+it published, and a CSV export (Exportify, TuneMyMusic, Spotify's own export)
+covers the rest; that file stays between you and your machine.
 
 ## Changes
 

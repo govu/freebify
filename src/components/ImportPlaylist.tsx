@@ -70,17 +70,17 @@ export function ImportPlaylist() {
   const navigate = useNavigate()
   const tt = useT()
 
-  const finish = (pid: string, n: number) => {
+  const finish = (pid: string, n: number, limited?: boolean) => {
     setBusy(false)
     setProgress(null)
     setOpen(false)
-    notify(t("import.imported", { n }))
+    notify(limited ? t("import.limited", { n }) : t("import.imported", { n }))
     navigate(`/playlist/${pid}`)
   }
 
   // every entry is re-matched on YouTube Music - the top hit wins.
   // batches of 4 so a long list doesn't hammer search in one burst
-  const matchEntries = async (playlistName: string, entries: ImportEntry[]) => {
+  const matchEntries = async (playlistName: string, entries: ImportEntry[], limited?: boolean) => {
     setProgress({ done: 0, total: entries.length })
     const pid = createPlaylist(playlistName)
     let found = 0
@@ -111,7 +111,7 @@ export function ImportPlaylist() {
       setProgress(null)
       return
     }
-    finish(pid, found)
+    finish(pid, found, limited)
   }
 
   const importUrl = async () => {
@@ -152,7 +152,7 @@ export function ImportPlaylist() {
         setProgress(null)
         return
       }
-      await matchEntries(res.name, res.tracks ?? [])
+      await matchEntries(res.name, res.tracks ?? [], res.limited)
     } catch {
       notify(t("import.failed"))
       setBusy(false)

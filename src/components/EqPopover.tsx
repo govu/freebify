@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { RotateCcw, SlidersHorizontal } from "lucide-react"
 import { usePlayer } from "../store/player"
+import { getEnhance, getFx, setEnhance, setFx } from "../api/audiobus"
 import { useT } from "../i18n"
 import { Slider } from "./Slider"
 
@@ -36,6 +37,14 @@ export function EqPopover() {
   const setSleepTimer = usePlayer((s) => s.setSleepTimer)
   const queueOpen = usePlayer((s) => s.queueOpen)
   const [readout, setReadout] = useState<number | null>(null)
+  // ambience + enhancer live on the bus (they own the graph); mirror them
+  // here so the controls re-render with their real values
+  const [fx, setFxState] = useState(getFx)
+  const [enh, setEnhState] = useState(getEnhance)
+  const patchFx = (p: Partial<ReturnType<typeof getFx>>) => {
+    setFx(p)
+    setFxState(getFx())
+  }
   // which preset armed the timer - sleepAt is a deadline, not a duration,
   // so the picked chip would otherwise lose its highlight as time passes
   const [sleepMins, setSleepMins] = useState<number | null>(null)
@@ -177,12 +186,47 @@ export function EqPopover() {
                   />
                 </span>
               </button>
+              <button
+                role="switch"
+                aria-checked={enh}
+                onClick={() => {
+                  setEnhance(!enh)
+                  setEnhState(!enh)
+                }}
+                className="flex w-full cursor-pointer items-center justify-between"
+              >
+                <span className="text-xs text-dim">{tt("eq.enhance")}</span>
+                <span
+                  className={`relative h-[18px] w-8 rounded-full border transition-colors ${
+                    enh ? "border-white bg-white" : "border-white/20 bg-white/10"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-1/2 size-3 -translate-y-1/2 rounded-full transition-[left,background-color] ${
+                      enh ? "left-[16px] bg-black" : "left-[2px] bg-white/60"
+                    }`}
+                  />
+                </span>
+              </button>
               <div>
                 <div className="mb-1 flex items-center justify-between">
                   <span className="text-xs text-dim">{tt("eq.crossfade")}</span>
                   <span className="text-[10px] tabular-nums text-faint">{fadeSecs === 0 ? tt("eq.off") : `${fadeSecs}s`}</span>
                 </div>
                 <Slider value={fadeSecs} max={12} onScrub={(v) => setFadeSecs(v)} ariaLabel={tt("eq.crossfadeSeconds")} />
+              </div>
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-xs text-dim">{tt("eq.space")}</span>
+                  <span className="text-[10px] tabular-nums text-faint">
+                    {fx.reverb === 0 && fx.echo === 0 && fx.drive === 0 ? tt("eq.off") : ""}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  <FxRow label={tt("eq.reverb")} value={fx.reverb} onChange={(v) => patchFx({ reverb: v })} aria={tt("eq.reverb")} />
+                  <FxRow label={tt("eq.echo")} value={fx.echo} onChange={(v) => patchFx({ echo: v })} aria={tt("eq.echo")} />
+                  <FxRow label={tt("eq.drive")} value={fx.drive} onChange={(v) => patchFx({ drive: v })} aria={tt("eq.drive")} />
+                </div>
               </div>
               <div>
                 <div className="mb-1 flex items-center justify-between">
@@ -323,3 +367,25 @@ function VBand({
     </div>
   )
 }
+
+// one ambience control: label left, slider right, percent readout far right
+function FxRow({
+  label,
+  value,
+  onChange,
+  aria,
+}: {
+  label: string
+  value: number
+  onChange: (v: number) => void
+  aria: string
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className={`w-11 shrink-0 text-[10px] ${value > 0 ? "text-ink" : "text-faint"}`}>{label}</span>
+      <Slider value={value} max={1} onScrub={onChange} onCommit={onChange} className="flex-1" ariaLabel={aria} />
+      <span className="w-7 shrink-0 text-right text-[10px] tabular-nums text-faint">{Math.round(value * 100)}</span>
+    </div>
+  )
+}
+

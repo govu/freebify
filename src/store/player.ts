@@ -2,8 +2,9 @@ import { create } from "zustand"
 import { t as tt } from "../i18n"
 import { rotateHost, streamUrl } from "../api/audius"
 import { prefetchStream, yt } from "../api/youtube"
+import { deezerRadio } from "../api/deezer"
 import { ytEngine } from "../api/ytplayer"
-import { attach, detach, fadeTo, fadeCurve, mkAudio, resume, rmsOf, busAvailable, setEq as busSetEq, setNormGain } from "../api/audiobus"
+import { attach, detach, fadeTo, fadeCurve, mkAudio, resume, rmsOf, spectrumOf, busAvailable, setEq as busSetEq, setNormGain } from "../api/audiobus"
 import type { RepeatMode, Track } from "../api/types"
 import { useLibrary } from "./library"
 import { useDownloads } from "./downloads"
@@ -516,6 +517,26 @@ function maybeFillRadio() {
         radioTried.add(seed.streamId!)
         add = dedupe()
         if (add.length) break
+      }
+      if (!add.length) {
+        // last resort: artists related to this one, via Deezer, matched back
+        // through YouTube search. Reached only when the panel and every
+        // queued seed are exhausted, so the extra searches stay off the
+        // normal playback path.
+        const picks = await deezerRadio(current.user?.name ?? "", current.title, 10)
+        const matched: Track[] = []
+        for (const p of picks) {
+          try {
+            const hit = (await yt.search(`${p.artist} ${p.title}`)).tracks[0]
+            if (hit) matched.push(hit)
+          } catch {
+            /* one failed match must not sink the batch */
+          }
+        }
+        if (matched.length) {
+          more = matched
+          add = dedupe()
+        }
       }
       if (!add.length) {
         // an empty fetch must not poison the flag - after a network blip
@@ -1672,11 +1693,17 @@ ytEngine.setEvents({
   },
 })
 
+// Live spectrum of the audio currently playing, filled into `out`. False when
+// the iframe engine owns playback or the bus isn't available, so visualizers
+// can fall back to a decorative animation instead of a flat line.
+export function getSpectrum(out: Uint8Array<ArrayBuffer>): boolean {
+  return spectrumOf(audio, out)
+}
+
 // Apply volume to the live engines without a store write - used while the
 // volume slider is scrubbing (persist only on commit; a set() per
 // pointermove serializes the store to localStorage and janks the drag).
-export function applyVolume(v: number) {
-  if (!Number.isFinite(v)) return
+export function applyVolume(v: number) {  if (!Number.isFinite(v)) return
   const vol = Math.min(1, Math.max(0, v))
   if (vol > 0 && usePlayer.getState().muted) {
     audio.muted = false

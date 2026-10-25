@@ -5,6 +5,7 @@ const { pathToFileURL } = require("url")
 const youtube = require("./youtube.cjs")
 const downloads = require("./downloads.cjs")
 const spotify = require("./spotify.cjs")
+const deezer = require("./deezer.cjs")
 
 // fbx:// scheme for downloaded files - privileges must be granted before
 // the app is ready (they can't be retrofitted onto a running session)
@@ -320,6 +321,7 @@ if (!gotLock) {
     }
   youtube.register(ipcMain)
   spotify.register(ipcMain)
+  deezer.register(ipcMain)
   downloads.register(ipcMain)
     handleDeepLink(process.argv)
 

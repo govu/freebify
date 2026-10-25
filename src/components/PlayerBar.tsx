@@ -11,10 +11,11 @@ import { hasArtistPage } from "../api/types"
 import { useT } from "../i18n"
 import { fmtDuration } from "../utils/format"
 import { ArtworkImg } from "./ArtworkImg"
+import { BassPulse, LiveBars } from "./LiveBars"
 import { EqPopover } from "./EqPopover"
-import { Equalizer } from "./Equalizer"
 import { Marquee } from "./Marquee"
 import { Slider } from "./Slider"
+import { WavySeek } from "./WavySeek"
 
 export function PlayerBar() {
   const t = useT()
@@ -57,21 +58,23 @@ export function PlayerBar() {
       <div className="flex min-w-0 items-center gap-3">
         {current ? (
           <>
-            <motion.button
-              layoutId="np-art"
-              onClick={() => setNpOpen(true)}
-              aria-label={t("player.openNowPlaying")}
-              whileHover={{ scale: 1.04 }}
-              whileTap={{ scale: 0.97 }}
-              className="relative size-14 shrink-0 overflow-hidden rounded-lg"
-            >
-              <ArtworkImg art={current.artwork} size="150x150" alt={current.title} className="size-full" />
-              {isPlaying && (
-                <div className="absolute inset-0 grid place-items-center bg-black/40">
-                  <Equalizer playing className="text-white" />
-                </div>
-              )}
-            </motion.button>
+            <BassPulse active={isPlaying && Boolean(current)} className="relative size-14 shrink-0">
+              <motion.button
+                layoutId="np-art"
+                onClick={() => setNpOpen(true)}
+                aria-label={t("player.openNowPlaying")}
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.97 }}
+                className="relative size-full overflow-hidden rounded-lg"
+              >
+                <ArtworkImg art={current.artwork} size="150x150" alt={current.title} className="size-full" />
+                {isPlaying && (
+                  <div className="absolute inset-0 grid place-items-center bg-black/40">
+                    <LiveBars playing className="text-white" />
+                  </div>
+                )}
+              </motion.button>
+            </BassPulse>
             <div className="min-w-0">
               {/* meta crossfades on track change instead of hard-swapping */}
               <AnimatePresence mode="wait" initial={false}>
@@ -232,7 +235,7 @@ function SeekBar() {
   return (
     <div className="flex w-full max-w-xl items-center gap-2">
       <span className="min-w-10 text-right text-[11px] tabular-nums text-dim">{fmtDuration(currentTime)}</span>
-      <Slider value={currentTime} max={dur} className="flex-1" onCommit={(v) => seek(v)} smooth ariaLabel={t("player.seek")} disabled={!hasTrack} />
+      <WavySeek value={currentTime} max={dur} className="flex-1" onCommit={(v) => seek(v)} ariaLabel={t("player.seek")} disabled={!hasTrack} />
       <span className="min-w-10 text-[11px] tabular-nums text-dim">{fmtDuration(dur)}</span>
     </div>
   )

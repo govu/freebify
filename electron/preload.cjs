@@ -33,6 +33,10 @@ contextBridge.exposeInMainWorld("freebify", {
   spotify: {
     import: (id) => ipcRenderer.invoke("sp:import", id),
   },
+  // Deezer discovery: related-artist radio when YouTube's panel runs dry
+  deezer: {
+    radio: (artist, title, limit) => ipcRenderer.invoke("dz:radio", artist, title, limit),
+  },
   dl: {
     // downloaded files live in userData/downloads - the renderer plays
     // them back through the fbx://dl/<file> scheme

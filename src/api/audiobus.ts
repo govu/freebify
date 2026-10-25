@@ -13,6 +13,143 @@
 
 export const EQ_BANDS = [60, 250, 500, 1_000, 4_000, 8_000, 14_000]
 
+// Ambience controls: 0..1 sends and a drive amount. Kept in the bus (like the
+// EQ gains) because the graph outlives every element and every page.
+export interface Fx {
+  reverb: number
+  echo: number
+  drive: number
+}
+const FX_KEY = "fbx-fx"
+const ENH_KEY = "fbx-enhance"
+
+function readFx(): Fx {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FX_KEY) ?? "null") as Partial<Fx> | null
+    const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0)
+    return { reverb: num(raw?.reverb), echo: num(raw?.echo), drive: num(raw?.drive) }
+  } catch {
+    return { reverb: 0, echo: 0, drive: 0 }
+  }
+}
+
+function readEnhance(): boolean {
+  try {
+    return localStorage.getItem(ENH_KEY) === "1"
+  } catch {
+    return false
+  }
+}
+
+let fx: Fx = readFx()
+let enhance = readEnhance()
+let fxNodes: {
+  in: GainNode
+  drive: WaveShaperNode
+  dry: GainNode
+  conv: ConvolverNode
+  rev: GainNode
+  delay: DelayNode
+  fb: GainNode
+  echo: GainNode
+  comp: DynamicsCompressorNode
+  bass: BiquadFilterNode
+  pres: BiquadFilterNode
+  air: BiquadFilterNode
+  sat: WaveShaperNode
+} | null = null
+
+function driveCurve(amount: number): Float32Array<ArrayBuffer> {
+  const n = 1024
+  const curve = new Float32Array(n)
+  const k = amount * 24
+  for (let i = 0; i < n; i++) {
+    const x = (i * 2) / n - 1
+    curve[i] = k <= 0.001 ? x : Math.tanh(x * (1 + k)) / Math.tanh(1 + k)
+  }
+  return curve
+}
+
+// small synthetic hall: exponentially decaying noise, stereo decorrelated
+function impulse(c: AudioContext, secs = 2.2): AudioBuffer {
+  const rate = c.sampleRate
+  const len = Math.floor(rate * secs)
+  const buf = c.createBuffer(2, len, rate)
+  for (let ch = 0; ch < 2; ch++) {
+    const data = buf.getChannelData(ch)
+    for (let i = 0; i < len; i++) {
+      const decay = Math.exp(-i / (rate * secs * 0.32))
+      data[i] = (Math.random() * 2 - 1) * decay
+    }
+  }
+  return buf
+}
+
+function applyFx() {
+  if (!fxNodes || !ctx) return
+  const t = ctx.currentTime
+  fxNodes.rev.gain.setTargetAtTime(fx.reverb * 0.5, t, 0.05)
+  fxNodes.echo.gain.setTargetAtTime(fx.echo * 0.4, t, 0.05)
+  fxNodes.fb.gain.setTargetAtTime(0.18 + fx.echo * 0.24, t, 0.05)
+  fxNodes.drive.curve = driveCurve(fx.drive)
+}
+
+function applyEnhance() {
+  if (!fxNodes || !ctx) return
+  const t = ctx.currentTime
+  fxNodes.comp.ratio.setTargetAtTime(enhance ? 2 : 1, t, 0.05)
+  fxNodes.comp.threshold.setTargetAtTime(enhance ? -18 : 0, t, 0.05)
+  fxNodes.comp.knee.setTargetAtTime(enhance ? 12 : 0, t, 0.05)
+  fxNodes.bass.gain.setTargetAtTime(enhance ? 3 : 0, t, 0.05)
+  fxNodes.pres.gain.setTargetAtTime(enhance ? 2.2 : 0, t, 0.05)
+  fxNodes.air.gain.setTargetAtTime(enhance ? 1.6 : 0, t, 0.05)
+  // gentle cubic soft-clip: rounds transients without audible fizz
+  if (enhance) {
+    const n = 1024
+    const curve = new Float32Array(n)
+    for (let i = 0; i < n; i++) {
+      const x = (i * 2) / n - 1
+      curve[i] = x - 0.05 * Math.pow(x, 3)
+    }
+    fxNodes.sat.curve = curve
+  } else {
+    fxNodes.sat.curve = null
+  }
+}
+
+export function setFx(patch: Partial<Fx>) {
+  const clamp = (v: number) => Math.min(1, Math.max(0, v))
+  fx = {
+    reverb: clamp(patch.reverb ?? fx.reverb),
+    echo: clamp(patch.echo ?? fx.echo),
+    drive: clamp(patch.drive ?? fx.drive),
+  }
+  try {
+    localStorage.setItem(FX_KEY, JSON.stringify(fx))
+  } catch {
+    /* private mode: stays session-only */
+  }
+  applyFx()
+}
+
+export function getFx(): Fx {
+  return { ...fx }
+}
+
+export function setEnhance(on: boolean) {
+  enhance = Boolean(on)
+  try {
+    localStorage.setItem(ENH_KEY, enhance ? "1" : "0")
+  } catch {
+    /* private mode: stays session-only */
+  }
+  applyEnhance()
+}
+
+export function getEnhance(): boolean {
+  return enhance
+}
+
 let ctx: AudioContext | null = null
 let eqNodes: BiquadFilterNode[] = []
 
@@ -40,19 +177,78 @@ function ensure(): AudioContext {
       b.gain.value = eqGains[i] ?? 0
       return b
     })
-    // chain: ports → eqNodes[0..n] → limiter → destination
-    for (let i = 0; i < eqNodes.length - 1; i++) eqNodes[i].connect(eqNodes[i + 1])
     // safety limiter - normalization boosts and EQ gain can push a signal
     // past full scale at high user volume; compressing at -2 dB catches
     // the peaks transparently instead of hard-clipping the output
-    const lim = ctx.createDynamicsCompressor()
-    lim.threshold.value = -2
-    lim.knee.value = 0
-    lim.ratio.value = 20
-    lim.attack.value = 0.003
-    lim.release.value = 0.12
-    eqNodes[eqNodes.length - 1].connect(lim)
-    lim.connect(ctx.destination)
+    const limiter = ctx.createDynamicsCompressor()
+    limiter.threshold.value = -2
+    limiter.knee.value = 0
+    limiter.ratio.value = 20
+    limiter.attack.value = 0.003
+    limiter.release.value = 0.12
+
+    // chain: ports → eqNodes[0..n] → enhancer → fx → limiter → destination
+    for (let i = 0; i < eqNodes.length - 1; i++) eqNodes[i].connect(eqNodes[i + 1])
+
+    // "enhance": a fixed chain whose nodes are transparent when off, so
+    // toggling is parameter-only and never rewires the graph
+    const comp = ctx.createDynamicsCompressor()
+    comp.attack.value = 0.01
+    comp.release.value = 0.24
+    const bass = ctx.createBiquadFilter()
+    bass.type = "lowshelf"
+    bass.frequency.value = 95
+    const pres = ctx.createBiquadFilter()
+    pres.type = "peaking"
+    pres.frequency.value = 3_000
+    pres.Q.value = 0.9
+    const air = ctx.createBiquadFilter()
+    air.type = "highshelf"
+    air.frequency.value = 10_000
+    const sat = ctx.createWaveShaper()
+    sat.oversample = "2x"
+
+    const fxIn = ctx.createGain()
+    const drive = ctx.createWaveShaper()
+    drive.oversample = "2x"
+    const dry = ctx.createGain()
+    dry.gain.value = 1
+    const conv = ctx.createConvolver()
+    conv.buffer = impulse(ctx)
+    const rev = ctx.createGain()
+    rev.gain.value = 0
+    const delay = ctx.createDelay(1)
+    delay.delayTime.value = 0.32
+    const fb = ctx.createGain()
+    fb.gain.value = 0.2
+    const echo = ctx.createGain()
+    echo.gain.value = 0
+
+    eqNodes[eqNodes.length - 1].connect(comp)
+    comp.connect(bass)
+    bass.connect(pres)
+    pres.connect(air)
+    air.connect(sat)
+    sat.connect(fxIn)
+
+    fxIn.connect(drive)
+    drive.connect(dry)
+    dry.connect(limiter)
+    // sends: reverb is fully wet, echo keeps its feedback loop off the dry path
+    fxIn.connect(conv)
+    conv.connect(rev)
+    rev.connect(limiter)
+    fxIn.connect(delay)
+    delay.connect(fb)
+    fb.connect(delay)
+    delay.connect(echo)
+    echo.connect(limiter)
+
+    fxNodes = { in: fxIn, drive, dry, conv, rev, delay, fb, echo, comp, bass, pres, air, sat }
+    applyEnhance()
+    applyFx()
+
+    limiter.connect(ctx.destination)
   }
   if (ctx.state === "suspended") void ctx.resume()
   // A play() that lands AFTER the click's transient activation expired
@@ -212,6 +408,16 @@ export function rmsOf(el: HTMLAudioElement): number {
   let sum = 0
   for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i]
   return Math.sqrt(sum / buf.length)
+}
+
+/** Frequency spectrum (0..255 per bin) of an element's signal. False when the
+ *  element isn't on the bus (iframe engine, plain browser) or `out` is the
+ *  wrong size - callers fall back to a decorative animation. */
+export function spectrumOf(el: HTMLAudioElement, out: Uint8Array<ArrayBuffer>): boolean {
+  const p = ports.get(el)
+  if (!p || out.length !== p.meter.frequencyBinCount) return false
+  p.meter.getByteFrequencyData(out)
+  return true
 }
 
 /** crossOrigin=anonymous MUST be set before the first src assignment -

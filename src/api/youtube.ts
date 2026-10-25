@@ -38,7 +38,10 @@ interface YtBridge {
 export interface SpotifyImport {
   ok: boolean
   name?: string
-  tracks?: { title: string; artist: string }[]
+  tracks?: { title: string; artist: string; duration?: number }[]
+  // Spotify only published its first 100 tracks and the full read failed
+  limited?: boolean
+  source?: "pathfinder" | "embed"
 }
 
 declare global {
@@ -47,6 +50,10 @@ declare global {
       yt: YtBridge
       spotify?: {
         import: (id: string) => Promise<SpotifyImport | null>
+      }
+      deezer?: {
+        radio: (artist: string, title: string, limit?: number) =>
+          Promise<{ title: string; artist: string; duration?: number }[]>
       }
       dl?: {
         list: () => Promise<{ id: string; file: string; addedAt: number; track: Track }[]>

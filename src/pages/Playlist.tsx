@@ -1,5 +1,5 @@
 import { motion } from "motion/react"
-import { Check, Download, Link2, ListMusic, Pencil, Play, Plus, Search, Share2, Trash2 } from "lucide-react"
+import { ArrowUpDown, Check, Download, Link2, ListMusic, Pencil, Play, Plus, Search, Share2, Trash2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { apiClient } from "../api/audius"
@@ -273,12 +273,14 @@ function LocalPlaylistView({ id }: { id: string }) {
   const renamePlaylist = useLibrary((s) => s.renamePlaylist)
   const deletePlaylist = useLibrary((s) => s.deletePlaylist)
   const removeFromPlaylist = useLibrary((s) => s.removeFromPlaylist)
+  const sortPlaylist = useLibrary((s) => s.sortPlaylist)
   const playContext = usePlayer((s) => s.playContext)
   const startAll = useDownloads((s) => s.startAll)
   const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState("")
   const [confirmDel, setConfirmDel] = useState(false)
+  const [sorted, setSorted] = useState<"title" | "artist" | "duration" | null>(null)
   const tt = useT()
 
   if (!playlist) {
@@ -372,6 +374,27 @@ function LocalPlaylistView({ id }: { id: string }) {
           >
             <Download size={15} /> {tt("playlist.downloadAll")}
           </button>
+        )}
+        {tracks.length > 1 && (
+          <div className="flex items-center gap-1 rounded-full border border-line p-1">
+            <span className="flex items-center gap-1.5 pl-2 pr-1 text-[11px] font-semibold text-faint">
+              <ArrowUpDown size={12} /> {tt("playlist.sort")}
+            </span>
+            {(["title", "artist", "duration"] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => {
+                  sortPlaylist(id, mode)
+                  setSorted(mode)
+                }}
+                className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                  sorted === mode ? "bg-white text-black" : "text-dim hover:bg-hover hover:text-ink"
+                }`}
+              >
+                {tt(`playlist.sort.${mode}`)}
+              </button>
+            ))}
+          </div>
         )}
         {tracks.length > 0 && window.freebify?.app?.saveJson && (
           <button

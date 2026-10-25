@@ -30,6 +30,8 @@ interface LibraryState {
   addTracksToPlaylist: (id: string, tracks: Track[]) => void
   removeFromPlaylist: (id: string, trackId: string) => void
   moveInPlaylist: (id: string, from: number, to: number) => void
+  // reorder a local playlist in place; the user asks for it, so no undo
+  sortPlaylist: (id: string, mode: "title" | "artist" | "duration") => void
 }
 
 const newId = () =>
@@ -212,6 +214,20 @@ export const useLibrary = create<LibraryState>()(
           ),
         })),
 
+      sortPlaylist: (id, mode) =>
+        set((s) => ({
+          playlists: s.playlists.map((p) => {
+            if (p.id !== id) return p
+            const text = (v?: string) => (v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            const cmp = (a: Track, b: Track) => {
+              if (mode === "duration") return (a.duration || Infinity) - (b.duration || Infinity)
+              const ka = text(mode === "title" ? a.title : a.user?.name)
+              const kb = text(mode === "title" ? b.title : b.user?.name)
+              return ka.localeCompare(kb, undefined, { sensitivity: "base", numeric: true })
+            }
+            return { ...p, tracks: [...p.tracks].sort(cmp) }
+          }),
+        })),
       moveInPlaylist: (id, from, to) =>
         set((s) => ({
           playlists: s.playlists.map((p) => {
