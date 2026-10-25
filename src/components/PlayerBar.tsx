@@ -15,7 +15,6 @@ import { BassPulse, LiveBars } from "./LiveBars"
 import { EqPopover } from "./EqPopover"
 import { Marquee } from "./Marquee"
 import { Slider } from "./Slider"
-import { WavySeek } from "./WavySeek"
 
 export function PlayerBar() {
   const t = useT()
@@ -235,7 +234,7 @@ function SeekBar() {
   return (
     <div className="flex w-full max-w-xl items-center gap-2">
       <span className="min-w-10 text-right text-[11px] tabular-nums text-dim">{fmtDuration(currentTime)}</span>
-      <WavySeek value={currentTime} max={dur} className="flex-1" onCommit={(v) => seek(v)} ariaLabel={t("player.seek")} disabled={!hasTrack} />
+      <Slider value={currentTime} max={dur} className="flex-1" onCommit={(v) => seek(v)} smooth ariaLabel={t("player.seek")} disabled={!hasTrack} />
       <span className="min-w-10 text-[11px] tabular-nums text-dim">{fmtDuration(dur)}</span>
     </div>
   )

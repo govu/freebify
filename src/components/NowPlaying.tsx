@@ -1,5 +1,5 @@
 import {
-  ChevronDown, Heart, ListMusic, Loader2, Maximize2, MicVocal, Minimize2, Pause, Play,
+  ChevronDown, Heart, ListMusic, Loader2, MicVocal, Pause, Play,
   Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Volume1, Volume2, VolumeX,
 } from "lucide-react"
 import { AnimatePresence, motion, useDragControls } from "motion/react"
@@ -15,7 +15,6 @@ import { useT } from "../i18n"
 import { ArtworkImg } from "./ArtworkImg"
 import { Marquee } from "./Marquee"
 import { Slider } from "./Slider"
-import { WavySeek } from "./WavySeek"
 
 interface LrcLine {
   t: number
@@ -570,96 +569,35 @@ const lrcGet = async (path: string, p: Record<string, string>): Promise<LrcRec[]
 // memoized row - the 10fps lyric clock ticks the whole list, but only the
 // row whose active/past flag changed re-renders (Spotify-style: the whole
 // line lights up - no word fill, no scale)
-// Karaoke fill: the sung part of the line is painted white, the rest stays
-// dim, with the boundary moving as the line plays. Character weights only
-// decide *which* character the voice is on (vowels and CJK hold longer);
-// the width comes from the character index, so the gradient stays aligned
-// with the glyphs instead of the syllable count.
-const CJK = /^[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Hangul}]$/u
-const PUNCT = /^[\s\p{P}]$/u
-
-function charWeight(c: string) {
-  if (PUNCT.test(c)) return 0.4
-  if (CJK.test(c)) return 3
-  return "aeiouyáéíóúàèìòùâêîôûäëïöüãõåæø".includes(c.toLowerCase()) ? 2.4 : 1
-}
-
-function karaokeStyle(text: string, progress: number): React.CSSProperties {
-  const chars = [...text]
-  const n = chars.length
-  if (n === 0) return {}
-  const weights = chars.map(charWeight)
-  const total = weights.reduce((a, b) => a + b, 0)
-  let acc = 0
-  let at = 0
-  const target = Math.min(1, Math.max(0, progress)) * total
-  for (let i = 0; i < n; i++) {
-    if (acc + weights[i] / 2 >= target) break
-    acc += weights[i]
-    at = i + 1
-  }
-  const edge = Math.min(6, Math.max(1.2, 100 / n))
-  const pct = (at / n) * 100
-  return {
-    backgroundImage: `linear-gradient(90deg, #fff 0%, #fff ${pct}%, rgba(255,255,255,0.38) ${pct + edge}%, rgba(255,255,255,0.38) 100%)`,
-    WebkitBackgroundClip: "text",
-    backgroundClip: "text",
-    color: "transparent",
-  }
-}
-
-// a 0 means "not singing yet", not a value worth a gradient
-function hasSinging(sing?: number): boolean {
-  return typeof sing === "number" && sing > 0 && sing < 1
-}
-
 const LineRow = memo(function LineRow({
   i,
   l,
   active,
   past,
-  stage,
-  sing,
   onTap,
 }: {
   i: number
   l: LrcLine
   active: boolean
   past: boolean
-  stage?: boolean
-  sing?: number
   onTap: (e: MouseEvent<HTMLButtonElement>, l: LrcLine) => void
 }) {
   const tt = useT()
-  const singing = active && hasSinging(sing)
   return (
     <button
       data-l={i}
       onClick={(e) => onTap(e, l)}
       title={tt("np.lineHint")}
-      className={`block w-full cursor-pointer px-4 py-2.5 font-bold leading-snug transition-colors duration-150 ease-out ${
-        stage ? "text-4xl md:text-5xl" : "text-2xl md:text-3xl"
-      } ${
+      className={`block w-full cursor-pointer px-4 py-2.5 text-2xl font-bold leading-snug transition-colors duration-150 ease-out md:text-3xl ${
         active ? "text-ink" : past ? "text-ink/45 hover:text-ink/70" : "text-ink/25 hover:text-ink/50"
       }`}
     >
-      {/* the gradient is anchored to the text, not the row: a centred short
-          line would otherwise sit past the fill boundary and read as fully
-          sung from the first frame */}
-      <span style={singing ? karaokeStyle(l.text, sing as number) : undefined}>{l.text}</span>
+      {l.text}
     </button>
   )
 })
 
-function SyncedLyrics({
-  lines,
-  autoOff,
-  stage,
-}: {
-  lines: LrcLine[]
-  autoOff: number
-  stage?: boolean
-}) {
+function SyncedLyrics({ lines, autoOff }: { lines: LrcLine[]; autoOff: number }) {
   // The store clock ticks at ~4Hz (the element's timeupdate) - between
   // ticks a line can sit ~250ms behind the music, which reads as a laggy
   // highlight. Interpolate locally from the last tick while playing so
@@ -772,14 +710,6 @@ function SyncedLyrics({
     if (lines[i].t <= adj + 0.15) active = i
     else break
   }
-  // how far the voice is through the active line; the next line's timestamp
-  // is the natural end, with a floor so a fast rap line doesn't flash over
-  let sing = 0
-  if (active >= 0) {
-    const start = lines[active].t
-    const end = lines[active + 1]?.t ?? start + 4
-    sing = Math.min(1, Math.max(0, (adj - start) / Math.max(0.6, end - start)))
-  }
   const listRef = useRef<HTMLDivElement>(null)
   // manual scroll pauses auto-follow ~5s - without this the next line
   // change yanks the view back while the user reads ahead
@@ -849,8 +779,6 @@ function SyncedLyrics({
               l={l}
               active={i === active}
               past={i < active}
-              stage={stage}
-              sing={i === active ? sing : undefined}
               onTap={onLineTap}
             />
           ))}
@@ -912,14 +840,11 @@ export function NowPlaying() {
   // (karaoke-style live highlighting); YouTube Music / lyrics.ovh are the
   // plain-text fallbacks. null = confirmed unavailable → mic hides
   const [showLyrics, setShowLyrics] = useState(false)
-  // stage = lyrics only, bigger type, the whole panel given to the song
-  const [stage, setStage] = useState(false)
   const [lyrics, setLyrics] = useState<{ synced: LrcLine[]; autoOff: number } | { plain: string } | null>(null)
   const [lyricsTried, setLyricsTried] = useState(false)
   const [lyricsLoading, setLyricsLoading] = useState(false)
   useEffect(() => {
     setShowLyrics(false)
-    setStage(false)
     setLyrics(null)
     setLyricsTried(false)
   }, [current?.id])
@@ -1987,12 +1912,8 @@ export function NowPlaying() {
                 {lyricsLoading ? (
                   <Loader2 size={28} className="animate-spin text-ink/50" />
                 ) : lyrics && "synced" in lyrics ? (
-                  <div
-                    className={`h-full ${
-                      stage ? "w-[min(94vw,1180px)]" : "w-[min(92vw,840px)]"
-                    } [mask-image:linear-gradient(180deg,transparent,black_10%,black_90%,transparent)]`}
-                  >
-                    <SyncedLyrics lines={lyrics.synced} autoOff={lyrics.autoOff} stage={stage} />
+                  <div className="h-full w-[min(92vw,840px)] [mask-image:linear-gradient(180deg,transparent,black_10%,black_90%,transparent)]">
+                    <SyncedLyrics lines={lyrics.synced} autoOff={lyrics.autoOff} />
                   </div>
                 ) : lyrics ? (
                   <div className="relative h-full w-[min(92vw,840px)]">
@@ -2081,16 +2002,6 @@ export function NowPlaying() {
                   <MicVocal size={22} />
                 </button>
               )}
-              {showLyrics && lyrics && "synced" in lyrics && (
-                <button
-                  onClick={() => setStage((v) => !v)}
-                  aria-label={tt(stage ? "np.stageExit" : "np.stage")}
-                  aria-pressed={stage}
-                  className={`transition ${stage ? "text-ink" : "text-ink/60 hover:text-ink"}`}
-                >
-                  {stage ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
-                </button>
-              )}
               <motion.button
                 whileTap={{ scale: 1.3 }}
                 onClick={() => toggleLike(current)}
@@ -2176,7 +2087,7 @@ function NpSeekBar({ trackDuration }: { trackDuration?: number }) {
   const dur = duration || trackDuration || 0
   return (
     <div className="mt-5">
-      <WavySeek value={currentTime} max={dur} onCommit={(v) => seek(v)} ariaLabel={tt("np.seek")} />
+      <Slider value={currentTime} max={dur} onCommit={(v) => seek(v)} smooth ariaLabel={tt("np.seek")} />
       <div className="mt-1 flex justify-between text-[11px] tabular-nums text-ink/50">
         <span>{fmtDuration(currentTime)}</span>
         <span>{fmtDuration(dur)}</span>

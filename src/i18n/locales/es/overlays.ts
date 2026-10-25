@@ -19,8 +19,6 @@ export default {
   "np.repeatOne": "Repetir: una canción",
   "np.seek": "Posición",
   "np.shuffle": "Aleatorio",
-  "np.stage": "Solo letra",
-  "np.stageExit": "Salir de solo letra",
   "np.title": "Sonando ahora",
   "np.unlike": "Quitar de Me gusta",
   "np.unmute": "Quitar silencio",

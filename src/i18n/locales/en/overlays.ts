@@ -19,8 +19,6 @@ export default {
   "np.repeatOne": "Repeat: one",
   "np.seek": "Seek",
   "np.shuffle": "Shuffle",
-  "np.stage": "Lyrics only",
-  "np.stageExit": "Exit lyrics only",
   "np.title": "Now playing",
   "np.unlike": "Remove from Liked Songs",
   "np.unmute": "Unmute",
