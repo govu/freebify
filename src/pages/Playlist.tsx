@@ -14,6 +14,7 @@ import { t, useT } from "../i18n"
 import { exportPlaylistToFile, useLibrary } from "../store/library"
 import { useDownloads } from "../store/downloads"
 import { notify, usePlayer } from "../store/player"
+import { enqueuePending, useResolve } from "../store/resolve"
 import { fmtCount, fmtDuration } from "../utils/format"
 
 export function PlaylistPage() {
@@ -282,6 +283,16 @@ function LocalPlaylistView({ id }: { id: string }) {
   const [confirmDel, setConfirmDel] = useState(false)
   const [sorted, setSorted] = useState<"title" | "artist" | "duration" | null>(null)
   const tt = useT()
+  const resolving = useResolve((s) => s.lists[id])
+
+  // a playlist imported in an earlier session may still hold unresolved rows
+  // (the app was closed mid-import) - opening it picks the work back up
+  const pendingCount = playlist?.tracks.filter((t) => t.pending).length ?? 0
+  useEffect(() => {
+    if (!pendingCount) return
+    const current = useLibrary.getState().playlists.find((p) => p.id === id)
+    if (current) enqueuePending(id, current.tracks.filter((t) => t.pending))
+  }, [id, pendingCount])
 
   if (!playlist) {
     return (
@@ -353,6 +364,11 @@ function LocalPlaylistView({ id }: { id: string }) {
           )}
           <p className="mt-3 text-sm text-dim">
             {tt("playlist.trackCount", { n: tracks.length })}{totalSec > 0 && ` · ${fmtDuration(totalSec)}`}
+            {resolving && (
+              <span className="ml-2 text-faint">
+                · {tt("playlist.resolving", { done: resolving.done, total: resolving.total })}
+              </span>
+            )}
           </p>
         </motion.div>
       </div>

@@ -29,6 +29,11 @@ interface LibraryState {
   addToPlaylist: (id: string, track: Track) => void
   addTracksToPlaylist: (id: string, tracks: Track[]) => void
   removeFromPlaylist: (id: string, trackId: string) => void
+  // bulk placeholder resolution - ONE set() for a whole resolved chunk;
+  // ids that no longer exist are ignored
+  resolveTracks: (hits: Map<string, Track>) => void
+  // unresolved rows that will never match (import cleanup)
+  dropTracks: (ids: string[]) => void
   moveInPlaylist: (id: string, from: number, to: number) => void
   // reorder a local playlist in place; the user asks for it, so no undo
   sortPlaylist: (id: string, mode: "title" | "artist" | "duration") => void
@@ -213,6 +218,36 @@ export const useLibrary = create<LibraryState>()(
             p.id === id ? { ...p, tracks: p.tracks.filter((t) => t.id !== trackId) } : p
           ),
         })),
+
+      resolveTracks: (hits) =>
+        set((s) => {
+          if (!hits.size) return s
+          let touched = false
+          const playlists = s.playlists.map((p) => {
+            if (!p.tracks.some((t) => hits.has(t.id))) return p
+            touched = true
+            // swap in place: position IS the playlist order, so resolving a
+            // row must never reorder it
+            return {
+              ...p,
+              tracks: p.tracks.map((t) => hits.get(t.id) ?? t),
+            }
+          })
+          return touched ? { playlists } : s
+        }),
+
+      dropTracks: (ids) =>
+        set((s) => {
+          if (!ids.length) return s
+          const gone = new Set(ids)
+          let touched = false
+          const playlists = s.playlists.map((p) => {
+            if (!p.tracks.some((t) => gone.has(t.id))) return p
+            touched = true
+            return { ...p, tracks: p.tracks.filter((t) => !gone.has(t.id)) }
+          })
+          return touched ? { playlists } : s
+        }),
 
       sortPlaylist: (id, mode) =>
         set((s) => ({

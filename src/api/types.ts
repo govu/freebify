@@ -37,6 +37,9 @@ export interface Track {
   id: string
   source?: "audius" | "yt"
   streamId?: string
+  // imported row whose YouTube match hasn't landed yet - it renders from the
+  // import metadata and is resolved (or clicked past) by the import queue
+  pending?: boolean
   title: string
   duration: number
   genre?: string | null

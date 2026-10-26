@@ -29,8 +29,6 @@ export default {
   "import.limited": "Importadas {n} canciones. Spotify solo publicó las primeras 100, exporta un CSV para traer el resto.",
   "import.linkHint": "Spotify: pega cualquier playlist pública, lista completa. YouTube Music: lista completa, sin emparejamientos.",
   "import.linkLabel": "Enlace de Spotify o YouTube Music",
-  "import.matching": "Buscando {done}/{total}…",
-  "import.noMatches": "Ninguna canción coincidió",
   "import.notFound": "Playlist no encontrada. Comprueba que no sea privada",
   "import.pasteLink": "Pega un enlace de playlist de Spotify o YouTube Music",
   "import.submit": "Importar playlist",

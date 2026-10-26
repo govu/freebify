@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld("freebify", {
   yt: {
     available: () => ipcRenderer.invoke("yt:available"),
     search: (q) => ipcRenderer.invoke("yt:search", q),
+    match: (items) => ipcRenderer.invoke("yt:match", items),
     stream: (videoId) => ipcRenderer.invoke("yt:stream", videoId),
     prefetch: (videoId) => ipcRenderer.invoke("yt:prefetch", videoId),
     invalidate: (videoId) => ipcRenderer.invoke("yt:invalidate", videoId),

@@ -98,12 +98,9 @@ async function pathfinder(id, token) {
     "Accept-Language": "en-US,en;q=0.9",
     "User-Agent": UA,
   }
-  const tracks = []
-  let name = ""
-  let total = Infinity
-  let offset = 0
-  let pages = 0
-  while (offset < total && pages < MAX_PAGES) {
+  // one page of 100. Returns null when Spotify refuses - the caller decides
+  // whether the pages it already has are still worth importing.
+  const page = async (offset) => {
     const body = JSON.stringify({
       variables: { uri, offset, limit: PAGE, enableWatchFeedEntrypoint: true },
       operationName: "fetchPlaylist",
@@ -115,30 +112,64 @@ async function pathfinder(id, token) {
       body,
       signal: AbortSignal.timeout(20000),
     })
-    pages++
     if (!res.ok) {
       log("spotify.import", `pathfinder ${res.status} at offset ${offset}`)
       return null
     }
-    let page
     try {
-      page = (await res.json())?.data?.playlistV2
+      return (await res.json())?.data?.playlistV2 ?? null
     } catch {
       log("spotify.import", "pathfinder returned a non-JSON body")
       return null
     }
-    const content = page?.content
-    const items = content?.items
-    if (!Array.isArray(items) || items.length === 0) break
-    name ||= String(page?.name ?? "")
-    if (Number.isFinite(content?.totalCount)) total = content.totalCount
+  }
+
+  const mk = (raw) => {
+    const content = raw?.content
+    const items = Array.isArray(content?.items) ? content.items : []
+    const tracks = []
     for (const it of items) {
       const t = mapItem(it)
       if (t) tracks.push(t)
     }
-    offset += items.length
-    if (items.length < PAGE) break
+    return {
+      name: String(raw?.name ?? ""),
+      items: items.length,
+      total: Number.isFinite(content?.totalCount) ? content.totalCount : 0,
+      tracks,
+    }
   }
+
+  const first = await page(0)
+  if (!first) return null
+  const head = mk(first)
+  const total = head.total || head.items
+  const tracks = head.tracks
+  let name = head.name
+
+  // pages past the first are independent offsets, so a 1000 track list is
+  // ten simultaneous requests instead of ten round trips one after another
+  const PAGE_CONC = 5
+  const offsets = []
+  for (let o = PAGE; o < total && offsets.length < MAX_PAGES; o += PAGE) offsets.push(o)
+  for (let i = 0; i < offsets.length; i += PAGE_CONC) {
+    const batch = offsets.slice(i, i + PAGE_CONC)
+    const pages = await Promise.all(batch.map((o) => page(o)))
+    // a silent refusal mid-list keeps what we already have - a partial
+    // playlist beats no playlist, and the UI marks it as limited
+    let stopped = false
+    for (const raw of pages) {
+      if (!raw) {
+        stopped = true
+        break
+      }
+      const p = mk(raw)
+      name ||= p.name
+      tracks.push(...p.tracks)
+    }
+    if (stopped) break
+  }
+
   if (tracks.length === 0) return null
   if (tracks.length < total - 1) log("spotify.import", `pathfinder short: ${tracks.length}/${total}`)
   return { name, tracks, total }

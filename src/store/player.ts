@@ -8,6 +8,7 @@ import { attach, detach, fadeTo, fadeCurve, mkAudio, resume, rmsOf, spectrumOf, 
 import type { RepeatMode, Track } from "../api/types"
 import { useLibrary } from "./library"
 import { useDownloads } from "./downloads"
+import { resolveNow } from "./resolve"
 import { isObj, isValidTrack, repairTrack, safeStorage, sanitizeTrackList, slimTrack } from "./storage"
 
 // The live media element. Swapped at track boundaries for the prebuffered
@@ -573,8 +574,31 @@ function maybeFillRadio() {
 export const usePlayer = create<PlayerState>()(
     (set, get) => {
       const loadAt = async (index: number, startPos = 0) => {
-        const track = get().queue[index]
+        let track = get().queue[index]
         if (!track) return
+        // an imported row still waiting on its YouTube match: show it right
+        // away with the buffering spinner, resolve out of band, then swap the
+        // real track into the queue slot (positions never shift)
+        if (track.pending) {
+          const before = loadSeq
+          set({
+            index, current: track, isPlaying: false,
+            currentTime: 0, duration: track.duration ?? 0, buffering: true,
+          })
+          const real = await resolveNow(track)
+          // a newer load won the race while this one resolved - drop it
+          if (before !== loadSeq) return
+          if (!real) {
+            set({ buffering: false })
+            notify(tt("core.unavailable"))
+            failAdvance()
+            return
+          }
+          const q = get().queue.slice()
+          q[index] = real
+          set({ queue: q })
+          track = real
+        }
         restoredSession = false
         streamRetries = 0
         const seq = ++loadSeq

@@ -3,15 +3,16 @@ import { FileSpreadsheet, Link2, Loader2, X } from "lucide-react"
 import { useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { yt } from "../api/youtube"
+import type { Track } from "../api/types"
 import { t, useT } from "../i18n"
 import { notify } from "../store/player"
 import { useLibrary } from "../store/library"
+import { enqueuePending } from "../store/resolve"
 
 // Import playlists: Spotify or YouTube Music links, or a CSV export
-// (each row re-matched by search). Best-effort matching - the top
-// YouTube Music hit is taken; originals-only catalog means a few misses.
-// Spotify publishes only its first 100 tracks publicly (its own cap) -
-// that's what the import reads; longer lists go through the CSV tab.
+// (each row re-matched by search). Best-effort matching - the best scored
+// hit is taken; originals-only catalog means a few misses. Matching runs in
+// the main process at high concurrency, so even a 1000 track list is quick.
 
 const YT_LIST = /[?&]list=([A-Za-z0-9_-]+)/
 const SPOTIFY_LIST = /open\.spotify\.com\/playlist\/([A-Za-z0-9]+)/
@@ -19,6 +20,7 @@ const SPOTIFY_LIST = /open\.spotify\.com\/playlist\/([A-Za-z0-9]+)/
 interface ImportEntry {
   title: string
   artist: string
+  duration?: number
 }
 // minimal CSV cell parser - quoted fields, escaped "" quotes, comma sep
 function csvRows(text: string): string[][] {
@@ -62,56 +64,52 @@ export function ImportPlaylist() {
   const [open, setOpen] = useState(false)
   const [url, setUrl] = useState("")
   const [busy, setBusy] = useState(false)
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const createPlaylist = useLibrary((s) => s.createPlaylist)
   const addTracksToPlaylist = useLibrary((s) => s.addTracksToPlaylist)
-  const deletePlaylist = useLibrary((s) => s.deletePlaylist)
   const fileRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
   const tt = useT()
 
   const finish = (pid: string, n: number, limited?: boolean) => {
     setBusy(false)
-    setProgress(null)
     setOpen(false)
     notify(limited ? t("import.limited", { n }) : t("import.imported", { n }))
     navigate(`/playlist/${pid}`)
   }
 
-  // every entry is re-matched on YouTube Music - the top hit wins.
-  // batches of 4 so a long list doesn't hammer search in one burst
+  // The playlist is created from the import metadata alone - every row is
+  // real from the first frame and resolved behind it (store/resolve.ts), so
+  // a 1000 track list is usable in about a second instead of a modal
+  // counting to 1000.
   const matchEntries = async (playlistName: string, entries: ImportEntry[], limited?: boolean) => {
-    setProgress({ done: 0, total: entries.length })
     const pid = createPlaylist(playlistName)
-    let found = 0
-    const BATCH = 4
-    for (let i = 0; i < entries.length; i += BATCH) {
-      const chunk = entries.slice(i, i + BATCH)
-      const hits = await Promise.all(
-        chunk.map(async (e) => {
-          const q = `${e.artist} ${e.title}`.trim()
-          if (!q) return null
-          try {
-            const res = await yt.search(q)
-            return res.tracks[0] ?? null
-          } catch {
-            return null
-          }
-        })
-      )
-      addTracksToPlaylist(pid, hits.filter((t): t is NonNullable<typeof t> => Boolean(t)))
-      found += hits.filter(Boolean).length
-      setProgress({ done: Math.min(i + BATCH, entries.length), total: entries.length })
-    }
-    if (found === 0) {
-      // every row failed to match - an empty playlist is worse than none
-      deletePlaylist(pid)
-      notify(t("import.noMatches"))
-      setBusy(false)
-      setProgress(null)
-      return
-    }
-    finish(pid, found, limited)
+    const placeholders: Track[] = entries.map((e, i) => ({
+      id: `spi-${pid}-${i}`,
+      source: "yt",
+      pending: true,
+      title: e.title || "Untitled",
+      duration: e.duration ?? 0,
+      play_count: 0,
+      repost_count: 0,
+      favorite_count: 0,
+      artwork: null,
+      user: {
+        id: `spa-${e.artist.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+        handle: e.artist,
+        name: e.artist || "Unknown artist",
+        is_verified: false,
+        follower_count: 0,
+        track_count: 0,
+        profile_picture: null,
+        cover_photo: null,
+      },
+    }))
+    addTracksToPlaylist(pid, placeholders)
+    enqueuePending(pid, placeholders)
+    setBusy(false)
+    setOpen(false)
+    notify(limited ? t("import.limited", { n: placeholders.length }) : t("import.imported", { n: placeholders.length }))
+    navigate(`/playlist/${pid}`)
   }
 
   const importUrl = async () => {
@@ -149,14 +147,12 @@ export function ImportPlaylist() {
       if (!res?.ok || !res.name) {
         notify(t("import.unreadable"))
         setBusy(false)
-        setProgress(null)
         return
       }
       await matchEntries(res.name, res.tracks ?? [], res.limited)
     } catch {
       notify(t("import.failed"))
       setBusy(false)
-      setProgress(null)
     }
   }
 
@@ -168,13 +164,12 @@ export function ImportPlaylist() {
       const [ti, ai] = findCols(rows[0])
       const entries: ImportEntry[] = rows
         .slice(1)
-        .slice(0, 5000) // 1 search per row in batches of 4 - beyond this the churn dwarfs the payoff
+        .slice(0, 5000) // rows land instantly, matching fills in behind them
         .map((r) => ({ title: r[ti]?.trim() ?? "", artist: r[ai]?.trim() ?? "" }))
       await matchEntries(file.name.replace(/\.[^.]+$/, ""), entries)
     } catch {
       notify(t("import.badCsv"))
       setBusy(false)
-      setProgress(null)
     }
   }
 
@@ -201,7 +196,6 @@ export function ImportPlaylist() {
     } catch {
       notify(t("import.badJson"))
       setBusy(false)
-      setProgress(null)
     }
   }
 
@@ -261,13 +255,7 @@ export function ImportPlaylist() {
                   disabled={busy || !url.trim()}
                   className="mt-3 w-full rounded-full bg-white py-2.5 text-sm font-bold text-black transition enabled:hover:scale-[1.02] disabled:opacity-40"
                 >
-                  {busy && !progress ? (
-                    <Loader2 size={15} className="mx-auto animate-spin" />
-                  ) : progress ? (
-                    tt("import.matching", { done: progress.done, total: progress.total })
-                  ) : (
-                    tt("import.submit")
-                  )}
+                  {busy ? <Loader2 size={15} className="mx-auto animate-spin" /> : tt("import.submit")}
                 </button>
               </div>
 
@@ -294,9 +282,7 @@ export function ImportPlaylist() {
                   disabled={busy}
                   className="w-full rounded-full border border-line py-2.5 text-sm font-semibold text-dim transition enabled:hover:border-dim enabled:hover:text-ink disabled:opacity-40"
                 >
-                  {progress
-                    ? tt("import.matching", { done: progress.done, total: progress.total })
-                    : tt("import.chooseCsv")}
+                  {tt("import.chooseCsv")}
                 </button>
               </div>
             </motion.div>

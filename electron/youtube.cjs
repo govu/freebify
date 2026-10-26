@@ -1060,6 +1060,186 @@ async function search(query) {
   }
 }
 
+// ---------- bulk song matching (playlist import) ----------
+// Import used to run the full three-way catalog search per track, four at a
+// time, from the renderer - a 1000 track Spotify list took minutes. Now: one
+// "song" search per track, 14 in flight inside the main process, deduped by
+// normalized title+artist and cached to disk, so a repeat import is instant.
+
+// decoration that never helps a search and routinely hides the real title
+const JUNK_WORD =
+  /\b(feat\.?|ft\.?|featuring|remaster(?:ed)?|mono|stereo|explicit|deluxe|anniversary|bonus track|with)\b/i
+const TAIL_JUNK = /\s+-\s+(?:\d{4}\s+)?(?:remaster(?:ed)?(?:\s+\d{4})?|album version|single version)\s*$/i
+
+function fold(s) {
+  return String(s ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+}
+
+// "Song (feat. X) [Remastered 2011] - Remastered" → "song"
+function cleanText(s) {
+  const drop = (m, inner) => (JUNK_WORD.test(inner) ? " " : m)
+  return fold(s)
+    .replace(/\(([^)]*)\)/g, drop)
+    .replace(/\[([^\]]*)\]/g, drop)
+    .replace(TAIL_JUNK, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+}
+
+// Spotify lists every credit ("A, B & C") - the first name is what YouTube
+// indexes, and the full string makes the query ambiguous
+function firstArtist(artist) {
+  return cleanText(fold(artist).split(/\s*(?:,|&|\/|;)\s*|\s+(?:feat\.?|ft\.?|with|x)\s+/)[0])
+}
+
+const matchKey = (title, artist) => {
+  const a = firstArtist(artist)
+  const t = cleanText(title)
+  return a ? `${a} ${t}`.trim() : t
+}
+
+// pick among the top hits instead of blindly trusting rank 1: exact title,
+// artist match and (when Spotify gave us one) a duration within a few
+// seconds all add up, so live/cover/karaoke uploads lose to the real track
+function matchScore(t, title, artist, duration) {
+  let score = 0
+  const want = cleanText(title)
+  const got = cleanText(t.title)
+  if (want && got) {
+    if (got === want) score += 3
+    else if (got.includes(want) || want.includes(got)) score += 1.5
+  }
+  const wantArtist = firstArtist(artist)
+  const gotArtist = cleanText(t.user?.name)
+  if (wantArtist && gotArtist && (gotArtist.includes(wantArtist) || wantArtist.includes(gotArtist)))
+    score += 1.5
+  if (duration > 0 && t.duration > 0) {
+    const d = Math.abs(t.duration - duration)
+    if (d <= 3) score += 3
+    else if (d <= 8) score += 1.5
+    else if (d > 30) score -= 1.5
+  }
+  return score
+}
+
+// measured: Innertube throttles hard past ~4-5 parallel searches (403 "your
+// computer is sending automated queries"), and the 403s cost more time than
+// the extra sockets save - 6 is the knee, throughput ~2-3 tracks/s
+const MATCH_CONC = 6
+const MATCH_CACHE_MAX = 15000
+const matchCache = new Map() // normalized key -> Track
+const matchInflight = new Map() // key -> Promise, so duplicates share one search
+let matchDirty = false
+let matchLoaded = false
+
+const matchFile = () => path.join(app.getPath("userData"), "song-matches.json")
+
+function loadMatchCache() {
+  if (matchLoaded) return
+  matchLoaded = true
+  try {
+    const raw = JSON.parse(fs.readFileSync(matchFile(), "utf8"))
+    if (raw && typeof raw === "object") {
+      for (const [k, v] of Object.entries(raw)) {
+        if (v?.streamId && k.length < 400) matchCache.set(k, v)
+      }
+    }
+  } catch { /* first run / corrupt - start empty */ }
+}
+
+function persistMatchCache() {
+  if (!matchDirty) return
+  try {
+    const tmp = matchFile() + ".tmp"
+    fs.writeFileSync(tmp, JSON.stringify(Object.fromEntries(matchCache)))
+    fs.renameSync(tmp, matchFile())
+    matchDirty = false
+  } catch { /* best-effort */ }
+}
+setInterval(persistMatchCache, 60 * 1000).unref?.()
+app?.once?.("before-quit", persistMatchCache)
+
+async function searchSong(yt, query) {
+  let res = await withTimeout(yt.music.search(query, { type: "song" }), 12000)
+  // a null here is a timeout/network blip, not "no such song" - one retry
+  if (!res) {
+    await new Promise((r) => setTimeout(r, 200 + Math.random() * 300))
+    res = await withTimeout(yt.music.search(query, { type: "song" }), 12000)
+  }
+  return songsOf(res?.contents ?? res?.results ?? res).slice(0, 8)
+}
+
+async function matchTrack(yt, item) {
+  const title = String(item?.title ?? "").trim().slice(0, 160)
+  const artist = String(item?.artist ?? "").trim().slice(0, 160)
+  const duration = Number(item?.duration) || 0
+  if (!title && !artist) return null
+  const key = matchKey(title, artist)
+  if (!key) return null
+  const cached = matchCache.get(key)
+  if (cached) return cached
+  const running = matchInflight.get(key)
+  if (running) return running
+  const job = (async () => {
+    const queries = []
+    const a = firstArtist(artist)
+    if (a) queries.push(`${a} ${title}`.trim())
+    const full = `${artist} ${title}`.trim()
+    if (full && !queries.includes(full)) queries.push(full)
+    if (!queries.length) queries.push(title)
+    for (const q of queries) {
+      const hits = await searchSong(yt, q.slice(0, 200))
+      if (!hits.length) continue
+      const best = duration
+        ? hits.reduce((x, y) =>
+            matchScore(y, title, artist, duration) > matchScore(x, title, artist, duration) ? y : x
+          )
+        : hits[0]
+      matchCache.set(key, best)
+      if (matchCache.size > MATCH_CACHE_MAX) matchCache.delete(matchCache.keys().next().value)
+      matchDirty = true
+      return best
+    }
+    return null
+  })()
+  matchInflight.set(key, job)
+  try {
+    return await job
+  } finally {
+    matchInflight.delete(key)
+  }
+}
+
+// items: [{ title, artist, duration? }] → Track|null[] in the SAME order
+async function matchSongs(items, ytOverride) {
+  const list = Array.isArray(items) ? items.slice(0, 500) : []
+  const yt = ytOverride ?? (await getYt())
+  if (!yt || list.length === 0) return list.map(() => null)
+  loadMatchCache()
+  const out = new Array(list.length).fill(null)
+  let cursor = 0
+  let failed = 0
+  const worker = async () => {
+    while (cursor < list.length) {
+      const i = cursor++
+      try {
+        out[i] = await matchTrack(yt, list[i])
+      } catch {
+        out[i] = null
+        failed++
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(MATCH_CONC, list.length) }, worker))
+  // every single search throwing means the session died, not 500 bad queries
+  if (failed >= list.length && list.length > 3) ytFail(new Error("bulk match: all searches failed"))
+  else ytOk()
+  return out
+}
+
 // general YouTube search (videos, not the music catalog) - caption source
 // for lyrics alignment: fan lyric videos almost always carry ASR/manual
 // subs while official audio uploads often ship none at all
@@ -2303,6 +2483,18 @@ function register(ipcMain) {
       () => ({ tracks: [], artists: [], playlists: [] })
     )
   )
+  // bulk title+artist → best song, for playlist import: one request per
+  // track instead of the three-way catalog search, 6 at a time
+  ipcMain.handle("yt:match", async (_e, items) => {
+    const t0 = Date.now()
+    const r = await withTimeout(matchSongs(items), 180000)
+    const list = Array.isArray(r) ? r : Array.isArray(items) ? items.map(() => null) : []
+    log(
+      "match",
+      `${Array.isArray(items) ? items.length : "?"} asked, ${list.filter(Boolean).length} hit, ${Date.now() - t0}ms${r ? "" : " (timeout)"}`
+    )
+    return list
+  })
   ipcMain.handle("yt:stream", (_e, videoId) =>
     typeof videoId === "string" && VID.test(videoId)
       ? withTimeout(resolveStreamUrl(videoId), 25000)
@@ -2438,4 +2630,13 @@ function register(ipcMain) {
   }
 }
 
-module.exports = { register, binPath, ytdlpAvailable, ensureExecutable }
+module.exports = {
+  register,
+  binPath,
+  ytdlpAvailable,
+  ensureExecutable,
+  matchSongs,
+  matchKey,
+  matchScore,
+  cleanText,
+}

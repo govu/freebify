@@ -7,6 +7,7 @@ import type { Playlist, Track, User } from "./types"
 interface YtBridge {
   available: () => Promise<{ meta: boolean; bin: boolean }>
   search: (q: string) => Promise<{ tracks: Track[]; artists: User[]; playlists: Playlist[] }>
+  match?: (items: MatchQuery[]) => Promise<(Track | null)[]>
   stream: (videoId: string) => Promise<string | null>
   prefetch?: (videoId: string) => Promise<string | null>
   invalidate: (videoId: string) => Promise<boolean>
@@ -42,6 +43,12 @@ export interface SpotifyImport {
   // Spotify only published its first 100 tracks and the full read failed
   limited?: boolean
   source?: "pathfinder" | "embed"
+}
+
+export interface MatchQuery {
+  title: string
+  artist: string
+  duration?: number
 }
 
 declare global {
@@ -137,6 +144,25 @@ export const yt = {
     const b = ytBridge()
     if (!b) return { tracks: [], artists: [], playlists: [] }
     return b.search(q)
+  },
+  // Bulk title+artist → song. The main process runs one lean search per entry
+  // with real concurrency and a disk cache, so a 1000 track import lands in
+  // seconds instead of minutes. Falls back to the three-way search per entry
+  // when the preload is older (or in a plain browser).
+  matchSongs: async (items: MatchQuery[]): Promise<(Track | null)[]> => {
+    const b = ytBridge()
+    if (!b || items.length === 0) return items.map(() => null)
+    if (b.match) return (await b.match(items)) ?? items.map(() => null)
+    return Promise.all(
+      items.map(async (it) => {
+        try {
+          const res = await b.search(`${it.artist} ${it.title}`.trim())
+          return res.tracks[0] ?? null
+        } catch {
+          return null
+        }
+      }),
+    )
   },
   stream: (videoId: string) => ytBridge()?.stream(videoId) ?? Promise.resolve(null),
   prefetch: (videoId: string) =>

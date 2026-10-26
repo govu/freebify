@@ -29,8 +29,6 @@ export default {
   "import.limited": "Imported {n} tracks. Spotify only published the first 100, export a CSV to bring the rest.",
   "import.linkHint": "Spotify: paste any public playlist link, full track list. YouTube Music: full list, no matching needed.",
   "import.linkLabel": "Spotify or YouTube Music link",
-  "import.matching": "Matching {done}/{total}…",
-  "import.noMatches": "No tracks matched",
   "import.notFound": "Playlist not found. Check it isn't private",
   "import.pasteLink": "Paste a Spotify or YouTube Music playlist link",
   "import.submit": "Import playlist",

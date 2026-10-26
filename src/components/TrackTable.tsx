@@ -1,4 +1,4 @@
-import { Check, ChevronLeft, Disc3, Download, Heart, Link2, ListEnd, ListMusic, ListPlus, MoreHorizontal, Play, Radio, Trash2, User as UserIcon } from "lucide-react"
+import { Check, ChevronLeft, Disc3, Download, Heart, Link2, ListEnd, ListMusic, ListPlus, Loader2, MoreHorizontal, Play, Radio, Trash2, User as UserIcon } from "lucide-react"
 import { motion } from "motion/react"
 import { useEffect, useRef, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
@@ -245,7 +245,8 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
   const dlPct = useDownloads((s) => s.progress[t.id] ?? 0)
   const dlStart = useDownloads((s) => s.start)
   const dlRemove = useDownloads((s) => s.remove)
-  const canDl = Boolean(window.freebify?.dl)
+  // a pending import row has no videoId yet - nothing to download yet
+  const canDl = Boolean(window.freebify?.dl) && !t.pending
   // menus near the viewport bottom flip upward instead of clipping
   const [flipUp, setFlipUp] = useState(false)
   const [flyOpen, setFlyOpen] = useState(false)
@@ -275,8 +276,9 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
 
   const artistPath = `/artist/${encodeURIComponent(t.user.id)}?n=${encodeURIComponent(t.user.name)}`
   // yt-va / yt- / empty ids are fake owner ids (playlist "Various Artists",
-  // missing channel) - navigating there lands on a broken artist page
-  const artistOk = hasArtistPage(t.user)
+  // missing channel) - navigating there lands on a broken artist page.
+  // An import placeholder's artist name isn't an artist page either.
+  const artistOk = hasArtistPage(t.user) && !t.pending
 
   return (
     <motion.div
@@ -317,6 +319,10 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
       <span className="flex items-center justify-center text-sm text-dim">
         {isCurrent ? (
           <Equalizer playing={playingHere} className="text-ink" />
+        ) : t.pending ? (
+          // imported row still matching against YouTube - the row is real,
+          // its audio isn't there yet; the spinner says so without a toast
+          <Loader2 size={14} className="animate-spin text-faint" />
         ) : (
           <>
             {numbered && <span className="group-hover:hidden">{numberOffset + index + 1}</span>}
@@ -328,7 +334,7 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
       <span className="flex min-w-0 items-center gap-3">
         <ArtworkImg art={t.artwork} size="150x150" alt="" className="size-10 shrink-0 rounded-md" iconSize={16} />
         <span className="min-w-0">
-          <span title={t.title} className={`block truncate text-sm font-medium ${isCurrent ? "text-white underline decoration-white/30 underline-offset-4" : "text-ink"}`}>
+          <span title={t.title} className={`block truncate text-sm font-medium ${isCurrent ? "text-white underline decoration-white/30 underline-offset-4" : t.pending ? "text-dim" : "text-ink"}`}>
             {t.title}
             {(isNonOriginal(t) || isLongForm(t)) && (
               <span className="ml-1.5 rounded border border-line px-1 align-middle text-[9px] font-semibold text-faint">
@@ -370,11 +376,12 @@ function Row({ track: t, index, numbered, numberOffset, showPlays, lgCols, menuO
         <button
           onClick={(e) => {
             e.stopPropagation()
-            toggleLike(t)
+            // saving a placeholder would put a dead row in Liked Songs
+            if (!t.pending) toggleLike(t)
           }}
           aria-label={liked ? tt("table.unlike") : tt("table.like")}
           aria-pressed={liked}
-          className={`transition ${liked ? "text-ink" : "text-dim opacity-0 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"}`}
+          className={`transition ${t.pending ? "pointer-events-none opacity-0" : liked ? "text-ink" : "text-dim opacity-0 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"}`}
         >
           <Heart size={15} className={liked ? "fill-current" : ""} />
         </button>

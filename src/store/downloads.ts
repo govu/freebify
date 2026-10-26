@@ -76,7 +76,11 @@ export const useDownloads = create<DownloadsState>()((set, get) => ({
   // queue caps concurrency, so this just fires every track's start()
   startAll: async (tracks) => {
     const s = get()
-    const fresh = tracks.filter((t) => t && !s.items[t.id] && s.progress[t.id] === undefined)
+    // import placeholders have no videoId yet - they get downloaded once the
+    // background match lands and the user asks again
+    const fresh = tracks.filter(
+      (t) => t && !t.pending && !s.items[t.id] && s.progress[t.id] === undefined,
+    )
     for (const t of fresh) void s.start(t)
     return fresh.length
   },
